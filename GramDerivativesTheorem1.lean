@@ -164,15 +164,79 @@ section MainTerm
 lemma iteratedDeriv_log (k : ℕ) (hk : 1 ≤ k) (t : ℝ) (ht : 0 < t) :
     iteratedDeriv k Real.log t =
       (-1 : ℝ) ^ (k - 1) * (k - 1).factorial * t ^ (-(k : ℝ)) := by
-  /- Proof sketch (by induction on k):
-     Base case k = 1:  (d/dt) log t = t⁻¹ = t^(-1).
-     Inductive step:   assume result for k;
-       (d^(k+1)/dt^(k+1)) log t
-         = (d/dt)[(-1)^(k-1) · (k-1)! · t^(-k)]
-         = (-1)^(k-1) · (k-1)! · (-k) · t^(-k-1)
-         = (-1)^k · k! · t^(-(k+1)).
-     Each step uses `HasDerivAt.rpow` and `HasDerivAt.const_mul`. -/
-  sorry
+  -- Strategy: induction on k.  The formula degenerates for k = 0 (the
+  -- LHS would be `log t`, which is not a power of t), so we first
+  -- rewrite `k = m + 1` and then induct on `m`.  The base case becomes
+  -- k = 1 (the ordinary first derivative of `log`).
+  obtain ⟨m, rfl⟩ : ∃ m, k = m + 1 := ⟨k - 1, by omega⟩
+  clear hk
+  -- Collapse the natural-number subtractions: `(m + 1) - 1 = m`.
+  simp only [Nat.add_sub_cancel]
+  -- The induction hypothesis must be available pointwise on the whole
+  -- ray (0, ∞), not just at the specific `t` we are given: in the
+  -- inductive step we differentiate `iteratedDeriv (n + 1) Real.log` at
+  -- `t`, which requires its values on a *neighbourhood* of `t`.
+  -- Hence we generalise `t` before doing the induction.
+  induction m generalizing t with
+  | zero =>
+    -- Base case k = 1.  `iteratedDeriv 1 = deriv`, and on (0, ∞) the
+    -- derivative of `log` is `t⁻¹ = t ^ (-1 : ℝ)`.
+    rw [iteratedDeriv_succ, iteratedDeriv_zero, Real.deriv_log]
+    -- Goal: t⁻¹ = (-1)^0 * (0!).cast * t ^ (-((0 + 1 : ℕ) : ℝ))
+    -- All the constants on the RHS are 1, and `t ^ (-1 : ℝ) = t⁻¹`
+    -- by `Real.rpow_neg_one`.
+    simp [Real.rpow_neg_one]
+  | succ n ih =>
+    -- Inductive step.  Goal:
+    --   iteratedDeriv (n + 2) Real.log t
+    --     = (-1)^(n+1) * (n+1)! * t^(-(n+2)).
+    -- Peel off one derivative.
+    rw [iteratedDeriv_succ]
+    -- Goal: deriv (iteratedDeriv (n + 1) Real.log) t = …
+    -- The IH gives the closed form of `iteratedDeriv (n + 1) Real.log`
+    -- pointwise on (0, ∞).  Since (0, ∞) is open, this holds on a
+    -- neighbourhood of `t`, so the two functions are `EventuallyEq`
+    -- and have the same derivative at `t`.
+    -- FIX: avoid the unicode neighbourhood notation `𝓝` (not enabled in this
+    -- setup); use the explicit `nhds` name instead.
+    have hEq :
+        (iteratedDeriv (n + 1) Real.log : ℝ → ℝ)
+          =ᶠ[nhds t]
+        (fun s : ℝ =>
+            (-1 : ℝ) ^ n * (n.factorial : ℝ) * s ^ (-((n + 1 : ℕ) : ℝ))) := by
+      -- FIX: same replacement for neighbourhood membership.
+      have h_nhds : Set.Ioi (0 : ℝ) ∈ nhds t := isOpen_Ioi.mem_nhds ht
+      filter_upwards [h_nhds] with s hs
+      exact ih s hs
+    rw [hEq.deriv_eq]
+    -- Now compute the derivative of the closed form.  The constant
+    -- `(-1)^n * n!` factors out, and the rpow rule
+    --     d/ds (s^p) = p · s^(p-1)
+    -- holds at any nonzero point — in particular at our `t > 0`.
+    have hrpow : HasDerivAt (fun s : ℝ => s ^ (-((n + 1 : ℕ) : ℝ)))
+        (-((n + 1 : ℕ) : ℝ) * t ^ (-((n + 1 : ℕ) : ℝ) - 1)) t :=
+      Real.hasDerivAt_rpow_const (Or.inl (ne_of_gt ht))
+    have hderiv :
+        HasDerivAt (fun s : ℝ =>
+            (-1 : ℝ) ^ n * (n.factorial : ℝ) * s ^ (-((n + 1 : ℕ) : ℝ)))
+          ((-1 : ℝ) ^ n * (n.factorial : ℝ)
+            * (-((n + 1 : ℕ) : ℝ) * t ^ (-((n + 1 : ℕ) : ℝ) - 1))) t :=
+      hrpow.const_mul _
+    rw [hderiv.deriv]
+    -- Final algebraic clean-up.  We must check
+    --   (-1)^n · n! · (-(n+1)) · t^(-(n+1)-1)
+    --     = (-1)^(n+1) · (n+1)! · t^(-(n+2)).
+    -- Two normalisations and `pow_succ` reduce this to a polynomial
+    -- identity that `ring` handles.
+    have hexp : -((n + 1 : ℕ) : ℝ) - 1 = -((n + 1 + 1 : ℕ) : ℝ) := by
+      push_cast; ring
+    have hfac : ((n + 1).factorial : ℝ) = ((n + 1 : ℕ) : ℝ) * (n.factorial : ℝ) := by
+      rw [Nat.factorial_succ]; push_cast; ring
+    -- After these rewrites, both sides share the same `t^(-(n+2))` and
+    -- the same `n.factorial` atom; `pow_succ` exposes the extra factor
+    -- of `(-1)` in `(-1)^(n+1) = (-1)^n * (-1)`.
+    rw [hexp, hfac, pow_succ]
+    ring
 
 -- Derivative of the linear piece  t ↦ t/(2π):
 -- Its n-th derivative is 0 for n ≥ 2, and 1/(2π) for n = 1.
