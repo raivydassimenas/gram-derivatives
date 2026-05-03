@@ -749,7 +749,7 @@ lemma iteratedDeriv_δ_isO (n : ℕ) (hn : 1 ≤ n) :
                 =ᶠ[Filter.atTop] (fun t => iteratedDeriv n δ t) := by
     filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
     rw [← h_split t ht, ← h_iter_eq t ht]
-  exact h_evEq.trans_isBigO h_sum
+  exact h_evEq.symm.trans_isBigO h_sum
 
 end ErrorTermDelta
 
@@ -812,7 +812,7 @@ theorem theorem1 (n : ℕ) (hn : 2 ≤ n) :
     have hδ  : ContDiffAt ℝ n δ t       := contDiffAt_δ n ht
     have hN  : ContDiffAt ℝ n N_step t  := contDiffAt_N_step n ht
     have hcδ : ContDiffAt ℝ n (fun s => (-(1 / Real.pi)) * δ s) t :=
-      hδ.const_mul _
+      hδ.mul_const _
     -- Outer split: (φ + c·δ) + N_step
     change iteratedDeriv n
               ((fun s => φ s + ((-(1 / Real.pi)) * δ s)) + N_step) t = _
