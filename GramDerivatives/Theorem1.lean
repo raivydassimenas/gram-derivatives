@@ -14,6 +14,18 @@
     as t → +∞, away from the (countably many) discontinuities of S.
 
   ─────────────────────────────────────────────────────────────────────────
+  FILE LAYOUT
+  ─────────────────────────────────────────────────────────────────────────
+    §0  Notation and asymptotic infrastructure.
+    §1  Definitions  (`φ`, `δ`, `α_part`, `ρ`, `j`).
+    §2  Assumptions / axioms taken from the literature.
+    §3  Iterated derivatives of `φ`              (main term).
+    §4  Iterated derivatives of `α_part`         (algebraic error).
+    §5  Iterated derivatives of `j` and `t·j(t)` (integral error).
+    §6  Iterated derivatives of `δ`              (combining §4 and §5).
+    §7  Statement and proof of Theorem 1.
+
+  ─────────────────────────────────────────────────────────────────────────
   PROOF STRATEGY (mirroring the paper's Proof of Theorem 1)
   ─────────────────────────────────────────────────────────────────────────
   The authors split the n-th derivative of S into two parts:
@@ -34,14 +46,7 @@
       and  ρ(u) = 1/2 - {u}.
 
       Each piece of δ is shown to contribute only O(t^(-n-1)) to the
-      n-th derivative:
-
-        (B1) The first two terms of δ expand in negative powers of t
-             and their n-th derivative is O(t^(-n-1)).
-
-        (B2) The integral j(t) = ∫₀^∞ ρ(u)/((u+1/4)²+(t/2)²) du
-             satisfies j^(n)(t) = O(t^(-n-2)), so
-             (d/dt)^n [-t/2 · j(t)] = O(t^(-n-1)) by the Leibniz rule.
+      n-th derivative.
 
   ─────────────────────────────────────────────────────────────────────────
   FORMALISATION NOTES
@@ -62,10 +67,11 @@
   assumption is labelled `-- ASSUMPTION` so it is clear what is taken on
   faith vs what is derived.
 
-  The file compiles if Mathlib is available (import lines at the top).
-  Every `sorry` that remains marks a genuine gap that would require
-  substantial new Mathlib development to close; they are each annotated
-  with what would be needed.
+  ── Open gaps (`sorry` inside proofs; would close Theorem 1) ──
+  • `iteratedDeriv_α_part_isO`  (§4) — term-by-term diff. of Laurent expn.
+  • `iteratedDeriv_j_isO`       (§5) — IBP + dominated convergence + split at u = t.
+  • `iteratedDeriv_tj_isO`      (§5) — Leibniz on `-(t/2)·j(t)`; follows from above.
+  • `δ_eq`                      (§6) — bookkeeping: `δ = α_part − (t/2)·j(t)`.
 -/
 
 import Mathlib
@@ -80,54 +86,11 @@ notation "𝓝∞" => Filter.atTop (α := ℝ)
 abbrev IsO (f g : ℝ → ℝ) (l : Filter ℝ) : Prop := Asymptotics.IsBigO l f g
 
 /-!
-  ## §0.5  Assumptions and open gaps  (ledger)
+  ## §1  Definitions
 
-  ── Axioms (taken on faith from the literature) ──
-  • `S`, `N_step`                  — opaque target / step functions.
-  • `S_eq_φ_sub_δ_add_N`           — Karatsuba–Korolev representation (§2).
-  • `contDiffAt_φ / _α_part / _δ`
-    `/ _neg_tj / _N_step`          — local smoothness on `(0, ∞)`  (§6).
-  • `N_step_iteratedDeriv_eq_zero` — `N_step` locally constant off ζ-zeros (§7).
-
-  ── Open gaps (`sorry` inside proofs; would close Theorem 1) ──
-  • `iteratedDeriv_α_part_isO`  (§4) — term-by-term diff. of Laurent expn.
-  • `iteratedDeriv_j_isO`       (§5) — IBP + dominated convergence + split at u = t.
-  • `iteratedDeriv_tj_isO`      (§5) — Leibniz on `-(t/2)·j(t)`; follows from above.
-  • `δ_eq`                      (§6) — bookkeeping: `δ = α_part − (t/2)·j(t)`.
--/
-
-/-!
-  ## §1  Opaque constants representing analytic-number-theory objects
--/
-
-/-- The function `S(t) = (1/π) · arg ζ(1/2 + it)`.  It is defined and smooth
-    on the complement of a discrete set (the ordinates of zeros of ζ).  For
-    the asymptotics we only need its Taylor expansion (Karatsuba–Korolev),
-    so we treat `S` as opaque: only `S_eq_φ_sub_δ_add_N` is used. -/
-axiom S : ℝ → ℝ -- ASSUMPTION
-
--- δ(t) as defined in the paper (equation (3)).
-noncomputable def δ (t : ℝ) : ℝ :=
-  t / 4 * Real.log (1 + 1 / (4 * t ^ 2))
-  + 1 / 4 * Real.arctan (1 / (2 * t))
-  - t / 2 * ∫ u in Set.Ici (0 : ℝ),
-        (1 / 2 - Int.fract u) / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
-
-/-- The integer-valued step function `N(γ+0)` from the Karatsuba–Korolev
-    expansion of `S(t)` between consecutive zero-ordinates of ζ.
-    Piecewise-constant on each gap, so its `n`-th derivative (`n ≥ 1`)
-    vanishes there; opaque otherwise. -/
-axiom N_step : ℝ → ℝ -- ASSUMPTION
-
-/-!
-  ## §2  The Karatsuba–Korolev representation of S
-
-  Equation (2) of the paper states: between two consecutive ordinates
-  γ < γ′ of zeros of ζ,
-
-      S(t) = -t/(2π)·log(t/(2π)) + t/(2π) - 7/8 - (1/π)·δ(t) + N_step(t)
-
-  We take this as an axiom.
+  Explicit definitions of the functions appearing in the proof: the smooth
+  main term `φ`, the error term `δ`, its algebraic and integral pieces
+  `α_part` and `j`, and the sawtooth function `ρ`.
 -/
 
 -- The smooth "main-term" function from the Karatsuba–Korolev representation.
@@ -136,21 +99,93 @@ noncomputable def φ (t : ℝ) : ℝ :=
   + t / (2 * Real.pi)
   - 7 / 8
 
+-- δ(t) as defined in the paper (equation (3)).
+noncomputable def δ (t : ℝ) : ℝ :=
+  t / 4 * Real.log (1 + 1 / (4 * t ^ 2))
+  + 1 / 4 * Real.arctan (1 / (2 * t))
+  - t / 2 * ∫ u in Set.Ici (0 : ℝ),
+        (1 / 2 - Int.fract u) / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
+
+/-- The algebraic part of δ. -/
+noncomputable def α_part (t : ℝ) : ℝ :=
+  t / 4 * Real.log (1 + 1 / (4 * t ^ 2))
+  + 1 / 4 * Real.arctan (1 / (2 * t))
+
+-- ρ(u) = 1/2 - {u}, the "sawtooth" function.
+noncomputable def ρ (u : ℝ) : ℝ := 1 / 2 - Int.fract u
+
+-- The integral j(t).
+noncomputable def j (t : ℝ) : ℝ :=
+  ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
+
+/-!
+  ## §2  Assumptions
+
+  All axioms taken from the literature are collected here.  They split into:
+
+    • Opaque target / step functions:  `S`, `N_step`.
+    • Karatsuba–Korolev representation: `S_eq_φ_sub_δ_add_N`.
+    • Local smoothness on `(0, ∞)`:
+        `contDiffAt_φ`, `contDiffAt_δ`, `contDiffAt_α_part`,
+        `contDiffAt_neg_tj`, `contDiffAt_N_step`.
+    • Vanishing of `N_step`'s derivatives off ζ-zeros:
+        `N_step_iteratedDeriv_eq_zero`.
+-/
+
+/-- The function `S(t) = (1/π) · arg ζ(1/2 + it)`.  It is defined and smooth
+    on the complement of a discrete set (the ordinates of zeros of ζ).  For
+    the asymptotics we only need its Taylor expansion (Karatsuba–Korolev),
+    so we treat `S` as opaque: only `S_eq_φ_sub_δ_add_N` is used. -/
+axiom S : ℝ → ℝ -- ASSUMPTION
+
+/-- The integer-valued step function `N(γ+0)` from the Karatsuba–Korolev
+    expansion of `S(t)` between consecutive zero-ordinates of ζ.
+    Piecewise-constant on each gap, so its `n`-th derivative (`n ≥ 1`)
+    vanishes there; opaque otherwise. -/
+axiom N_step : ℝ → ℝ -- ASSUMPTION
+
 /-- ASSUMPTION (Karatsuba–Korolev [6, proof of Thm 2]):  for `t` in the open
     interval `(γ, γ′)` between consecutive zero-ordinates of ζ,
     `S t = φ t - (1/π) · δ t + N_step t`. -/
 axiom S_eq_φ_sub_δ_add_N (t : ℝ) (ht : 0 < t) :
     S t = φ t - (1 / Real.pi) * δ t + N_step t
 
+/-- ASSUMPTION: `φ` is smooth on `(0, ∞)` (algebraic combination of `t · log t`). -/
+axiom contDiffAt_φ (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n φ s
+
+/-- ASSUMPTION: `δ` is smooth on `(0, ∞)` (inherited from `α_part` and `t·j(t)`). -/
+axiom contDiffAt_δ (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n δ s
+
+/-- ASSUMPTION: `α_part` is smooth on `(0, ∞)`. -/
+axiom contDiffAt_α_part (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n α_part s
+
+/-- ASSUMPTION: `t ↦ -(t/2)·j(t)` is smooth on `(0, ∞)`.  Inherited from
+    smoothness of `j` (an analytic property of the ρ-integral). -/
+axiom contDiffAt_neg_tj (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n (fun t => -(t / 2) * j t) s
+
+/-- ASSUMPTION: away from ordinates of zeros of ζ, `N_step` is smooth
+    (in fact locally constant). -/
+axiom contDiffAt_N_step (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n N_step s
+
+/-- ASSUMPTION: away from the ordinates of zeros of ζ (a discrete set),
+    `N_step` is locally constant, so all positive-order derivatives vanish.
+    The `h_not_zero : True` slot is a placeholder for "t is not an ordinate
+    of a zero" — to be tightened once a real predicate is in place. -/
+axiom N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < t)
+    (h_not_zero : True) -- placeholder for "t is not an ordinate of a zero"
+    : iteratedDeriv n N_step t = 0
+
 /-!
-  ## §3  The main-term computation: iterated derivatives of φ
+  ## §3  Main-term computation: iterated derivatives of φ
 
   The key calculation is
 
       φ^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)    for n ≥ 2.
-
-  We build this up via standard calculus facts that are (or can be)
-  proved from Mathlib primitives.
 -/
 
 section MainTerm
@@ -376,11 +411,6 @@ end MainTerm
 -/
 
 section ErrorTermAlgebraic
-
-/-- The algebraic part of δ. -/
-noncomputable def α_part (t : ℝ) : ℝ :=
-  t / 4 * Real.log (1 + 1 / (4 * t ^ 2))
-  + 1 / 4 * Real.arctan (1 / (2 * t))
 
 /-- Taylor remainder bound for `arctan` at 0:  `|arctan v − v| ≤ |v|³/3`.
 
@@ -619,13 +649,6 @@ end ErrorTermAlgebraic
 
 section ErrorTermIntegral
 
--- ρ(u) = 1/2 - {u}, the "sawtooth" function.
-noncomputable def ρ (u : ℝ) : ℝ := 1 / 2 - Int.fract u
-
--- The integral j(t).
-noncomputable def j (t : ℝ) : ℝ :=
-  ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
-
 -- (The paper actually uses the antiderivative σ(u) = ∫₀^u ρ(z) dz,
 --  which satisfies 0 ≤ σ(u) ≤ 1/8, and integrates by parts once.)
 
@@ -696,28 +719,6 @@ lemma δ_eq (t : ℝ) (ht : 0 < t) :
     δ t = α_part t - t / 2 * j t := by
   sorry -- TODO (open): unfold `δ`, `α_part`, `j` and verify they line up.
 
-/-- ASSUMPTION: `α_part` is smooth on `(0, ∞)`. -/
-axiom contDiffAt_α_part (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n α_part s
-
-/-- ASSUMPTION: `t ↦ -(t/2)·j(t)` is smooth on `(0, ∞)`.  Inherited from
-    smoothness of `j` (an analytic property of the ρ-integral). -/
-axiom contDiffAt_neg_tj (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n (fun t => -(t / 2) * j t) s
-
-/-- ASSUMPTION: `φ` is smooth on `(0, ∞)` (algebraic combination of `t · log t`). -/
-axiom contDiffAt_φ (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n φ s
-
-/-- ASSUMPTION: `δ` is smooth on `(0, ∞)` (inherited from `α_part` and `t·j(t)`). -/
-axiom contDiffAt_δ (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n δ s
-
-/-- ASSUMPTION: away from ordinates of zeros of ζ, `N_step` is smooth
-    (in fact locally constant). -/
-axiom contDiffAt_N_step (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n N_step s
-
 /-- The n-th derivative of δ is O(t^(-n-1)) for n ≥ 1. -/
 lemma iteratedDeriv_δ_isO (n : ℕ) (hn : 1 ≤ n) :
     IsO (fun t => iteratedDeriv n δ t)
@@ -754,24 +755,7 @@ lemma iteratedDeriv_δ_isO (n : ℕ) (hn : 1 ≤ n) :
 end ErrorTermDelta
 
 /-!
-  ## §7  The derivative of N_step vanishes
-
-  Between consecutive ordinates of zeros of ζ, the function N_step is
-  locally constant, hence its derivatives of every order vanish there.
--/
-
-/-- ASSUMPTION: away from the ordinates of zeros of ζ (a discrete set),
-    `N_step` is locally constant, so all positive-order derivatives vanish.
-    The `h_not_zero : True` slot is a placeholder for "t is not an ordinate
-    of a zero" — to be tightened once a real predicate is in place. -/
-axiom N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < t)
-    (h_not_zero : True) -- placeholder for "t is not an ordinate of a zero"
-    : iteratedDeriv n N_step t = 0
-
-/-!
-  ## §8  Main theorem: Theorem 1
-
-  Putting everything together.
+  ## §7  Main theorem: Theorem 1
 -/
 
 /-- **Theorem 1** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
@@ -812,7 +796,7 @@ theorem theorem1 (n : ℕ) (hn : 2 ≤ n) :
     have hδ  : ContDiffAt ℝ n δ t       := contDiffAt_δ n ht
     have hN  : ContDiffAt ℝ n N_step t  := contDiffAt_N_step n ht
     have hcδ : ContDiffAt ℝ n (fun s => (-(1 / Real.pi)) * δ s) t :=
-      hδ.mul_const _
+      contDiffAt_const.mul hδ
     -- Outer split: (φ + c·δ) + N_step
     change iteratedDeriv n
               ((fun s => φ s + ((-(1 / Real.pi)) * δ s)) + N_step) t = _
