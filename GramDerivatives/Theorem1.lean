@@ -19,11 +19,12 @@
     §0  Notation and asymptotic infrastructure.
     §1  Definitions  (`φ`, `δ`, `α_part`, `ρ`, `j`).
     §2  Assumptions / axioms taken from the literature.
-    §3  Iterated derivatives of `φ`              (main term).
-    §4  Iterated derivatives of `α_part`         (algebraic error).
-    §5  Iterated derivatives of `j` and `t·j(t)` (integral error).
-    §6  Iterated derivatives of `δ`              (combining §4 and §5).
-    §7  Statement and proof of Theorem 1.
+    §3  Smoothness lemmas (derived from §2 + elementary calculus).
+    §4  Iterated derivatives of `φ`              (main term).
+    §5  Iterated derivatives of `α_part`         (algebraic error).
+    §6  Iterated derivatives of `j` and `t·j(t)` (integral error).
+    §7  Iterated derivatives of `δ`              (combining §5 and §6).
+    §8  Statement and proof of Theorem 1.
 
   ─────────────────────────────────────────────────────────────────────────
   PROOF STRATEGY (mirroring the paper's Proof of Theorem 1)
@@ -68,10 +69,17 @@
   faith vs what is derived.
 
   ── Open gaps (`sorry` inside proofs; would close Theorem 1) ──
-  • `iteratedDeriv_α_part_isO`  (§4) — term-by-term diff. of Laurent expn.
-  • `iteratedDeriv_j_isO`       (§5) — IBP + dominated convergence + split at u = t.
-  • `iteratedDeriv_tj_isO`      (§5) — Leibniz on `-(t/2)·j(t)`; follows from above.
-  • `δ_eq`                      (§6) — bookkeeping: `δ = α_part − (t/2)·j(t)`.
+  • `iteratedDeriv_α_part_isO`  (§5) — term-by-term diff. of Laurent expn.
+  • `iteratedDeriv_j_isO`       (§6) — IBP + dominated convergence + split at u = t.
+  • `iteratedDeriv_tj_isO`      (§6) — Leibniz on `-(t/2)·j(t)`; follows from above.
+  • `δ_eq`                      (§7) — bookkeeping: `δ = α_part − (t/2)·j(t)`.
+
+  ── Open assumption (axiom) requiring deeper analytic input ──
+  • `contDiffAt_j`              (§2) — smoothness of the parametric integral
+                                       `j(t) = ∫₀^∞ ρ(u)/((u+1/4)²+(t/2)²) du`.
+                                       See its docstring for two routes to a
+                                       proof (inductive dominated convergence
+                                       or Binet's second formula via log Γ).
 -/
 
 import Mathlib
@@ -125,11 +133,12 @@ noncomputable def j (t : ℝ) : ℝ :=
 
     • Opaque target / step functions:  `S`, `N_step`.
     • Karatsuba–Korolev representation: `S_eq_φ_sub_δ_add_N`.
-    • Local smoothness on `(0, ∞)`:
-        `contDiffAt_φ`, `contDiffAt_δ`, `contDiffAt_α_part`,
-        `contDiffAt_neg_tj`, `contDiffAt_N_step`.
-    • Vanishing of `N_step`'s derivatives off ζ-zeros:
-        `N_step_iteratedDeriv_eq_zero`.
+    • Smoothness of the parametric integral:  `contDiffAt_j`.
+    • Smoothness / vanishing of `N_step`:  `contDiffAt_N_step`,
+      `N_step_iteratedDeriv_eq_zero`.
+
+  Smoothness of `φ`, `α_part`, `δ`, and `t·j(t)` is *derived* in §3 from
+  `contDiffAt_j` plus elementary Mathlib calculus.
 -/
 
 /-- The function `S(t) = (1/π) · arg ζ(1/2 + it)`.  It is defined and smooth
@@ -150,22 +159,25 @@ axiom N_step : ℝ → ℝ -- ASSUMPTION
 axiom S_eq_φ_sub_δ_add_N (t : ℝ) (ht : 0 < t) :
     S t = φ t - (1 / Real.pi) * δ t + N_step t
 
-/-- ASSUMPTION: `φ` is smooth on `(0, ∞)` (algebraic combination of `t · log t`). -/
-axiom contDiffAt_φ (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n φ s
+/-- ASSUMPTION: `j(t) = ∫₀^∞ ρ(u)/((u+1/4)² + (t/2)²) du` is smooth on
+    `(0, ∞)`.  This is the genuinely analytic input that cannot be derived
+    from elementary Mathlib lemmas:
 
-/-- ASSUMPTION: `δ` is smooth on `(0, ∞)` (inherited from `α_part` and `t·j(t)`). -/
-axiom contDiffAt_δ (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n δ s
+    • Mathlib's `ParametricIntegral.lean` only provides first-order results
+      (`hasDerivAt_integral_of_dominated_loc_of_lip` etc.); there is no
+      general `ContDiff` lemma for parametric integrals.
 
-/-- ASSUMPTION: `α_part` is smooth on `(0, ∞)`. -/
-axiom contDiffAt_α_part (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n α_part s
+    • Two viable strategies to discharge this axiom:
+        (a) Inductive dominated convergence — at each order `n`, exhibit
+            an integrable dominator `Cₙ·(u+1/4)^(-n-2)` for the `n`-th
+            `t`-derivative of the integrand.
+        (b) Binet's second formula — identify `j(t)` (up to `1/t`) with
+            `Im log Γ(1/4 + i·t/2)`, then use holomorphicity of log Γ
+            on `Re z > 0` and `ContDiff` of holomorphic functions.
 
-/-- ASSUMPTION: `t ↦ -(t/2)·j(t)` is smooth on `(0, ∞)`.  Inherited from
-    smoothness of `j` (an analytic property of the ρ-integral). -/
-axiom contDiffAt_neg_tj (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n (fun t => -(t / 2) * j t) s
+    Either route is a substantial subproject; see file header. -/
+axiom contDiffAt_j (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n j s
 
 /-- ASSUMPTION: away from ordinates of zeros of ζ, `N_step` is smooth
     (in fact locally constant). -/
@@ -181,7 +193,79 @@ axiom N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < 
     : iteratedDeriv n N_step t = 0
 
 /-!
-  ## §3  Main-term computation: iterated derivatives of φ
+  ## §3  Smoothness lemmas
+
+  Derived from the axioms in §2 plus elementary Mathlib calculus.  The four
+  results in this section establish `ContDiffAt ℝ n F t` for `t > 0` and
+  every `F` that appears as a sub-expression of `S` in the Karatsuba–Korolev
+  decomposition.
+
+  Dependency tree:
+    contDiffAt_j (axiom)  ──▶  contDiffAt_neg_tj  ──▶  contDiffAt_δ
+                                                     ▲
+    contDiffAt_α_part  ──────────────────────────────┘
+    contDiffAt_φ                              (independent)
+-/
+
+section Smoothness
+
+/-- `φ` is smooth on `(0, ∞)` (algebraic combination of `t · log t`). -/
+theorem contDiffAt_φ (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n φ s := by
+  have h2π_ne : (2 * Real.pi) ≠ 0 := by positivity
+  have hne : s / (2 * Real.pi) ≠ 0 := div_ne_zero (ne_of_gt hs) h2π_ne
+  have h_div : ContDiffAt ℝ n (fun t : ℝ => t / (2 * Real.pi)) s :=
+    contDiffAt_id.div_const _
+  have h_log : ContDiffAt ℝ n (fun t : ℝ => Real.log (t / (2 * Real.pi))) s :=
+    h_div.log hne
+  unfold φ
+  exact ((h_div.neg.mul h_log).add h_div).sub contDiffAt_const
+
+/-- `α_part` is smooth on `(0, ∞)`. -/
+theorem contDiffAt_α_part (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n α_part s := by
+  have h_4s2_ne : (4 * s ^ 2 : ℝ) ≠ 0 := by positivity
+  have h_2s_ne : (2 * s : ℝ) ≠ 0 := by positivity
+  have h_1_inv_ne : (1 + 1 / (4 * s ^ 2) : ℝ) ≠ 0 := by positivity
+  have h_4t2 : ContDiffAt ℝ n (fun t : ℝ => 4 * t ^ 2) s :=
+    contDiffAt_const.mul (contDiffAt_id.pow 2)
+  have h_inv_4t2 : ContDiffAt ℝ n (fun t : ℝ => 1 / (4 * t ^ 2)) s :=
+    contDiffAt_const.div h_4t2 h_4s2_ne
+  have h_log : ContDiffAt ℝ n (fun t : ℝ => Real.log (1 + 1 / (4 * t ^ 2))) s :=
+    (contDiffAt_const.add h_inv_4t2).log h_1_inv_ne
+  have h_part1 : ContDiffAt ℝ n
+      (fun t : ℝ => t / 4 * Real.log (1 + 1 / (4 * t ^ 2))) s :=
+    (contDiffAt_id.div_const 4).mul h_log
+  have h_2t : ContDiffAt ℝ n (fun t : ℝ => 2 * t) s :=
+    contDiffAt_const.mul contDiffAt_id
+  have h_inv_2t : ContDiffAt ℝ n (fun t : ℝ => 1 / (2 * t)) s :=
+    contDiffAt_const.div h_2t h_2s_ne
+  have h_part2 : ContDiffAt ℝ n
+      (fun t : ℝ => 1 / 4 * Real.arctan (1 / (2 * t))) s :=
+    contDiffAt_const.mul h_inv_2t.arctan
+  unfold α_part
+  exact h_part1.add h_part2
+
+/-- `t ↦ -(t/2)·j(t)` is smooth on `(0, ∞)`.  Immediate from smoothness
+    of `j` (the polynomial factor `-(t/2)` is trivially smooth). -/
+theorem contDiffAt_neg_tj (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n (fun t => -(t / 2) * j t) s :=
+  (contDiffAt_id.div_const 2).neg.mul (contDiffAt_j n hs)
+
+/-- `δ` is smooth on `(0, ∞)` (inherited from `α_part` and `t·j(t)`). -/
+theorem contDiffAt_δ (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n δ s := by
+  have h_eq : (δ : ℝ → ℝ) = fun t => α_part t + (-(t / 2) * j t) := by
+    funext t
+    unfold δ α_part j ρ
+    ring
+  rw [h_eq]
+  exact (contDiffAt_α_part n hs).add (contDiffAt_neg_tj n hs)
+
+end Smoothness
+
+/-!
+  ## §4  Main-term computation: iterated derivatives of φ
 
   The key calculation is
 
@@ -395,7 +479,7 @@ theorem iteratedDeriv_φ (n : ℕ) (hn : 2 ≤ n) (t : ℝ) (ht : 0 < t) :
 end MainTerm
 
 /-!
-  ## §4  Error term (B1): iterated derivatives of the algebraic part of δ
+  ## §5  Error term (B1): iterated derivatives of the algebraic part of δ
 
   The first two terms of δ(t) are
 
@@ -635,7 +719,7 @@ lemma iteratedDeriv_α_part_isO (n : ℕ) (hn : 1 ≤ n) :
 end ErrorTermAlgebraic
 
 /-!
-  ## §5  Error term (B2): iterated derivatives of the integral part of δ
+  ## §6  Error term (B2): iterated derivatives of the integral part of δ
 
   Define
 
@@ -706,7 +790,7 @@ lemma iteratedDeriv_tj_isO (n : ℕ) (hn : 1 ≤ n) :
 end ErrorTermIntegral
 
 /-!
-  ## §6  Combining parts: the n-th derivative of δ
+  ## §7  Combining parts: the n-th derivative of δ
 
   δ(t) = α_part(t) - (t/2)·j(t),   so
   δ^(n)(t) = α_part^(n)(t) + (d^n/dt^n)[-(t/2)·j(t)] = O(t^(-n-1)).
@@ -755,7 +839,7 @@ lemma iteratedDeriv_δ_isO (n : ℕ) (hn : 1 ≤ n) :
 end ErrorTermDelta
 
 /-!
-  ## §7  Main theorem: Theorem 1
+  ## §8  Main theorem: Theorem 1
 -/
 
 /-- **Theorem 1** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
