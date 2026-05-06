@@ -1,4 +1,3 @@
-
 -- Correction: use a stable umbrella import to avoid version-specific module path changes.
 import Mathlib
 
