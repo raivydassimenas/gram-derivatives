@@ -1,85 +1,48 @@
 /-
-  GramDerivatives.lean
-  ====================
+  GramDerivatives/Theorem1.lean
+  =============================
   Lean 4 / Mathlib formalisation of **Theorem 1** from
 
-    Dundulis, Garunkštis, Laurinčikas, Šimenas,
-    "Higher derivatives of the Gram function", 2026.
+      Dundulis, Garunkštis, Laurinčikas, Šimenas,
+      "Higher derivatives of the Gram function", 2026.
 
-  Theorem 1 (restated).
-    For every n ≥ 2, the n-th derivative of the function S(t) satisfies
+  Theorem 1.  For n ≥ 2, as t → +∞ (away from discontinuities of S),
 
-        S^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1))
+      S^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1)).
 
-    as t → +∞, away from the (countably many) discontinuities of S.
+  ─── Strategy ──────────────────────────────────────────────────────────
+  Karatsuba–Korolev decomposition (axiom `S_eq_φ_sub_δ_add_N`):
+        S(t) = φ(t) − (1/π)·δ(t) + N_step(t)
+  with
+    • φ(t) = −t/(2π)·log(t/(2π)) + t/(2π) − 7/8   (smooth main term),
+    • δ(t) = α_part(t) − (t/2)·j(t)               (smooth error term),
+    • N_step                                       (locally constant).
+  Then φ^(n)(t) supplies the leading term and δ^(n)(t) = O(t^(−n−1)).
 
-  ─────────────────────────────────────────────────────────────────────────
-  FILE LAYOUT
-  ─────────────────────────────────────────────────────────────────────────
+  ─── File layout ───────────────────────────────────────────────────────
     §0  Notation and asymptotic infrastructure.
     §1  Definitions  (`φ`, `δ`, `α_part`, `ρ`, `j`).
     §2  Assumptions / axioms taken from the literature.
-    §3  Smoothness lemmas (derived from §2 + elementary calculus).
+    §3  Smoothness lemmas (derived from §2 + elementary Mathlib calculus).
     §4  Iterated derivatives of `φ`              (main term).
     §5  Iterated derivatives of `α_part`         (algebraic error).
     §6  Iterated derivatives of `j` and `t·j(t)` (integral error).
     §7  Iterated derivatives of `δ`              (combining §5 and §6).
     §8  Statement and proof of Theorem 1.
 
-  ─────────────────────────────────────────────────────────────────────────
-  PROOF STRATEGY (mirroring the paper's Proof of Theorem 1)
-  ─────────────────────────────────────────────────────────────────────────
-  The authors split the n-th derivative of S into two parts:
+  ─── What's axiomatised ────────────────────────────────────────────────
+  Mathlib (as of 2024-25) lacks ζ, the Riemann–Siegel θ, the argument
+  function S, and the Riemann–von Mangoldt formula, so we introduce these
+  objects as opaque constants together with the properties used in the
+  proof.  Every axiom is tagged `-- ASSUMPTION` and carries a docstring.
 
-  (A) The "main term" from
-
-        φ(t) := -t/(2π) · log(t/(2π))  +  t/(2π)  -  7/8
-
-      One computes φ^(n)(t) by repeated differentiation and obtains
-      exactly  (-1)^(n-1) · (n-2)! / (2π) · t^(1-n).
-
-  (B) The "error term" from  -(1/π) · δ(t), where
-
-        δ(t) = t/4 · log(1 + 1/(4t²))
-              + 1/4 · arctan(1/(2t))
-              - t/2 · ∫₀^∞  ρ(u) / ((u + 1/4)² + (t/2)²)  du
-
-      and  ρ(u) = 1/2 - {u}.
-
-      Each piece of δ is shown to contribute only O(t^(-n-1)) to the
-      n-th derivative.
-
-  ─────────────────────────────────────────────────────────────────────────
-  FORMALISATION NOTES
-  ─────────────────────────────────────────────────────────────────────────
-  Lean 4 / Mathlib (as of 2024-25) contains:
-    • Real analysis (derivatives, iterated derivatives, smooth functions)
-    • Asymptotics via `Asymptotics.IsO` and `Asymptotics.IsLittleO`
-    • Bochner / Lebesgue integration
-    • Basic transcendental functions (log, arctan, exp)
-  but does NOT yet contain:
-    • The Riemann zeta function ζ
-    • The Riemann–Siegel theta function ϑ
-    • The argument function S(t) = (1/π) arg ζ(1/2 + it)
-    • The Riemann–von Mangoldt formula
-
-  Therefore we introduce these objects as **opaque constants** (axioms)
-  together with precisely the properties used in the proof.  Every
-  assumption is labelled `-- ASSUMPTION` so it is clear what is taken on
-  faith vs what is derived.
-
-  ── Open gaps (`sorry` inside proofs; would close Theorem 1) ──
+  ─── Remaining gaps ────────────────────────────────────────────────────
   • `iteratedDeriv_α_part_isO`  (§5) — term-by-term diff. of Laurent expn.
-  • `iteratedDeriv_j_isO`       (§6) — IBP + dominated convergence + split at u = t.
-  • `iteratedDeriv_tj_isO`      (§6) — Leibniz on `-(t/2)·j(t)`; follows from above.
-  • `δ_eq`                      (§7) — bookkeeping: `δ = α_part − (t/2)·j(t)`.
-
-  ── Open assumption (axiom) requiring deeper analytic input ──
-  • `contDiffAt_j`              (§2) — smoothness of the parametric integral
-                                       `j(t) = ∫₀^∞ ρ(u)/((u+1/4)²+(t/2)²) du`.
-                                       See its docstring for two routes to a
-                                       proof (inductive dominated convergence
-                                       or Binet's second formula via log Γ).
+  • `iteratedDeriv_j_isO`       (§6) — IBP + dominated convergence.
+  • `iteratedDeriv_tj_isO`      (§6) — Leibniz on `-(t/2)·j(t)`; from above.
+  • `contDiffAt_j`              (§2) — axiom: smoothness of the parametric
+                                       integral `j(t)`.  Two routes
+                                       sketched in its docstring.
 -/
 
 import Mathlib
@@ -101,28 +64,28 @@ abbrev IsO (f g : ℝ → ℝ) (l : Filter ℝ) : Prop := Asymptotics.IsBigO l f
   `α_part` and `j`, and the sawtooth function `ρ`.
 -/
 
--- The smooth "main-term" function from the Karatsuba–Korolev representation.
+/-- Smooth "main-term" function from the Karatsuba–Korolev representation. -/
 noncomputable def φ (t : ℝ) : ℝ :=
   -(t / (2 * Real.pi)) * Real.log (t / (2 * Real.pi))
   + t / (2 * Real.pi)
   - 7 / 8
 
--- δ(t) as defined in the paper (equation (3)).
+/-- The error term δ(t) from equation (3) of the paper. -/
 noncomputable def δ (t : ℝ) : ℝ :=
   t / 4 * Real.log (1 + 1 / (4 * t ^ 2))
   + 1 / 4 * Real.arctan (1 / (2 * t))
   - t / 2 * ∫ u in Set.Ici (0 : ℝ),
         (1 / 2 - Int.fract u) / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
 
-/-- The algebraic part of δ. -/
+/-- The algebraic part of δ:  `t/4 · log(1 + 1/(4t²)) + (1/4)·arctan(1/(2t))`. -/
 noncomputable def α_part (t : ℝ) : ℝ :=
   t / 4 * Real.log (1 + 1 / (4 * t ^ 2))
   + 1 / 4 * Real.arctan (1 / (2 * t))
 
--- ρ(u) = 1/2 - {u}, the "sawtooth" function.
+/-- The sawtooth function `ρ(u) = 1/2 − {u}`. -/
 noncomputable def ρ (u : ℝ) : ℝ := 1 / 2 - Int.fract u
 
--- The integral j(t).
+/-- The integral part of δ:  `j(t) = ∫₀^∞ ρ(u) / ((u + 1/4)² + (t/2)²) du`. -/
 noncomputable def j (t : ℝ) : ℝ :=
   ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
 
@@ -338,40 +301,44 @@ private lemma iteratedDeriv_congr_of_nhds
       exact ih s hs
     exact hEq.deriv_eq
 
+/-- Iterated derivative commutes with a constant scalar factor,
+    with no differentiability hypothesis on `g`. -/
+private lemma iteratedDeriv_const_mul (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s : ℝ) :
+    iteratedDeriv k (fun x => c * g x) s = c * iteratedDeriv k g s := by
+  induction k generalizing s with
+  | zero => simp [iteratedDeriv_zero]
+  | succ k ih =>
+    rw [iteratedDeriv_succ, iteratedDeriv_succ]
+    have hEq : iteratedDeriv k (fun x => c * g x) = fun x => c * iteratedDeriv k g x :=
+      funext ih
+    rw [hEq, deriv_const_mul_field']
+
 /-- The n-th iterated derivative of φ at t, for n ≥ 2 and t > 0,
     equals the main term of Theorem 1:
       `φ^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)`. -/
 theorem iteratedDeriv_φ (n : ℕ) (hn : 2 ≤ n) (t : ℝ) (ht : 0 < t) :
     iteratedDeriv n φ t =
       (-1 : ℝ) ^ (n - 1) * (n - 2).factorial * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ)) := by
-  -- Maintenance: avoid blank lines between tactics in this `by` block — Mathlib's
-  -- `linter.style.emptyLine` treats them as splitting a command.
-  -- Reindex `n = m + 2` to avoid `Nat.sub` arithmetic.
+  -- Reindex `n = m + 2` to skip `Nat.sub` arithmetic.
   obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
   clear hn
   have h2π_pos : (0 : ℝ) < 2 * Real.pi := by positivity
   have h2π_ne : (2 * Real.pi) ≠ 0 := ne_of_gt h2π_pos
-  -- Rewrite φ on `(0, ∞)` in the polynomial-times-log form
-  --   φ(s) = -(1/(2π)) · s · log s + ((1 + log(2π))/(2π)) · s - 7/8
-  -- using `log(s/(2π)) = log s - log(2π)`.  This avoids chain-ruling
-  -- through the inner division.
-  have hφ_alt : ∀ s, 0 < s →
-      φ s = -(1 / (2 * Real.pi)) * (s * Real.log s)
-          + ((1 + Real.log (2 * Real.pi)) / (2 * Real.pi)) * s
-          - 7 / 8 := by
+  -- Rewrite φ on `(0,∞)` as a polynomial-times-log expression `Φ`, using
+  -- `log(s/(2π)) = log s - log(2π)`.  This avoids chain-ruling through the
+  -- inner division.
+  set Φ : ℝ → ℝ :=
+    fun s => -(1 / (2 * Real.pi)) * (s * Real.log s)
+           + ((1 + Real.log (2 * Real.pi)) / (2 * Real.pi)) * s
+           - 7 / 8
+  have hφΦ : ∀ s ∈ Set.Ioi (0 : ℝ), φ s = Φ s := by
     intro s hs
     unfold φ
     rw [Real.log_div (ne_of_gt hs) h2π_ne]
     ring
-  set Φ : ℝ → ℝ :=
-    fun s => -(1 / (2 * Real.pi)) * (s * Real.log s)
-           + ((1 + Real.log (2 * Real.pi)) / (2 * Real.pi)) * s
-           - 7 / 8 with hΦ_def
-  have hφΦ : ∀ s ∈ Set.Ioi (0 : ℝ), φ s = Φ s := fun s hs => hφ_alt s hs
   rw [iteratedDeriv_congr_of_nhds (m + 2) isOpen_Ioi hφΦ t ht]
-  -- First derivative of `Φ` on `(0, ∞)`.  The product rule on `s · log s`
-  -- gives `log s + 1`; the `+1` is exactly what cancels against the linear
-  -- term so the result reduces to `-(1/(2π)) · log s + log(2π)/(2π)`.
+  -- First derivative of Φ.  Product rule on `s·log s` gives `log s + 1`; the
+  -- `+1` cancels the linear term, so `Φ'(s) = -(1/(2π))·log s + log(2π)/(2π)`.
   have hderiv_Φ : ∀ s, 0 < s →
       deriv Φ s = -(1 / (2 * Real.pi)) * Real.log s
                 + Real.log (2 * Real.pi) / (2 * Real.pi) := by
@@ -383,8 +350,7 @@ theorem iteratedDeriv_φ (n : ℕ) (hn : 2 ≤ n) (t : ℝ) (ht : 0 < t) :
           (1 * Real.log s + s * s⁻¹) s := (hasDerivAt_id s).mul h2
       have hcalc : (1 : ℝ) * Real.log s + s * s⁻¹ = Real.log s + 1 := by
         rw [mul_inv_cancel₀ (ne_of_gt hs)]; ring
-      rw [hcalc] at hp
-      exact hp
+      rw [hcalc] at hp; exact hp
     have h_term1 :
         HasDerivAt (fun s : ℝ => -(1 / (2 * Real.pi)) * (s * Real.log s))
           (-(1 / (2 * Real.pi)) * (Real.log s + 1)) s :=
@@ -393,9 +359,8 @@ theorem iteratedDeriv_φ (n : ℕ) (hn : 2 ≤ n) (t : ℝ) (ht : 0 < t) :
         HasDerivAt (fun s : ℝ =>
             ((1 + Real.log (2 * Real.pi)) / (2 * Real.pi)) * s)
           ((1 + Real.log (2 * Real.pi)) / (2 * Real.pi)) s := by
-      have := (hasDerivAt_id s).const_mul
+      simpa using (hasDerivAt_id s).const_mul
         ((1 + Real.log (2 * Real.pi)) / (2 * Real.pi))
-      simpa using this
     have hΦ' :
         HasDerivAt Φ
           (-(1 / (2 * Real.pi)) * (Real.log s + 1)
@@ -404,72 +369,37 @@ theorem iteratedDeriv_φ (n : ℕ) (hn : 2 ≤ n) (t : ℝ) (ht : 0 < t) :
     rw [hΦ'.deriv]
     field_simp
     ring
-  -- Peel one derivative and replace `deriv Φ` with its closed form `ψ`
-  -- on `(0, ∞)`.
+  -- Peel one derivative; replace `deriv Φ` by its closed form `ψ` on `(0,∞)`.
   rw [show (m + 2 : ℕ) = (m + 1) + 1 from rfl, iteratedDeriv_succ']
   set ψ : ℝ → ℝ := fun s =>
     -(1 / (2 * Real.pi)) * Real.log s
-    + Real.log (2 * Real.pi) / (2 * Real.pi) with hψ_def
-  have hderiv_eq_ψ : ∀ s ∈ Set.Ioi (0 : ℝ), deriv Φ s = ψ s := fun s hs => hderiv_Φ s hs
-  rw [iteratedDeriv_congr_of_nhds (m + 1) isOpen_Ioi hderiv_eq_ψ t ht]
-  -- For `k ≥ 1` and `s > 0`,  iteratedDeriv k ψ s = -(1/(2π)) · iteratedDeriv k log s.
-  -- We avoid global `iteratedDeriv_add`/`_const_mul` (which want `ContDiff`
-  -- globally; `log` is not globally smooth) and iterate manually.
+    + Real.log (2 * Real.pi) / (2 * Real.pi)
+  rw [iteratedDeriv_congr_of_nhds (m + 1) isOpen_Ioi hderiv_Φ t ht]
+  -- For k ≥ 1 and s > 0,  iteratedDeriv k ψ s = -(1/(2π)) · iteratedDeriv k log s.
+  -- We iterate manually: global `iteratedDeriv_add`/`_const_mul` would need
+  -- `ContDiff` of `log` on all of ℝ, which fails at 0.
   have h_iter_ψ : ∀ k : ℕ, ∀ s, 0 < s →
       iteratedDeriv (k + 1) ψ s
         = -(1 / (2 * Real.pi)) * iteratedDeriv (k + 1) Real.log s := by
-    have hderiv_ψ : ∀ s, 0 < s →
-        deriv ψ s = -(1 / (2 * Real.pi)) * (1 / s) := by
-      intro s hs
-      have h_log : HasDerivAt Real.log (1 / s) s := by
-        simpa using Real.hasDerivAt_log (ne_of_gt hs)
-      have h_c1log :
-          HasDerivAt (fun s => -(1 / (2 * Real.pi)) * Real.log s)
-            (-(1 / (2 * Real.pi)) * (1 / s)) s := h_log.const_mul _
-      have hψ' : HasDerivAt ψ (-(1 / (2 * Real.pi)) * (1 / s)) s := by
-        simpa [ψ] using h_c1log.add_const (Real.log (2 * Real.pi) / (2 * Real.pi))
-      exact hψ'.deriv
-    have hderiv_log : ∀ s, 0 < s → deriv Real.log s = 1 / s := by
-      intro s hs
-      have h := Real.hasDerivAt_log (ne_of_gt hs)
-      -- `HasDerivAt.deriv` gives `s⁻¹`; `simp [one_div]` matches the goal `1/s`
-      -- (linter prefers plain `simp` over `simpa ... using` here).
-      rw [h.deriv]
-      simp [one_div]
     have hderiv_ψ_eq : ∀ s ∈ Set.Ioi (0 : ℝ),
         deriv ψ s = (-(1 / (2 * Real.pi))) * deriv Real.log s := by
       intro s hs
-      rw [hderiv_ψ s hs, hderiv_log s hs]
-    -- `iteratedDeriv k (c · g) s = c · iteratedDeriv k g s`, unconditional
-    -- because `deriv_const_mul_field'` holds without differentiability.
-    -- `hEq` must be stated in non-eta-expanded form so the `rw` matches
-    -- inside `deriv (...)`.
-    have iter_const_mul : ∀ (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s : ℝ),
-        iteratedDeriv k (fun s => c * g s) s = c * iteratedDeriv k g s := by
-      intro c g k
-      induction k with
-      | zero => intro s; simp [iteratedDeriv_zero]
-      | succ k ih =>
-        intro s
-        rw [iteratedDeriv_succ, iteratedDeriv_succ]
-        have hEq : iteratedDeriv k (fun s => c * g s)
-                    = fun s => c * iteratedDeriv k g s := by
-          funext s; exact ih s
-        rw [hEq, deriv_const_mul_field']
+      have h_log : HasDerivAt Real.log (1 / s) s := by
+        simpa using Real.hasDerivAt_log (ne_of_gt hs)
+      have hψ' : HasDerivAt ψ (-(1 / (2 * Real.pi)) * (1 / s)) s := by
+        simpa [ψ] using
+          (h_log.const_mul _).add_const
+            (Real.log (2 * Real.pi) / (2 * Real.pi))
+      rw [hψ'.deriv, (Real.hasDerivAt_log (ne_of_gt hs)).deriv]
+      simp [one_div]
     intro k s hs
-    rw [iteratedDeriv_succ']
-    have hcong : ∀ u ∈ Set.Ioi (0 : ℝ),
-        deriv ψ u
-          = (fun u => (-(1 / (2 * Real.pi))) * deriv Real.log u) u :=
-      hderiv_ψ_eq
-    rw [iteratedDeriv_congr_of_nhds k isOpen_Ioi hcong s hs]
-    rw [iter_const_mul (-(1 / (2 * Real.pi))) (deriv Real.log) k s,
+    rw [iteratedDeriv_succ',
+        iteratedDeriv_congr_of_nhds k isOpen_Ioi hderiv_ψ_eq s hs,
+        iteratedDeriv_const_mul (-(1 / (2 * Real.pi))) (deriv Real.log) k s,
         ← iteratedDeriv_succ']
-  rw [h_iter_ψ m t ht]
-  rw [iteratedDeriv_log (m + 1) (by omega) t ht]
+  rw [h_iter_ψ m t ht, iteratedDeriv_log (m + 1) (by omega) t ht]
   simp only [Nat.add_sub_cancel]
-  -- Algebraic finish.  The earlier `m + 2 = m + 1 + 1` rewrite means the
-  -- residual `Nat.sub`s in the goal are over `m + 1 + 1`, not `m + 2`.
+  -- Algebraic finish.  Residual `Nat.sub`s are over `m + 1 + 1`, not `m + 2`.
   have h_fact : (m + 1 + 1) - 2 = m := by omega
   have h_exp : (1 - ((m + 1 + 1 : ℕ) : ℝ)) = -((m + 1 : ℕ) : ℝ) := by
     push_cast; ring
@@ -622,8 +552,8 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
     unfold α_part
     rw [h316]; ring
   -- Set `u := 1/(4 s²)` and `v := 1/(2 s)` for clarity.
-  set u : ℝ := 1 / (4 * s ^ 2) with hu_def
-  set v : ℝ := 1 / (2 * s) with hv_def
+  set u : ℝ := 1 / (4 * s ^ 2)
+  set v : ℝ := 1 / (2 * s)
   have hu_nonneg : 0 ≤ u := by simp [u]; positivity
   have hu_lt : u < 1 := by
     simp only [u]
@@ -638,10 +568,8 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
   -- `s/4 · log(1+u) − 1/(16 s) = s/4 · (log(1+u) − u)` because `1/(16 s) = (s/4)·u`.
   have hAeq : s / 4 * Real.log (1 + u) - 1 / (16 * s) =
               s / 4 * (Real.log (1 + u) - u) := by
-    have : (s / 4) * u = 1 / (16 * s) := by
-      simp [u]; field_simp; ring
-    linarith [this, show s / 4 * Real.log (1 + u) - 1 / (16 * s) =
-               s / 4 * (Real.log (1 + u) - u) + ((s / 4) * u - 1 / (16 * s)) from by ring]
+    have hsu : (s / 4) * u = 1 / (16 * s) := by simp [u]; field_simp; ring
+    linear_combination -hsu
   have h_log_tail : |Real.log (1 + u) - u| ≤ u ^ 2 / (1 - u) :=
     abs_log_one_add_sub_self_le hu_nonneg hu_lt
   have h_one_sub_u : (3 : ℝ) / 4 ≤ 1 - u := by linarith
@@ -669,8 +597,7 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
   -- so `1/4 · v = 1/(8 s)`.
   have hBeq : 1 / 4 * Real.arctan v - 1 / (8 * s) = 1 / 4 * (Real.arctan v - v) := by
     have hv_eq : (1 / 4 : ℝ) * v = 1 / (8 * s) := by simp [v]; field_simp; ring
-    linarith [hv_eq, show 1 / 4 * Real.arctan v - 1 / (8 * s) =
-               1 / 4 * (Real.arctan v - v) + ((1 / 4) * v - 1 / (8 * s)) from by ring]
+    linear_combination -hv_eq
   have h_arctan_tail : |Real.arctan v - v| ≤ |v| ^ 3 / 3 := abs_arctan_sub_self_le v
   have hv_abs : |v| = v := abs_of_pos hv_pos
   -- Combine: `|1/4 · (arctan v − v)| ≤ 1/4 · v³/3 = v³/12 = 1/(96 s³)`.
@@ -707,14 +634,8 @@ lemma iteratedDeriv_α_part_isO (n : ℕ) (hn : 1 ≤ n) :
     IsO (fun t => iteratedDeriv n α_part t)
         (fun t => t ^ (-(n : ℝ) - 1))
         𝓝∞ := by
-  /- Proof: from the Puiseux series α_part(t) = Σ_{k≥1} c_k · t^(-k),
-     differentiating term-by-term n times gives each term O(t^(-n-1)).
-     In Mathlib, this requires:
-       • Showing α_part is smooth on (0,∞)  (`ContDiff` from differentiability
-         of `log` and `arctan` away from their singularities);
-       • Using the asymptotic Laurent expansion and differentiability of
-         each power of t. -/
-  sorry -- TODO (open): see strategy above
+  -- Differentiate α_part(t) = Σ_{k≥1} cₖ t^{-k} term-by-term; each term is O(t^{-n-1}).
+  sorry -- TODO: open gap, see file header
 
 end ErrorTermAlgebraic
 
@@ -733,16 +654,16 @@ end ErrorTermAlgebraic
 
 section ErrorTermIntegral
 
--- (The paper actually uses the antiderivative σ(u) = ∫₀^u ρ(z) dz,
---  which satisfies 0 ≤ σ(u) ≤ 1/8, and integrates by parts once.)
+/- The paper integrates `j` by parts once using the antiderivative
+   `σ(u) = ∫₀^u ρ(z) dz` (which satisfies `0 ≤ σ(u) ≤ 1/8`):
 
-/- After integration by parts:
-     j(t) = 2 ∫₀^∞  σ(u)·(u + 1/4) / ((u + 1/4)² + (t/2)²)²  du
-   where σ(u) = ∫₀^u ρ(z) dz  satisfies  0 ≤ σ(u) ≤ 1/8.
-   This is equation just before the estimate in the paper's proof. -/
+       j(t) = 2 · ∫₀^∞  σ(u) · (u + 1/4) / ((u + 1/4)² + (t/2)²)²  du.
 
-/-- The n-th derivative of j is O(t^(-n-2)).
-    This is the key estimate from the paper (equations after the IBP step). -/
+   The estimate in the paper then differentiates this form n times under
+   the integral and splits at `u = t`. -/
+
+/-- The n-th derivative of `j` is `O(t^(-n-2))`.
+    Key estimate from the paper, after the IBP step above. -/
 lemma iteratedDeriv_j_isO (n : ℕ) :
     IsO (fun t => iteratedDeriv n j t)
         (fun t => t ^ (-(n : ℝ) - 2))
@@ -801,7 +722,8 @@ section ErrorTermDelta
 /-- δ splits as α_part minus the integral term. -/
 lemma δ_eq (t : ℝ) (ht : 0 < t) :
     δ t = α_part t - t / 2 * j t := by
-  sorry -- TODO (open): unfold `δ`, `α_part`, `j` and verify they line up.
+  unfold δ α_part j ρ
+  ring
 
 /-- The n-th derivative of δ is O(t^(-n-1)) for n ≥ 1. -/
 lemma iteratedDeriv_δ_isO (n : ℕ) (hn : 1 ≤ n) :
