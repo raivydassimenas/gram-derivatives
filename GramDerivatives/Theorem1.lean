@@ -302,8 +302,11 @@ private lemma iteratedDeriv_congr_of_nhds
     exact hEq.deriv_eq
 
 /-- Iterated derivative commutes with a constant scalar factor,
-    with no differentiability hypothesis on `g`. -/
-private lemma iteratedDeriv_const_mul (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s : ℝ) :
+    with no differentiability hypothesis on `g`.
+
+    Named with a prime to avoid clash with Mathlib's `iteratedDeriv_const_mul`,
+    which carries a `ContDiffAt` hypothesis we don't want to thread through. -/
+private lemma iteratedDeriv_const_mul' (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s : ℝ) :
     iteratedDeriv k (fun x => c * g x) s = c * iteratedDeriv k g s := by
   induction k generalizing s with
   | zero => simp [iteratedDeriv_zero]
@@ -386,16 +389,15 @@ theorem iteratedDeriv_φ (n : ℕ) (hn : 2 ≤ n) (t : ℝ) (ht : 0 < t) :
       intro s hs
       have h_log : HasDerivAt Real.log (1 / s) s := by
         simpa using Real.hasDerivAt_log (ne_of_gt hs)
-      have hψ' : HasDerivAt ψ (-(1 / (2 * Real.pi)) * (1 / s)) s := by
-        simpa [ψ] using
-          (h_log.const_mul _).add_const
-            (Real.log (2 * Real.pi) / (2 * Real.pi))
+      have hψ' : HasDerivAt ψ (-(1 / (2 * Real.pi)) * (1 / s)) s :=
+        (h_log.const_mul (-(1 / (2 * Real.pi)))).add_const
+          (Real.log (2 * Real.pi) / (2 * Real.pi))
       rw [hψ'.deriv, (Real.hasDerivAt_log (ne_of_gt hs)).deriv]
       simp [one_div]
     intro k s hs
     rw [iteratedDeriv_succ',
         iteratedDeriv_congr_of_nhds k isOpen_Ioi hderiv_ψ_eq s hs,
-        iteratedDeriv_const_mul (-(1 / (2 * Real.pi))) (deriv Real.log) k s,
+        iteratedDeriv_const_mul' (-(1 / (2 * Real.pi))) (deriv Real.log) k s,
         ← iteratedDeriv_succ']
   rw [h_iter_ψ m t ht, iteratedDeriv_log (m + 1) (by omega) t ht]
   simp only [Nat.add_sub_cancel]
@@ -569,7 +571,7 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
   have hAeq : s / 4 * Real.log (1 + u) - 1 / (16 * s) =
               s / 4 * (Real.log (1 + u) - u) := by
     have hsu : (s / 4) * u = 1 / (16 * s) := by simp [u]; field_simp; ring
-    linear_combination -hsu
+    linear_combination hsu
   have h_log_tail : |Real.log (1 + u) - u| ≤ u ^ 2 / (1 - u) :=
     abs_log_one_add_sub_self_le hu_nonneg hu_lt
   have h_one_sub_u : (3 : ℝ) / 4 ≤ 1 - u := by linarith
@@ -597,7 +599,7 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
   -- so `1/4 · v = 1/(8 s)`.
   have hBeq : 1 / 4 * Real.arctan v - 1 / (8 * s) = 1 / 4 * (Real.arctan v - v) := by
     have hv_eq : (1 / 4 : ℝ) * v = 1 / (8 * s) := by simp [v]; field_simp; ring
-    linear_combination -hv_eq
+    linear_combination hv_eq
   have h_arctan_tail : |Real.arctan v - v| ≤ |v| ^ 3 / 3 := abs_arctan_sub_self_le v
   have hv_abs : |v| = v := abs_of_pos hv_pos
   -- Combine: `|1/4 · (arctan v − v)| ≤ 1/4 · v³/3 = v³/12 = 1/(96 s³)`.
@@ -629,13 +631,161 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
   -- on `u, v`, both forms should match.
   exact habs_add.trans (hsum ▸ h_final)
 
-/-- The n-th derivative of α_part is O(t^(-n-1)). -/
+/-! ### Scaffold reduction of `iteratedDeriv_α_part_isO`
+
+The original gap (`α_part^(n) = O(t^(-n-1))` for `n ≥ 1`) is reduced to:
+  • two routine first- and second-derivative computations of `α_part`, and
+  • a single deep rational-decay lemma `iteratedDeriv_α_part_deriv2_isO`.
+The main theorem `iteratedDeriv_α_part_isO` is then proved unconditionally
+from those three pieces (no further `sorry`). -/
+
+/-- Closed form for the second derivative of `α_part` on `(0, ∞)`.
+
+    Combined as a single rational function:
+        α_part_deriv2(t) = (12 t² − 1) / (2 t (4 t² + 1)²). -/
+private noncomputable def α_part_deriv2 (t : ℝ) : ℝ :=
+  -1 / (2 * t * (4 * t ^ 2 + 1)) + 8 * t / (4 * t ^ 2 + 1) ^ 2
+
+/-- **Routine.**  `α_part'(t) = (1/4)·log(1 + 1/(4t²)) − 1/(4t² + 1)` for `t > 0`.
+
+    Mechanical product/chain rule:
+      d/dt[(t/4)·log(1+1/(4t²))]
+        = (1/4)·log(1+1/(4t²))  +  (t/4)·(-2/(t(4t²+1)))
+        = (1/4)·log(1+1/(4t²))  −  1/(2(4t²+1))
+      d/dt[(1/4)·arctan(1/(2t))]
+        = (1/4)·((-1/(2t²))/(1+1/(4t²)))
+        = −1/(2(4t²+1))
+      sum = (1/4)·log(1+1/(4t²)) − 1/(4t²+1). -/
+private lemma hasDerivAt_α_part {t : ℝ} (ht : 0 < t) :
+    HasDerivAt α_part
+      ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)) t := by
+  sorry
+
+/-- **Routine.**  Differentiating the closed form of `α_part'` once more
+    produces the rational expression `α_part_deriv2`.
+
+    Mechanical:
+      d/dt[(1/4)·log(1+1/(4t²))] = (1/4)·(-2/(t(4t²+1))) = −1/(2t(4t²+1))
+      d/dt[1/(4t²+1)] = −8t/(4t²+1)²,  so d/dt[−1/(4t²+1)] = 8t/(4t²+1)². -/
+private lemma hasDerivAt_α_part_form {t : ℝ} (ht : 0 < t) :
+    HasDerivAt
+      (fun s : ℝ =>
+        (1 / 4) * Real.log (1 + 1 / (4 * s ^ 2)) - 1 / (4 * s ^ 2 + 1))
+      (α_part_deriv2 t) t := by
+  sorry
+
+/-- **The single deep open gap.**
+
+    For all `k ≥ 0`, the `k`-th iterated derivative of the rational function
+        α_part_deriv2(t) = -1/(2t(4t²+1)) + 8t/(4t²+1)²
+                         = (12 t² − 1) / (2 t (4 t² + 1)²)
+    decays as `O(t^(-3-k))` at `+∞`.
+
+    Two viable proof routes:
+    (a) **Cauchy estimate.**  Extend `α_part_deriv2` to a meromorphic
+        function on `{Re z > 0}` (its only finite poles are at `z = 0` and
+        `z = ±i/2`).  On the disk `|z − t| ≤ t/2` (for real `t ≥ 2`):
+            |z| ∈ [t/2, 3t/2],   |4z² + 1| ≥ t²/2,   |12 z² − 1| ≤ 28 t²,
+        so  |α_part_deriv2(z)| ≤ 28·t² / (2·(t/2)·(t²/2)²) = 112/t³.
+        Cauchy then gives |α_part_deriv2^{(k)}(t)| ≤ k!·112·2^k / t^{k+3}.
+    (b) **Induction on k.**  Show by induction that `iteratedDeriv k α_part_deriv2`
+        is a finite sum of terms `c · t^a / (4t²+1)^b` with `a − 2b ≤ −3 − k`
+        and bounded coefficients `c`; bound term-by-term. -/
+lemma iteratedDeriv_α_part_deriv2_isO (k : ℕ) :
+    IsO (fun t => iteratedDeriv k α_part_deriv2 t)
+        (fun t => t ^ (-(k : ℝ) - 3))
+        𝓝∞ :=
+  sorry
+
+/-- The n-th derivative of `α_part` is `O(t^(-n-1))` for `n ≥ 1`. -/
 lemma iteratedDeriv_α_part_isO (n : ℕ) (hn : 1 ≤ n) :
     IsO (fun t => iteratedDeriv n α_part t)
         (fun t => t ^ (-(n : ℝ) - 1))
         𝓝∞ := by
-  -- Differentiate α_part(t) = Σ_{k≥1} cₖ t^{-k} term-by-term; each term is O(t^{-n-1}).
-  sorry -- TODO: open gap, see file header
+  rcases Nat.lt_or_ge n 2 with hn1 | hn2
+  · -- Case n = 1: bound `α_part'` directly using log(1+x) ≤ x and 1/(4t²+1) ≤ 1/(4t²).
+    have hn_eq : n = 1 := by omega
+    subst hn_eq
+    refine Asymptotics.IsBigO.of_bound (5 / 16) ?_
+    filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht
+    have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le zero_lt_one ht
+    have ht2_pos : (0 : ℝ) < t ^ 2 := by positivity
+    have h4t2_pos : (0 : ℝ) < 4 * t ^ 2 := by positivity
+    have h_inner_pos : (0 : ℝ) < 1 + 1 / (4 * t ^ 2) := by positivity
+    -- Reduce iteratedDeriv 1 to deriv.
+    have h_iter1 : iteratedDeriv 1 α_part t = deriv α_part t := by
+      rw [show (1 : ℕ) = 0 + 1 from rfl, iteratedDeriv_succ', iteratedDeriv_zero]
+    rw [h_iter1, (hasDerivAt_α_part ht_pos).deriv]
+    -- Elementary bounds.
+    have h_log_le : Real.log (1 + 1 / (4 * t ^ 2)) ≤ 1 / (4 * t ^ 2) := by
+      have := Real.log_le_sub_one_of_pos h_inner_pos
+      linarith
+    have h_log_nn : 0 ≤ Real.log (1 + 1 / (4 * t ^ 2)) :=
+      Real.log_nonneg (by linarith [show (0:ℝ) ≤ 1 / (4 * t ^ 2) by positivity])
+    have h_recip_le : (1 : ℝ) / (4 * t ^ 2 + 1) ≤ 1 / (4 * t ^ 2) :=
+      one_div_le_one_div_of_le h4t2_pos (by linarith)
+    have h_recip_nn : (0 : ℝ) ≤ 1 / (4 * t ^ 2 + 1) := by positivity
+    have h_log_quarter_nn :
+        (0 : ℝ) ≤ (1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) :=
+      mul_nonneg (by norm_num) h_log_nn
+    -- Triangle inequality + linear bounds.
+    have h_abs :
+        |(1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)|
+          ≤ (1 / 4) * (1 / (4 * t ^ 2)) + 1 / (4 * t ^ 2) := by
+      have h_tri :
+          |(1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)|
+            ≤ |(1 / 4) * Real.log (1 + 1 / (4 * t ^ 2))|
+              + |(1 : ℝ) / (4 * t ^ 2 + 1)| := by
+        have := abs_add_le ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)))
+                           (-((1 : ℝ) / (4 * t ^ 2 + 1)))
+        rw [abs_neg] at this
+        simpa [sub_eq_add_neg] using this
+      rw [abs_of_nonneg h_log_quarter_nn, abs_of_nonneg h_recip_nn] at h_tri
+      have h_log_quarter_le :
+          (1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) ≤ (1 / 4) * (1 / (4 * t ^ 2)) :=
+        mul_le_mul_of_nonneg_left h_log_le (by norm_num)
+      linarith
+    -- Convert `t^(-(↑1 : ℝ) - 1)` to `1/t²`.
+    have h_pow_simp : t ^ (-((1 : ℕ) : ℝ) - 1) = 1 / t ^ 2 := by
+      have hexp : (-((1 : ℕ) : ℝ) - 1) = -((2 : ℕ) : ℝ) := by push_cast; ring
+      rw [hexp, Real.rpow_neg ht_pos.le, Real.rpow_natCast, one_div]
+    rw [Real.norm_eq_abs, Real.norm_eq_abs, h_pow_simp,
+        abs_of_pos (by positivity : (0 : ℝ) < 1 / t ^ 2)]
+    refine h_abs.trans (le_of_eq ?_)
+    field_simp
+    ring
+  · -- Case n ≥ 2: reduce to `iteratedDeriv_α_part_deriv2_isO`.
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
+    -- Step 1: pointwise equality `deriv (deriv α_part) = α_part_deriv2` on (0,∞).
+    have h_pointwise : ∀ s ∈ Set.Ioi (0 : ℝ),
+        deriv (deriv α_part) s = α_part_deriv2 s := by
+      intro s hs
+      have hs_pos : (0 : ℝ) < s := hs
+      -- `deriv α_part` agrees with the closed form on a nbhd of `s`.
+      have h_eq_on_nhds :
+          (deriv α_part : ℝ → ℝ) =ᶠ[nhds s]
+            (fun r => (1 / 4) * Real.log (1 + 1 / (4 * r ^ 2))
+                      - 1 / (4 * r ^ 2 + 1)) := by
+        filter_upwards [isOpen_Ioi.mem_nhds hs] with r hr
+        exact (hasDerivAt_α_part hr).deriv
+      rw [h_eq_on_nhds.deriv_eq]
+      exact (hasDerivAt_α_part_form hs_pos).deriv
+    -- Step 2: lift to iteratedDeriv on the open set (0,∞).
+    have h_eq :
+        (fun t => iteratedDeriv (m + 2) α_part t) =ᶠ[Filter.atTop]
+        (fun t => iteratedDeriv m α_part_deriv2 t) := by
+      filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+      rw [show (m + 2 : ℕ) = (m + 1) + 1 from rfl, iteratedDeriv_succ',
+          iteratedDeriv_succ']
+      exact iteratedDeriv_congr_of_nhds m isOpen_Ioi h_pointwise t ht
+    -- Step 3: invoke the deep gap and rewrite the bound.
+    have h_O := iteratedDeriv_α_part_deriv2_isO m
+    have h_pow_eq :
+        (fun t : ℝ => t ^ (-(m : ℝ) - 3))
+          = (fun t : ℝ => t ^ (-((m + 2 : ℕ) : ℝ) - 1)) := by
+      funext t; congr 1; push_cast; ring
+    rw [h_pow_eq] at h_O
+    exact h_eq.trans_isBigO h_O
 
 end ErrorTermAlgebraic
 
