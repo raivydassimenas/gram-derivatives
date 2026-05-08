@@ -659,7 +659,63 @@ private noncomputable def α_part_deriv2 (t : ℝ) : ℝ :=
 private lemma hasDerivAt_α_part {t : ℝ} (ht : 0 < t) :
     HasDerivAt α_part
       ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)) t := by
-  sorry
+  have ht_ne : t ≠ 0 := ne_of_gt ht
+  have h4t2_pos : (0 : ℝ) < 4 * t ^ 2 := by positivity
+  have h4t2_ne : (4 * t ^ 2 : ℝ) ≠ 0 := ne_of_gt h4t2_pos
+  have h4t2_p1_pos : (0 : ℝ) < 4 * t ^ 2 + 1 := by positivity
+  have h4t2_p1_ne : (4 * t ^ 2 + 1 : ℝ) ≠ 0 := ne_of_gt h4t2_p1_pos
+  have h_inner_pos : (0 : ℝ) < 1 + 1 / (4 * t ^ 2) := by positivity
+  have h_inner_ne : (1 + 1 / (4 * t ^ 2) : ℝ) ≠ 0 := ne_of_gt h_inner_pos
+  have h2t_ne : (2 * t : ℝ) ≠ 0 := by positivity
+  -- Each step normalises its own derivative to a clean closed form.
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
+    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
+    push_cast; ring
+  have h_inv_4t2 :
+      HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t := by
+    convert (hasDerivAt_const t (1 : ℝ)).div h_4t2 h4t2_ne using 1
+    field_simp; ring
+  have h_one_plus :
+      HasDerivAt (fun s : ℝ => 1 + 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t :=
+    h_inv_4t2.const_add (1 : ℝ)
+  have h_log :
+      HasDerivAt (fun s : ℝ => Real.log (1 + 1 / (4 * s ^ 2)))
+        (-2 / (t * (4 * t ^ 2 + 1))) t := by
+    convert h_one_plus.log h_inner_ne using 1
+    field_simp; ring
+  have h_div4 : HasDerivAt (fun s : ℝ => s / 4) (1 / 4 : ℝ) t :=
+    (hasDerivAt_id t).div_const 4
+  have h_first :
+      HasDerivAt (fun s : ℝ => s / 4 * Real.log (1 + 1 / (4 * s ^ 2)))
+        ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (2 * (4 * t ^ 2 + 1))) t := by
+    convert h_div4.mul h_log using 1
+    field_simp; ring
+  have h_2s : HasDerivAt (fun s : ℝ => 2 * s) (2 : ℝ) t := by
+    convert (hasDerivAt_id t).const_mul (2 : ℝ) using 1; ring
+  have h_inv_2s :
+      HasDerivAt (fun s : ℝ => 1 / (2 * s)) (-1 / (2 * t ^ 2)) t := by
+    convert (hasDerivAt_const t (1 : ℝ)).div h_2s h2t_ne using 1
+    field_simp; ring
+  have h_arctan :
+      HasDerivAt (fun s : ℝ => Real.arctan (1 / (2 * s)))
+        (-2 / (4 * t ^ 2 + 1)) t := by
+    convert h_inv_2s.arctan using 1
+    field_simp; ring
+  have h_second :
+      HasDerivAt (fun s : ℝ => 1 / 4 * Real.arctan (1 / (2 * s)))
+        (-1 / (2 * (4 * t ^ 2 + 1))) t := by
+    convert h_arctan.const_mul (1 / 4 : ℝ) using 1
+    field_simp; ring
+  -- Combine.  The final derivative collapses to the clean form.
+  have h_sum :
+      HasDerivAt
+        (fun s : ℝ =>
+          s / 4 * Real.log (1 + 1 / (4 * s ^ 2)) + 1 / 4 * Real.arctan (1 / (2 * s)))
+        ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)) t := by
+    convert h_first.add h_second using 1
+    field_simp; ring
+  -- α_part is definitionally the lambda above.
+  exact h_sum
 
 /-- **Routine.**  Differentiating the closed form of `α_part'` once more
     produces the rational expression `α_part_deriv2`.
@@ -672,7 +728,52 @@ private lemma hasDerivAt_α_part_form {t : ℝ} (ht : 0 < t) :
       (fun s : ℝ =>
         (1 / 4) * Real.log (1 + 1 / (4 * s ^ 2)) - 1 / (4 * s ^ 2 + 1))
       (α_part_deriv2 t) t := by
-  sorry
+  have ht_ne : t ≠ 0 := ne_of_gt ht
+  have h4t2_pos : (0 : ℝ) < 4 * t ^ 2 := by positivity
+  have h4t2_ne : (4 * t ^ 2 : ℝ) ≠ 0 := ne_of_gt h4t2_pos
+  have h4t2_p1_pos : (0 : ℝ) < 4 * t ^ 2 + 1 := by positivity
+  have h4t2_p1_ne : (4 * t ^ 2 + 1 : ℝ) ≠ 0 := ne_of_gt h4t2_p1_pos
+  have h_inner_pos : (0 : ℝ) < 1 + 1 / (4 * t ^ 2) := by positivity
+  have h_inner_ne : (1 + 1 / (4 * t ^ 2) : ℝ) ≠ 0 := ne_of_gt h_inner_pos
+  -- Reuse the chain (1/4)·log(1 + 1/(4 s²)) from the previous lemma.
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
+    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
+    push_cast; ring
+  have h_inv_4t2 :
+      HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t := by
+    convert (hasDerivAt_const t (1 : ℝ)).div h_4t2 h4t2_ne using 1
+    field_simp; ring
+  have h_one_plus :
+      HasDerivAt (fun s : ℝ => 1 + 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t :=
+    h_inv_4t2.const_add (1 : ℝ)
+  have h_log :
+      HasDerivAt (fun s : ℝ => Real.log (1 + 1 / (4 * s ^ 2)))
+        (-2 / (t * (4 * t ^ 2 + 1))) t := by
+    convert h_one_plus.log h_inner_ne using 1
+    field_simp; ring
+  have h_first :
+      HasDerivAt (fun s : ℝ => (1 / 4) * Real.log (1 + 1 / (4 * s ^ 2)))
+        (-1 / (2 * t * (4 * t ^ 2 + 1))) t := by
+    convert h_log.const_mul (1 / 4 : ℝ) using 1
+    field_simp; ring
+  -- Second piece: 1/(4 s² + 1).
+  have h_4t2_p1 :
+      HasDerivAt (fun s : ℝ => 4 * s ^ 2 + 1) (8 * t) t := by
+    convert h_4t2.add_const (1 : ℝ) using 1
+  have h_inv_4t2_p1 :
+      HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2 + 1))
+        (-(8 * t) / (4 * t ^ 2 + 1) ^ 2) t := by
+    convert (hasDerivAt_const t (1 : ℝ)).div h_4t2_p1 h4t2_p1_ne using 1
+    ring
+  -- Combine: (1/4)·log(...) − 1/(4 s² + 1).
+  have h_sub :
+      HasDerivAt
+        (fun s : ℝ => (1 / 4) * Real.log (1 + 1 / (4 * s ^ 2)) - 1 / (4 * s ^ 2 + 1))
+        (α_part_deriv2 t) t := by
+    convert h_first.sub h_inv_4t2_p1 using 1
+    unfold α_part_deriv2
+    field_simp; ring
+  exact h_sub
 
 /-- **The single deep open gap.**
 
