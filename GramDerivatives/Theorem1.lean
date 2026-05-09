@@ -444,7 +444,7 @@ private lemma abs_arctan_sub_self_le (v : ℝ) :
   suffices h : ∀ w : ℝ, 0 ≤ w → |Real.arctan w - w| ≤ w ^ 3 / 3 by
     by_cases hv : 0 ≤ v
     · simpa [abs_of_nonneg hv] using h v hv
-    · push_neg at hv
+    · have hv : v < 0 := lt_of_not_ge hv
       have hpos : 0 ≤ -v := by linarith
       have key := h (-v) hpos
       have hreq : -Real.arctan v - -v = -(Real.arctan v - v) := by ring
@@ -526,7 +526,7 @@ private lemma abs_log_one_add_sub_self_le {u : ℝ} (hu : 0 ≤ u) (hu_lt : u < 
 /-- Laurent expansion of α_part: it equals 3/(16t) + O(t^(-3)).
     This is derived by Taylor-expanding log(1+x) and arctan(x) at x=0
     with x = 1/(4t²) and x = 1/(2t) respectively. -/
-lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
+lemma α_part_expansion (t : ℝ) (_ : 0 < t) :
     ∃ (r : ℝ → ℝ),
       IsO r (fun t => t ^ (-(3 : ℝ))) 𝓝∞ ∧
       α_part t = 3 / (16 * t) + r t := by
@@ -556,7 +556,7 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
   -- Set `u := 1/(4 s²)` and `v := 1/(2 s)` for clarity.
   set u : ℝ := 1 / (4 * s ^ 2)
   set v : ℝ := 1 / (2 * s)
-  have hu_nonneg : 0 ≤ u := by simp [u]; positivity
+  have hu_nonneg : 0 ≤ u := by simp only [u]; positivity
   have hu_lt : u < 1 := by
     simp only [u]
     rw [div_lt_one (by positivity)]
@@ -565,7 +565,7 @@ lemma α_part_expansion (t : ℝ) (ht : 0 < t) :
     simp only [u]
     rw [div_le_div_iff₀ (by positivity) (by positivity)]
     nlinarith [hs, sq_nonneg (s - 1)]
-  have hv_pos : 0 < v := by simp [v]; positivity
+  have hv_pos : 0 < v := by simp only [v]; positivity
   -- Bound (A): the log piece.
   -- `s/4 · log(1+u) − 1/(16 s) = s/4 · (log(1+u) − u)` because `1/(16 s) = (s/4)·u`.
   have hAeq : s / 4 * Real.log (1 + u) - 1 / (16 * s) =
@@ -775,28 +775,287 @@ private lemma hasDerivAt_α_part_form {t : ℝ} (ht : 0 < t) :
     field_simp; ring
   exact h_sub
 
-/-- **The single deep open gap.**
+/-! #### Rational-piece machinery for `iteratedDeriv_α_part_deriv2_isO`
 
-    For all `k ≥ 0`, the `k`-th iterated derivative of the rational function
+We encode each summand `c · t^a · (4t² + 1)^{-b}` as a `RatTerm`, with formal
+derivative producing two new terms that lower the asymptotic invariant
+`a − 2b` by 1.  Iterating gives `iteratedDeriv k α_part_deriv2` as a finite
+sum of such pieces, all bounded by `O(t^(-3-k))`. -/
+
+/-- A formal piece `c · t^a · (4t² + 1)^{-b}`. -/
+private structure RatTerm where
+  coeff : ℝ
+  tExp : ℤ
+  polePow : ℕ
+
+/-- Evaluation at a real `t`. -/
+private noncomputable def RatTerm.eval (p : RatTerm) (t : ℝ) : ℝ :=
+  p.coeff * t ^ p.tExp / (4 * t ^ 2 + 1) ^ p.polePow
+
+/-- Formal derivative of a single `RatTerm`: product rule on
+    `c · t^a · (4t² + 1)^{-b}` produces the two terms
+    `c · a · t^{a-1} · (4t² + 1)^{-b}` and `-8 c b · t^{a+1} · (4t² + 1)^{-(b+1)}`. -/
+private def RatTerm.formalDeriv (p : RatTerm) : List RatTerm :=
+  [{ coeff := p.coeff * (p.tExp : ℝ), tExp := p.tExp - 1, polePow := p.polePow },
+   { coeff := -8 * p.coeff * (p.polePow : ℝ),
+     tExp := p.tExp + 1, polePow := p.polePow + 1 }]
+
+/-- A formal sum of `RatTerm`s. -/
+private abbrev RatExpr := List RatTerm
+
+/-- Evaluation of a `RatExpr` at `t`. -/
+private noncomputable def RatExpr.eval (l : RatExpr) (t : ℝ) : ℝ :=
+  (l.map (fun p => p.eval t)).sum
+
+/-- Formal derivative of a `RatExpr`: each piece is differentiated and the
+    resulting two-term lists concatenated. -/
+private def RatExpr.formalDeriv (l : RatExpr) : RatExpr :=
+  l.flatMap RatTerm.formalDeriv
+
+/-- The asymptotic invariant: every term in `l` satisfies `tExp − 2·polePow ≤ M`. -/
+private def RatExpr.Bounded (M : ℤ) (l : RatExpr) : Prop :=
+  ∀ p ∈ l, p.tExp - 2 * (p.polePow : ℤ) ≤ M
+
+/-- Pointwise expansion of `RatExpr.eval p.formalDeriv t`. -/
+private lemma RatTerm.formalDeriv_eval (p : RatTerm) (t : ℝ) :
+    RatExpr.eval p.formalDeriv t =
+      p.coeff * (p.tExp : ℝ) * t ^ (p.tExp - 1) / (4 * t ^ 2 + 1) ^ p.polePow
+      + (-8 * p.coeff * (p.polePow : ℝ)) * t ^ (p.tExp + 1)
+          / (4 * t ^ 2 + 1) ^ (p.polePow + 1) := by
+  change (((⟨p.coeff * (p.tExp : ℝ), p.tExp - 1, p.polePow⟩ : RatTerm).eval t) ::
+        ((⟨-8 * p.coeff * (p.polePow : ℝ), p.tExp + 1, p.polePow + 1⟩
+          : RatTerm).eval t) :: []).sum = _
+  simp [RatTerm.eval]
+
+/-- Lemma A: each `RatTerm` is differentiable on `(0, ∞)`, with the
+    derivative given by the formal-derivative sum. -/
+private lemma RatTerm.hasDerivAt_eval (p : RatTerm) {t : ℝ} (ht : 0 < t) :
+    HasDerivAt p.eval (RatExpr.eval p.formalDeriv t) t := by
+  obtain ⟨c, a, b⟩ := p
+  have ht_ne : t ≠ 0 := ne_of_gt ht
+  have h_q_pos : (0 : ℝ) < 4 * t ^ 2 + 1 := by positivity
+  have h_q_ne : (4 * t ^ 2 + 1 : ℝ) ≠ 0 := ne_of_gt h_q_pos
+  -- Build numerator and denominator differentiabilities.
+  have h_num : HasDerivAt (fun s : ℝ => c * s ^ a) (c * ((a : ℝ) * t ^ (a - 1))) t :=
+    (hasDerivAt_zpow a t (Or.inl ht_ne)).const_mul c
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
+    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
+    push_cast; ring
+  have h_qb :
+      HasDerivAt (fun s : ℝ => (4 * s ^ 2 + 1) ^ b)
+        ((b : ℝ) * (4 * t ^ 2 + 1) ^ (b - 1) * (8 * t)) t :=
+    (h_4t2.add_const 1).pow b
+  -- Quotient.
+  have h_div := h_num.div h_qb (pow_ne_zero b h_q_ne)
+  change HasDerivAt (fun s : ℝ => c * s ^ a / (4 * s ^ 2 + 1) ^ b) _ t
+  rw [RatTerm.formalDeriv_eval]
+  convert h_div using 1
+  -- Reconcile the two derivative expressions algebraically.  Replace
+  -- `t^(a-1)` and `t^(a+1)` with `t^a/t` and `t·t^a` so that `ring` only
+  -- has to handle a single zpow factor.
+  have h_pred : t ^ (a - 1) = t ^ a * t⁻¹ := by
+    rw [show (a - 1 : ℤ) = a + (-1) from by ring, zpow_add₀ ht_ne, zpow_neg_one]
+  have h_succ : t ^ (a + 1) = t ^ a * t := by
+    rw [zpow_add₀ ht_ne, zpow_one]
+  rw [h_pred, h_succ]
+  -- Split on b because `b - 1 : ℕ` truncates at 0.
+  rcases b with _ | b'
+  · simp; ring
+  · have hb_pred : (b' + 1 : ℕ) - 1 = b' := Nat.add_sub_cancel _ _
+    rw [hb_pred]
+    field_simp
+    ring
+
+/-- Lemma B: a finite-sum `RatExpr` is differentiable on `(0, ∞)`. -/
+private lemma RatExpr.hasDerivAt_eval (l : RatExpr) {t : ℝ} (ht : 0 < t) :
+    HasDerivAt (RatExpr.eval l) (RatExpr.eval (RatExpr.formalDeriv l) t) t := by
+  induction l with
+  | nil =>
+    change HasDerivAt (fun _ : ℝ => (0 : ℝ)) 0 t
+    exact hasDerivAt_const t 0
+  | cons p ps ih =>
+    have h_p : HasDerivAt p.eval (RatExpr.eval p.formalDeriv t) t :=
+      RatTerm.hasDerivAt_eval p ht
+    have h_eval_cons :
+        RatExpr.eval (p :: ps) = (fun s => p.eval s + RatExpr.eval ps s) := by
+      funext s; simp [RatExpr.eval]
+    have h_formal_cons :
+        RatExpr.formalDeriv (p :: ps) =
+          p.formalDeriv ++ RatExpr.formalDeriv ps := rfl
+    have h_eval_append :
+        RatExpr.eval (p.formalDeriv ++ RatExpr.formalDeriv ps) t =
+          RatExpr.eval p.formalDeriv t + RatExpr.eval (RatExpr.formalDeriv ps) t := by
+      simp [RatExpr.eval, List.map_append, List.sum_append]
+    rw [h_eval_cons, h_formal_cons, h_eval_append]
+    exact h_p.add ih
+
+/-- Lemma C: formal differentiation lowers the asymptotic invariant by 1. -/
+private lemma RatExpr.Bounded.formalDeriv {l : RatExpr} {M : ℤ}
+    (h : RatExpr.Bounded M l) :
+    RatExpr.Bounded (M - 1) (RatExpr.formalDeriv l) := by
+  intro p hp
+  simp only [RatExpr.formalDeriv, List.mem_flatMap, RatTerm.formalDeriv,
+    List.mem_cons, List.not_mem_nil, or_false] at hp
+  obtain ⟨q, hq, hp_eq⟩ := hp
+  have hq_inv := h q hq
+  rcases hp_eq with rfl | rfl
+  · -- p.tExp = q.tExp - 1, p.polePow = q.polePow
+    change q.tExp - 1 - 2 * (q.polePow : ℤ) ≤ M - 1
+    omega
+  · -- p.tExp = q.tExp + 1, p.polePow = q.polePow + 1
+    change q.tExp + 1 - 2 * ((q.polePow + 1 : ℕ) : ℤ) ≤ M - 1
+    push_cast
+    omega
+
+/-- Per-term bound: `|p.eval t| ≤ (|p.coeff| / 4^b) · t^M` for `t ≥ 1`,
+    where `M` upper-bounds `p.tExp − 2·p.polePow`. -/
+private lemma RatTerm.abs_eval_le (p : RatTerm) {M : ℤ}
+    (hp : p.tExp - 2 * (p.polePow : ℤ) ≤ M) {t : ℝ} (ht : 1 ≤ t) :
+    |p.eval t| ≤ |p.coeff| / 4 ^ p.polePow * t ^ M := by
+  obtain ⟨c, a, b⟩ := p
+  have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le zero_lt_one ht
+  have ht_ne : t ≠ 0 := ne_of_gt ht_pos
+  have h_4t2_pos : (0 : ℝ) < 4 * t ^ 2 := by positivity
+  have h_4t2_p1_pos : (0 : ℝ) < 4 * t ^ 2 + 1 := by positivity
+  have h_pow_a_pos : (0 : ℝ) < t ^ a := zpow_pos ht_pos a
+  have h_4t2_pow_pos : (0 : ℝ) < (4 * t ^ 2) ^ b := pow_pos h_4t2_pos b
+  have h_4t2_p1_pow_pos : (0 : ℝ) < (4 * t ^ 2 + 1) ^ b := pow_pos h_4t2_p1_pos b
+  unfold RatTerm.eval
+  rw [abs_div, abs_mul, abs_of_pos h_4t2_p1_pow_pos, abs_of_pos h_pow_a_pos]
+  -- Drop the +1 in the denominator.
+  have step1 :
+      |c| * t ^ a / (4 * t ^ 2 + 1) ^ b ≤ |c| * t ^ a / (4 * t ^ 2) ^ b := by
+    apply div_le_div_of_nonneg_left
+    · positivity
+    · exact h_4t2_pow_pos
+    · exact pow_le_pow_left₀ (by linarith) (by linarith : 4 * t ^ 2 ≤ 4 * t ^ 2 + 1) _
+  refine step1.trans ?_
+  -- Rewrite RHS in `(|c|/4^b) · t^(a − 2b)` form.
+  have h_eq :
+      |c| * t ^ a / (4 * t ^ 2) ^ b = |c| / 4 ^ b * t ^ (a - 2 * (b : ℤ)) := by
+    have : (4 * t ^ 2 : ℝ) ^ b = 4 ^ b * (t ^ 2) ^ b := mul_pow _ _ _
+    rw [this, ← pow_mul]
+    have h_pow2b : t ^ (2 * b) = t ^ ((2 * b : ℕ) : ℤ) := by
+      rw [zpow_natCast]
+    rw [h_pow2b]
+    rw [show a - 2 * (b : ℤ) = a + (-((2 * b : ℕ) : ℤ)) from by push_cast; ring]
+    rw [zpow_add₀ ht_ne, zpow_neg]
+    field_simp
+  rw [h_eq]
+  -- Bound `t^(a − 2b) ≤ t^M` since `a − 2b ≤ M` and `t ≥ 1`.
+  apply mul_le_mul_of_nonneg_left
+  · exact zpow_le_zpow_right₀ ht hp
+  · positivity
+
+/-- Lemma D: a `RatExpr` bounded by `M` is `O(t^M)` (uniformly for `t ≥ 1`). -/
+private lemma RatExpr.exists_bound_of_Bounded {l : RatExpr} {M : ℤ}
+    (h : RatExpr.Bounded M l) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ t : ℝ, 1 ≤ t → |RatExpr.eval l t| ≤ C * t ^ M := by
+  induction l with
+  | nil =>
+    refine ⟨0, le_refl _, fun t _ => ?_⟩
+    change |((0 : ℝ))| ≤ 0 * t ^ M
+    simp
+  | cons p ps ih =>
+    have h_ps : RatExpr.Bounded M ps := fun q hq => h q (List.mem_cons_of_mem _ hq)
+    obtain ⟨C', hC'_nn, hC'⟩ := ih h_ps
+    have hp_inv : p.tExp - 2 * (p.polePow : ℤ) ≤ M := h p List.mem_cons_self
+    refine ⟨|p.coeff| / 4 ^ p.polePow + C', by positivity, fun t ht => ?_⟩
+    have h_eval_cons :
+        RatExpr.eval (p :: ps) t = p.eval t + RatExpr.eval ps t := by
+      simp [RatExpr.eval]
+    rw [h_eval_cons]
+    refine (abs_add_le _ _).trans ?_
+    have h_p_bound := RatTerm.abs_eval_le p hp_inv ht
+    have h_ps_bound := hC' t ht
+    calc |p.eval t| + |RatExpr.eval ps t|
+        ≤ |p.coeff| / 4 ^ p.polePow * t ^ M + C' * t ^ M :=
+          add_le_add h_p_bound h_ps_bound
+      _ = (|p.coeff| / 4 ^ p.polePow + C') * t ^ M := by ring
+
+/-- Iterated formal differentiation lowers the invariant by `k`. -/
+private lemma RatExpr.Bounded.iterate_formalDeriv {l : RatExpr} {M : ℤ}
+    (h : RatExpr.Bounded M l) (k : ℕ) :
+    RatExpr.Bounded (M - k) (RatExpr.formalDeriv^[k] l) := by
+  induction k with
+  | zero => simpa using h
+  | succ k ih =>
+    rw [Function.iterate_succ_apply']
+    have h1 := ih.formalDeriv
+    convert h1 using 1
+    push_cast; ring
+
+/-- Lemma E: iterated real derivative on `(0,∞)` matches iterated formal
+    derivative. -/
+private lemma RatExpr.iteratedDeriv_eval (l : RatExpr) (k : ℕ)
+    {t : ℝ} (ht : 0 < t) :
+    iteratedDeriv k (RatExpr.eval l) t =
+      RatExpr.eval (RatExpr.formalDeriv^[k] l) t := by
+  induction k generalizing l with
+  | zero => simp
+  | succ k ih =>
+    rw [iteratedDeriv_succ']
+    have h_deriv_eq : ∀ s ∈ Set.Ioi (0 : ℝ),
+        deriv (RatExpr.eval l) s = RatExpr.eval (RatExpr.formalDeriv l) s := by
+      intro s hs
+      exact (RatExpr.hasDerivAt_eval l hs).deriv
+    rw [iteratedDeriv_congr_of_nhds k isOpen_Ioi h_deriv_eq t ht]
+    rw [ih (RatExpr.formalDeriv l)]
+    rfl
+
+/-- The initial expression `l₀` representing `α_part_deriv2`. -/
+private noncomputable def RatExpr.l₀ : RatExpr :=
+  [⟨-1/2, -1, 1⟩, ⟨8, 1, 2⟩]
+
+/-- Lemma F: `α_part_deriv2 t = eval l₀ t` for `t > 0`. -/
+private lemma α_part_deriv2_eq_l₀_eval {t : ℝ} (ht : 0 < t) :
+    α_part_deriv2 t = RatExpr.eval RatExpr.l₀ t := by
+  have ht_ne : t ≠ 0 := ne_of_gt ht
+  have h_inv : t ^ (-1 : ℤ) = t⁻¹ := zpow_neg_one t
+  have h_one : t ^ (1 : ℤ) = t := zpow_one t
+  unfold α_part_deriv2 RatExpr.l₀ RatExpr.eval
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero,
+             RatTerm.eval, h_inv, h_one, pow_one]
+  field_simp
+
+/-- Lemma F': `l₀` satisfies the asymptotic invariant `M = -3`. -/
+private lemma RatExpr.bounded_l₀ : RatExpr.Bounded (-3) RatExpr.l₀ := by
+  intro p hp
+  simp only [RatExpr.l₀, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl <;> · show _ ≤ (-3 : ℤ); decide
+
+/-- The `k`-th iterated derivative of the rational function
         α_part_deriv2(t) = -1/(2t(4t²+1)) + 8t/(4t²+1)²
                          = (12 t² − 1) / (2 t (4 t² + 1)²)
     decays as `O(t^(-3-k))` at `+∞`.
 
-    Two viable proof routes:
-    (a) **Cauchy estimate.**  Extend `α_part_deriv2` to a meromorphic
-        function on `{Re z > 0}` (its only finite poles are at `z = 0` and
-        `z = ±i/2`).  On the disk `|z − t| ≤ t/2` (for real `t ≥ 2`):
-            |z| ∈ [t/2, 3t/2],   |4z² + 1| ≥ t²/2,   |12 z² − 1| ≤ 28 t²,
-        so  |α_part_deriv2(z)| ≤ 28·t² / (2·(t/2)·(t²/2)²) = 112/t³.
-        Cauchy then gives |α_part_deriv2^{(k)}(t)| ≤ k!·112·2^k / t^{k+3}.
-    (b) **Induction on k.**  Show by induction that `iteratedDeriv k α_part_deriv2`
-        is a finite sum of terms `c · t^a / (4t²+1)^b` with `a − 2b ≤ −3 − k`
-        and bounded coefficients `c`; bound term-by-term. -/
+    Proved via the `RatExpr` machinery above: write `α_part_deriv2 = eval l₀`
+    on `(0, ∞)`, lift `iteratedDeriv` to `eval (formalDeriv^[k] l₀)`, and
+    apply the per-term bound — the asymptotic invariant `tExp − 2·polePow ≤
+    −3 − k` is preserved under formal differentiation. -/
 lemma iteratedDeriv_α_part_deriv2_isO (k : ℕ) :
     IsO (fun t => iteratedDeriv k α_part_deriv2 t)
         (fun t => t ^ (-(k : ℝ) - 3))
-        𝓝∞ :=
-  sorry
+        𝓝∞ := by
+  obtain ⟨C, _, hC⟩ :=
+    RatExpr.exists_bound_of_Bounded (RatExpr.bounded_l₀.iterate_formalDeriv k)
+  refine Asymptotics.IsBigO.of_bound C ?_
+  filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht
+  have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le zero_lt_one ht
+  -- Step 1: rewrite `iteratedDeriv k α_part_deriv2 t` as `eval (formalDeriv^[k] l₀) t`.
+  have h_iter : iteratedDeriv k α_part_deriv2 t =
+      RatExpr.eval (RatExpr.formalDeriv^[k] RatExpr.l₀) t := by
+    rw [iteratedDeriv_congr_of_nhds k isOpen_Ioi
+          (fun s hs => α_part_deriv2_eq_l₀_eval hs) t ht_pos]
+    exact RatExpr.iteratedDeriv_eval RatExpr.l₀ k ht_pos
+  rw [Real.norm_eq_abs, Real.norm_eq_abs, h_iter]
+  -- Step 2: convert the real exponent `-(k:ℝ) - 3` to the integer one used
+  -- in the per-term bound.
+  have h_pow_real : t ^ (-(k : ℝ) - 3) = t ^ ((-3 - (k : ℤ)) : ℤ) := by
+    rw [show (-(k : ℝ) - 3) = (((-3 - (k : ℤ)) : ℤ) : ℝ) from by push_cast; ring,
+        Real.rpow_intCast]
+  rw [h_pow_real, abs_of_pos (zpow_pos ht_pos _)]
+  exact hC t ht
 
 /-- The n-th derivative of `α_part` is `O(t^(-n-1))` for `n ≥ 1`. -/
 lemma iteratedDeriv_α_part_isO (n : ℕ) (hn : 1 ≤ n) :
@@ -971,7 +1230,7 @@ end ErrorTermIntegral
 section ErrorTermDelta
 
 /-- δ splits as α_part minus the integral term. -/
-lemma δ_eq (t : ℝ) (ht : 0 < t) :
+lemma δ_eq (t : ℝ) (_ : 0 < t) :
     δ t = α_part t - t / 2 * j t := by
   unfold δ α_part j ρ
   ring
