@@ -37,12 +37,11 @@
   proof.  Every axiom is tagged `-- ASSUMPTION` and carries a docstring.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
-  • `iteratedDeriv_α_part_isO`  (§5) — term-by-term diff. of Laurent expn.
-  • `iteratedDeriv_j_isO`       (§6) — IBP + dominated convergence.
-  • `iteratedDeriv_tj_isO`      (§6) — Leibniz on `-(t/2)·j(t)`; from above.
-  • `contDiffAt_j`              (§2) — axiom: smoothness of the parametric
-                                       integral `j(t)`.  Two routes
-                                       sketched in its docstring.
+  • `iteratedDeriv_j_isO`   (§6) — IBP + dominated convergence.
+  • `iteratedDeriv_tj_isO`  (§6) — Leibniz on `-(t/2)·j(t)`; from the above.
+  • `contDiffAt_j`          (§2) — axiom: smoothness of the parametric
+                                   integral `j(t)`.  Two routes sketched
+                                   in its docstring.
 -/
 
 import Mathlib
@@ -631,13 +630,15 @@ lemma α_part_expansion (t : ℝ) (_ : 0 < t) :
   -- on `u, v`, both forms should match.
   exact habs_add.trans (hsum ▸ h_final)
 
-/-! ### Scaffold reduction of `iteratedDeriv_α_part_isO`
+/-! ### Reduction of `iteratedDeriv_α_part_isO`
 
-The original gap (`α_part^(n) = O(t^(-n-1))` for `n ≥ 1`) is reduced to:
-  • two routine first- and second-derivative computations of `α_part`, and
-  • a single deep rational-decay lemma `iteratedDeriv_α_part_deriv2_isO`.
-The main theorem `iteratedDeriv_α_part_isO` is then proved unconditionally
-from those three pieces (no further `sorry`). -/
+`α_part^(n)(t) = O(t^(-n-1))` for `n ≥ 1` is established via three pieces:
+  • `hasDerivAt_α_part`           — first derivative of `α_part`,
+  • `hasDerivAt_α_part_form`      — second derivative as a rational function
+                                    `α_part_deriv2`,
+  • `iteratedDeriv_α_part_deriv2_isO` — decay of the iterated derivative of
+                                       that rational function (proved via
+                                       the `RatExpr` machinery below). -/
 
 /-- Closed form for the second derivative of `α_part` on `(0, ∞)`.
 
@@ -645,6 +646,31 @@ from those three pieces (no further `sorry`). -/
         α_part_deriv2(t) = (12 t² − 1) / (2 t (4 t² + 1)²). -/
 private noncomputable def α_part_deriv2 (t : ℝ) : ℝ :=
   -1 / (2 * t * (4 * t ^ 2 + 1)) + 8 * t / (4 * t ^ 2 + 1) ^ 2
+
+/-- Derivative of the inner log of `α_part`:
+    `(d/dt) log(1 + 1/(4 t²)) = -2 / (t · (4 t² + 1))` for `t > 0`.
+
+    Shared building block for `hasDerivAt_α_part` and
+    `hasDerivAt_α_part_form` below. -/
+private lemma hasDerivAt_log_one_plus_inv_4sq {t : ℝ} (ht : 0 < t) :
+    HasDerivAt (fun s : ℝ => Real.log (1 + 1 / (4 * s ^ 2)))
+      (-2 / (t * (4 * t ^ 2 + 1))) t := by
+  have ht_ne : t ≠ 0 := ne_of_gt ht
+  have h4t2_ne : (4 * t ^ 2 : ℝ) ≠ 0 := by positivity
+  have h_inner_ne : (1 + 1 / (4 * t ^ 2) : ℝ) ≠ 0 :=
+    ne_of_gt (by positivity)
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
+    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
+    push_cast; ring
+  have h_inv_4t2 :
+      HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t := by
+    convert (hasDerivAt_const t (1 : ℝ)).div h_4t2 h4t2_ne using 1
+    field_simp; ring
+  have h_one_plus :
+      HasDerivAt (fun s : ℝ => 1 + 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t :=
+    h_inv_4t2.const_add (1 : ℝ)
+  convert h_one_plus.log h_inner_ne using 1
+  field_simp; ring
 
 /-- **Routine.**  `α_part'(t) = (1/4)·log(1 + 1/(4t²)) − 1/(4t² + 1)` for `t > 0`.
 
@@ -660,29 +686,8 @@ private lemma hasDerivAt_α_part {t : ℝ} (ht : 0 < t) :
     HasDerivAt α_part
       ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)) t := by
   have ht_ne : t ≠ 0 := ne_of_gt ht
-  have h4t2_pos : (0 : ℝ) < 4 * t ^ 2 := by positivity
-  have h4t2_ne : (4 * t ^ 2 : ℝ) ≠ 0 := ne_of_gt h4t2_pos
-  have h4t2_p1_pos : (0 : ℝ) < 4 * t ^ 2 + 1 := by positivity
-  have h4t2_p1_ne : (4 * t ^ 2 + 1 : ℝ) ≠ 0 := ne_of_gt h4t2_p1_pos
-  have h_inner_pos : (0 : ℝ) < 1 + 1 / (4 * t ^ 2) := by positivity
-  have h_inner_ne : (1 + 1 / (4 * t ^ 2) : ℝ) ≠ 0 := ne_of_gt h_inner_pos
   have h2t_ne : (2 * t : ℝ) ≠ 0 := by positivity
-  -- Each step normalises its own derivative to a clean closed form.
-  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
-    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
-    push_cast; ring
-  have h_inv_4t2 :
-      HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t := by
-    convert (hasDerivAt_const t (1 : ℝ)).div h_4t2 h4t2_ne using 1
-    field_simp; ring
-  have h_one_plus :
-      HasDerivAt (fun s : ℝ => 1 + 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t :=
-    h_inv_4t2.const_add (1 : ℝ)
-  have h_log :
-      HasDerivAt (fun s : ℝ => Real.log (1 + 1 / (4 * s ^ 2)))
-        (-2 / (t * (4 * t ^ 2 + 1))) t := by
-    convert h_one_plus.log h_inner_ne using 1
-    field_simp; ring
+  have h_log := hasDerivAt_log_one_plus_inv_4sq ht
   have h_div4 : HasDerivAt (fun s : ℝ => s / 4) (1 / 4 : ℝ) t :=
     (hasDerivAt_id t).div_const 4
   have h_first :
@@ -729,36 +734,19 @@ private lemma hasDerivAt_α_part_form {t : ℝ} (ht : 0 < t) :
         (1 / 4) * Real.log (1 + 1 / (4 * s ^ 2)) - 1 / (4 * s ^ 2 + 1))
       (α_part_deriv2 t) t := by
   have ht_ne : t ≠ 0 := ne_of_gt ht
-  have h4t2_pos : (0 : ℝ) < 4 * t ^ 2 := by positivity
-  have h4t2_ne : (4 * t ^ 2 : ℝ) ≠ 0 := ne_of_gt h4t2_pos
-  have h4t2_p1_pos : (0 : ℝ) < 4 * t ^ 2 + 1 := by positivity
-  have h4t2_p1_ne : (4 * t ^ 2 + 1 : ℝ) ≠ 0 := ne_of_gt h4t2_p1_pos
-  have h_inner_pos : (0 : ℝ) < 1 + 1 / (4 * t ^ 2) := by positivity
-  have h_inner_ne : (1 + 1 / (4 * t ^ 2) : ℝ) ≠ 0 := ne_of_gt h_inner_pos
-  -- Reuse the chain (1/4)·log(1 + 1/(4 s²)) from the previous lemma.
-  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
-    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
-    push_cast; ring
-  have h_inv_4t2 :
-      HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t := by
-    convert (hasDerivAt_const t (1 : ℝ)).div h_4t2 h4t2_ne using 1
-    field_simp; ring
-  have h_one_plus :
-      HasDerivAt (fun s : ℝ => 1 + 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t :=
-    h_inv_4t2.const_add (1 : ℝ)
-  have h_log :
-      HasDerivAt (fun s : ℝ => Real.log (1 + 1 / (4 * s ^ 2)))
-        (-2 / (t * (4 * t ^ 2 + 1))) t := by
-    convert h_one_plus.log h_inner_ne using 1
-    field_simp; ring
+  have h4t2_p1_ne : (4 * t ^ 2 + 1 : ℝ) ≠ 0 := ne_of_gt (by positivity)
+  -- First piece: (1/4) · log(1 + 1/(4 s²)).
+  have h_log := hasDerivAt_log_one_plus_inv_4sq ht
   have h_first :
       HasDerivAt (fun s : ℝ => (1 / 4) * Real.log (1 + 1 / (4 * s ^ 2)))
         (-1 / (2 * t * (4 * t ^ 2 + 1))) t := by
     convert h_log.const_mul (1 / 4 : ℝ) using 1
     field_simp; ring
-  -- Second piece: 1/(4 s² + 1).
-  have h_4t2_p1 :
-      HasDerivAt (fun s : ℝ => 4 * s ^ 2 + 1) (8 * t) t := by
+  -- Second piece: 1 / (4 s² + 1).
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
+    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
+    push_cast; ring
+  have h_4t2_p1 : HasDerivAt (fun s : ℝ => 4 * s ^ 2 + 1) (8 * t) t := by
     convert h_4t2.add_const (1 : ℝ) using 1
   have h_inv_4t2_p1 :
       HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2 + 1))
@@ -775,10 +763,10 @@ private lemma hasDerivAt_α_part_form {t : ℝ} (ht : 0 < t) :
     field_simp; ring
   exact h_sub
 
-/-! #### Rational-piece machinery for `iteratedDeriv_α_part_deriv2_isO`
+/-! ### `RatExpr` machinery for `iteratedDeriv_α_part_deriv2_isO`
 
-We encode each summand `c · t^a · (4t² + 1)^{-b}` as a `RatTerm`, with formal
-derivative producing two new terms that lower the asymptotic invariant
+Each summand `c · t^a · (4t² + 1)^{-b}` is encoded as a `RatTerm`.  Its
+formal derivative produces two new terms that lower the asymptotic invariant
 `a − 2b` by 1.  Iterating gives `iteratedDeriv k α_part_deriv2` as a finite
 sum of such pieces, all bounded by `O(t^(-3-k))`. -/
 
