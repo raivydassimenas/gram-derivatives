@@ -155,6 +155,396 @@ axiom N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < 
     : iteratedDeriv n N_step t = 0
 
 /-!
+  ## §2.5  Parametric-integral infrastructure for `j`
+
+  The integral `j(t) = ∫₀^∞ ρ(u) / ((u+1/4)² + (t/2)²) du` is smooth in `t` on
+  `(0, ∞)` because for each `u ≥ 0` the kernel `t ↦ 1/((u+1/4)² + (t/2)²)` is
+  rational with strictly positive denominator (≥ `(u+1/4)² ≥ 1/16`), so all
+  its `t`-derivatives are bounded by `C_k · (u+1/4)^(-(k+2))` uniformly in `t`
+  on bounded intervals — an integrable dominator at every order.
+
+  This sub-section sets up the kernel and its basic smoothness; subsequent
+  sub-sections build the dominator bound, the integrand integrability, and
+  the differentiation-under-the-integral chain that yields `contDiffAt_j`.
+-/
+
+section ParametricIntegralJ
+
+/-- Kernel of the integral defining `j`:  `kernel u t = 1 / ((u + 1/4)² + (t/2)²)`. -/
+noncomputable def kernel (u t : ℝ) : ℝ := 1 / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
+
+/-- Strict positivity of the kernel's denominator for `u ≥ 0`:
+    `(u + 1/4)² + (t/2)² ≥ (u + 1/4)² ≥ 1/16 > 0`. -/
+private lemma kernel_denom_pos {u : ℝ} (hu : 0 ≤ u) (t : ℝ) :
+    0 < (u + 1 / 4) ^ 2 + (t / 2) ^ 2 := by
+  have h_u_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_sq_pos : (0 : ℝ) < (u + 1 / 4) ^ 2 := pow_pos h_u_pos 2
+  have h_t_sq : (0 : ℝ) ≤ (t / 2) ^ 2 := sq_nonneg _
+  linarith
+
+/-- For each `u ≥ 0`, the kernel `t ↦ kernel u t` is `C^∞` on all of `ℝ`. -/
+private lemma contDiff_kernel {u : ℝ} (hu : 0 ≤ u) :
+    ContDiff ℝ ⊤ (fun t : ℝ => kernel u t) := by
+  unfold kernel
+  refine ContDiff.div contDiff_const ?_ (fun t => ne_of_gt (kernel_denom_pos hu t))
+  exact (contDiff_const.add ((contDiff_id.div_const 2).pow 2))
+
+/-- The Lorentzian/Cauchy profile  `lor s = 1 / (1 + s²)`,  used as the
+    canonical shape of the kernel after rescaling. -/
+private noncomputable def lor (s : ℝ) : ℝ := 1 / (1 + s ^ 2)
+
+private lemma lor_denom_pos (s : ℝ) : 0 < 1 + s ^ 2 := by
+  have : (0 : ℝ) ≤ s ^ 2 := sq_nonneg _; linarith
+
+/-- `lor` is `C^∞` on all of `ℝ`. -/
+private lemma contDiff_lor : ContDiff ℝ ⊤ lor := by
+  unfold lor
+  exact ContDiff.div contDiff_const (contDiff_const.add (contDiff_id.pow 2))
+    (fun s => ne_of_gt (lor_denom_pos s))
+
+/-- Rescaling identity:  `kernel u t = (u+1/4)^{-2} · lor(t / (2(u+1/4)))`.
+    This factors out the `u`-dependence into a single negative power and
+    leaves the `t`-dependence inside the bounded Lorentzian profile. -/
+private lemma kernel_eq_scaled {u : ℝ} (hu : 0 ≤ u) (t : ℝ) :
+    kernel u t = ((u + 1 / 4) ^ 2)⁻¹ * lor ((1 / (2 * (u + 1 / 4))) * t) := by
+  have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+  have hr_ne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr
+  have hr2_ne : ((u + 1 / 4) ^ 2 : ℝ) ≠ 0 := pow_ne_zero _ hr_ne
+  have h2r_ne : (2 * (u + 1 / 4) : ℝ) ≠ 0 := by positivity
+  have hd_ne : ((u + 1 / 4) ^ 2 + (t / 2) ^ 2 : ℝ) ≠ 0 :=
+    ne_of_gt (kernel_denom_pos hu t)
+  unfold kernel lor
+  field_simp
+
+/-- Iterated derivative of the kernel via the Lorentzian rescaling.
+
+    With  `r = u + 1/4`  and  `c = 1/(2r)`,
+    `kernel u t = r^{-2} · lor(c · t)`,
+    so applying iterated `t`-derivatives gives
+    `(d/dt)^k kernel u t = r^{-2} · c^k · lor^{(k)}(c · t)`. -/
+private lemma iteratedDeriv_kernel (k : ℕ) {u : ℝ} (hu : 0 ≤ u) (t : ℝ) :
+    iteratedDeriv k (fun s => kernel u s) t =
+      ((u + 1 / 4) ^ 2)⁻¹ * (1 / (2 * (u + 1 / 4))) ^ k *
+        iteratedDeriv k lor ((1 / (2 * (u + 1 / 4))) * t) := by
+  -- Replace `kernel u` by its scaled form pointwise (via funext).
+  have h_eq : (fun s : ℝ => kernel u s) =
+      fun s => ((u + 1 / 4) ^ 2)⁻¹ * lor ((1 / (2 * (u + 1 / 4))) * s) := by
+    funext s; exact kernel_eq_scaled hu s
+  rw [h_eq]
+  -- Pull out the constant factor `((u+1/4)^2)⁻¹` (simp-normal form of
+  -- `iteratedDeriv_const_mul_field`).
+  rw [iteratedDeriv_const_mul_field ((u + 1 / 4) ^ 2)⁻¹
+        (fun s => lor ((1 / (2 * (u + 1 / 4))) * s))]
+  -- Apply the comp-const-mul rule for `lor`.
+  have h_lor_k : ContDiff ℝ k lor := contDiff_lor.of_le le_top
+  rw [show (iteratedDeriv k fun s => lor ((1 / (2 * (u + 1 / 4))) * s)) =
+        (fun s => (1 / (2 * (u + 1 / 4))) ^ k *
+          iteratedDeriv k lor ((1 / (2 * (u + 1 / 4))) * s)) from
+      iteratedDeriv_comp_const_mul h_lor_k _]
+  ring
+
+/-- `iteratedDeriv k lor` is bounded on every closed interval `[-R, R]`. -/
+private lemma exists_bound_iteratedDeriv_lor (k : ℕ) (R : ℝ) :
+    ∃ M : ℝ, 0 ≤ M ∧ ∀ s, |s| ≤ R → |iteratedDeriv k lor s| ≤ M := by
+  rcases lt_or_ge R 0 with hR | hR
+  · -- Vacuously true: no `s` satisfies `|s| ≤ R < 0`.
+    refine ⟨0, le_refl 0, ?_⟩
+    intro s hs
+    exact absurd (lt_of_le_of_lt hs hR) (not_lt.mpr (abs_nonneg s))
+  · -- `R ≥ 0`: extract a bound on the compact `Icc (-R) R` from continuity.
+    have hcont : Continuous (iteratedDeriv k lor) :=
+      contDiff_lor.continuous_iteratedDeriv k le_top
+    have habs : Continuous (fun s => |iteratedDeriv k lor s|) := hcont.abs
+    obtain ⟨M, hMub⟩ :=
+      (isCompact_Icc (a := -R) (b := R)).bddAbove_image habs.continuousOn
+    refine ⟨max M 0, le_max_right _ _, ?_⟩
+    intro s hs
+    have hs_in : s ∈ Set.Icc (-R) R := by
+      rw [Set.mem_Icc]; exact ⟨neg_le_of_abs_le hs, le_of_abs_le hs⟩
+    exact (hMub ⟨s, hs_in, rfl⟩).trans (le_max_left _ _)
+
+/-- Uniform bound for `|iteratedDeriv k (kernel u) t|`.
+
+    For any `R : ℝ` and `k : ℕ`, there is a constant `C_k(R) ≥ 0` with
+    `|iteratedDeriv k (kernel u) t| ≤ C_k(R) · (u + 1/4)^{-(k+2)}`
+    whenever `0 ≤ u` and `|t| ≤ R`.  The proof rescales the kernel into the
+    Lorentzian profile `lor` and bounds `iteratedDeriv k lor` on the
+    bounded image of the rescaling map. -/
+private lemma exists_bound_iteratedDeriv_kernel (k : ℕ) (R : ℝ) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ (u : ℝ), 0 ≤ u → ∀ (t : ℝ), |t| ≤ R →
+      |iteratedDeriv k (fun s => kernel u s) t| ≤ C * ((u + 1 / 4) ^ (k + 2))⁻¹ := by
+  -- For `u ≥ 0`, the rescaling factor `c = 1/(2(u+1/4))` lies in `(0, 2]`,
+  -- so `|c · t| ≤ 2 · |R|`.  Bound `iteratedDeriv k lor` on `[-2|R|, 2|R|]`.
+  obtain ⟨M, hM_nn, hM⟩ := exists_bound_iteratedDeriv_lor k (2 * |R|)
+  refine ⟨M / 2 ^ k, by positivity, ?_⟩
+  intro u hu t ht
+  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h2r_pos : (0 : ℝ) < 2 * (u + 1 / 4) := by linarith
+  have hr2_pos : (0 : ℝ) < (u + 1 / 4) ^ 2 := pow_pos hr_pos 2
+  have hrk2_pos : (0 : ℝ) < (u + 1 / 4) ^ (k + 2) := pow_pos hr_pos (k + 2)
+  have hc_pos : (0 : ℝ) < 1 / (2 * (u + 1 / 4)) := by positivity
+  have hc_le_two : (1 / (2 * (u + 1 / 4)) : ℝ) ≤ 2 := by
+    rw [div_le_iff₀ h2r_pos]; linarith
+  -- Bound the Lorentzian factor at the rescaled argument.
+  have h_arg_abs : |1 / (2 * (u + 1 / 4)) * t| ≤ 2 * |R| := by
+    rw [abs_mul, abs_of_pos hc_pos]
+    calc 1 / (2 * (u + 1 / 4)) * |t|
+        ≤ 2 * |t| := by gcongr
+      _ ≤ 2 * |R| := by
+          have : |t| ≤ |R| := ht.trans (le_abs_self R)
+          linarith
+  have h_lor_bd : |iteratedDeriv k lor (1 / (2 * (u + 1 / 4)) * t)| ≤ M :=
+    hM _ h_arg_abs
+  -- Apply the rescaling identity.
+  rw [iteratedDeriv_kernel k hu t]
+  -- Distribute absolute values across the product of three positive (in
+  -- abs.) factors.
+  rw [abs_mul, abs_mul, abs_of_pos (inv_pos.mpr hr2_pos),
+      abs_pow, abs_of_pos hc_pos]
+  -- Bound the |lor^(k)| factor by `M`, keeping the other (positive) factors.
+  have h_step1 : ((u + 1 / 4) ^ 2)⁻¹ * (1 / (2 * (u + 1 / 4))) ^ k *
+                  |iteratedDeriv k lor (1 / (2 * (u + 1 / 4)) * t)|
+                ≤ ((u + 1 / 4) ^ 2)⁻¹ * (1 / (2 * (u + 1 / 4))) ^ k * M := by
+    gcongr
+  refine h_step1.trans (le_of_eq ?_)
+  -- Algebraic simplification:  ((u+1/4)^2)⁻¹ · (1/(2(u+1/4)))^k · M
+  --                          = (M / 2^k) · ((u+1/4)^(k+2))⁻¹.
+  have hr_ne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr_pos
+  have hrk_ne : ((u + 1 / 4 : ℝ) ^ k) ≠ 0 := pow_ne_zero _ hr_ne
+  have h2k_ne : ((2 : ℝ) ^ k) ≠ 0 := pow_ne_zero _ two_ne_zero
+  rw [div_pow, one_pow, mul_pow, pow_add (u + 1 / 4) k 2]
+  field_simp
+
+/-- The dominator `((u+1/4)^(k+2))⁻¹` is integrable on `Ici 0`.
+
+    Reduction to `Real.rpow` form to apply `integrableOn_add_rpow_Ioi_of_lt`,
+    then transfer to `Ici` (which differs from `Ioi` by a measure-zero point). -/
+private lemma integrableOn_pow_inv_shift (k : ℕ) :
+    IntegrableOn (fun u : ℝ => ((u + 1 / 4) ^ (k + 2))⁻¹) (Set.Ici (0 : ℝ)) := by
+  -- Integrability on `Ioi 0` via the `rpow` lemma after rewriting.
+  have h_ioi : IntegrableOn (fun u : ℝ => ((u + 1 / 4) ^ (k + 2))⁻¹)
+      (Set.Ioi (0 : ℝ)) := by
+    refine (integrableOn_add_rpow_Ioi_of_lt
+      (a := -((k + 2 : ℕ) : ℝ)) (m := 1 / 4) (c := 0)
+      (by push_cast; linarith)
+      (by norm_num)).congr_fun ?_ measurableSet_Ioi
+    intro u hu
+    have hu_pos : (0 : ℝ) < u + 1 / 4 := by linarith [Set.mem_Ioi.mp hu]
+    change (u + 1 / 4) ^ (-((k + 2 : ℕ) : ℝ)) = ((u + 1 / 4) ^ (k + 2))⁻¹
+    rw [Real.rpow_neg hu_pos.le, Real.rpow_natCast]
+  -- Transfer from `Ioi 0` to `Ici 0` (they differ by the measure-zero `{0}`).
+  exact h_ioi.congr_set_ae Ioi_ae_eq_Ici.symm
+
+/-- The integrand for `j` and its formal `t`-derivatives:
+    `jIntegrand k t u = ρ u · iteratedDeriv k (kernel u ·) t`.  At `k = 0`
+    this is the `j`-integrand itself; at `k ≥ 1` it is the formal derivative
+    obtained by differentiating under the integral. -/
+private noncomputable def jIntegrand (k : ℕ) (t : ℝ) : ℝ → ℝ :=
+  fun u => ρ u * iteratedDeriv k (fun s => kernel u s) t
+
+/-- Continuity of `u ↦ iteratedDeriv k (kernel u ·) t` on `Ici 0`,
+    via the rescaling identity (each factor is continuous in `u`). -/
+private lemma continuousOn_iteratedDeriv_kernel (k : ℕ) (t : ℝ) :
+    ContinuousOn
+      (fun u : ℝ => iteratedDeriv k (fun s => kernel u s) t) (Set.Ici 0) := by
+  have h_pos : ∀ u ∈ Set.Ici (0 : ℝ), (0 : ℝ) < u + 1 / 4 := by
+    intro u hu; linarith [Set.mem_Ici.mp hu]
+  have h_pos2 : ∀ u ∈ Set.Ici (0 : ℝ), (0 : ℝ) < 2 * (u + 1 / 4) := by
+    intro u hu; linarith [h_pos u hu]
+  -- The rescaled form is continuous on `Ici 0` as a product of continuous
+  -- factors.
+  have h_inv2 : ContinuousOn (fun u : ℝ => ((u + 1 / 4) ^ 2)⁻¹) (Set.Ici 0) :=
+    ContinuousOn.inv₀
+      ((continuousOn_id.add continuousOn_const).pow 2)
+      (fun u hu => ne_of_gt (pow_pos (h_pos u hu) 2))
+  have h_inv1 : ContinuousOn (fun u : ℝ => 1 / (2 * (u + 1 / 4))) (Set.Ici 0) :=
+    ContinuousOn.div continuousOn_const
+      ((continuousOn_const.mul (continuousOn_id.add continuousOn_const)))
+      (fun u hu => ne_of_gt (h_pos2 u hu))
+  have h_pow1 : ContinuousOn (fun u : ℝ => (1 / (2 * (u + 1 / 4))) ^ k)
+                  (Set.Ici 0) := h_inv1.pow k
+  have hcont_lor : Continuous (iteratedDeriv k lor) :=
+    contDiff_lor.continuous_iteratedDeriv k le_top
+  have h_inner : ContinuousOn (fun u : ℝ => (1 / (2 * (u + 1 / 4))) * t)
+                  (Set.Ici 0) := h_inv1.mul continuousOn_const
+  have h_lor_arg : ContinuousOn
+      (fun u : ℝ => iteratedDeriv k lor ((1 / (2 * (u + 1 / 4))) * t))
+      (Set.Ici 0) := hcont_lor.comp_continuousOn h_inner
+  have h_resc : ContinuousOn
+      (fun u : ℝ => ((u + 1 / 4) ^ 2)⁻¹ *
+        (1 / (2 * (u + 1 / 4))) ^ k *
+        iteratedDeriv k lor ((1 / (2 * (u + 1 / 4))) * t)) (Set.Ici 0) :=
+    (h_inv2.mul h_pow1).mul h_lor_arg
+  -- Transfer continuity along the rescaling identity (which gives the
+  -- pointwise equality `iteratedDeriv k (kernel u ·) t = (rescaled form)`
+  -- for `u ≥ 0`).
+  exact h_resc.congr (fun u hu => iteratedDeriv_kernel k (Set.mem_Ici.mp hu) t)
+
+/-- AE-strong-measurability of `jIntegrand k t` on `Ici 0`. -/
+private lemma aeStronglyMeasurable_jIntegrand (k : ℕ) (t : ℝ) :
+    AEStronglyMeasurable (jIntegrand k t) (volume.restrict (Set.Ici (0 : ℝ))) := by
+  -- `ρ` is measurable on ℝ; the kernel-derivative is continuous on `Ici 0`.
+  have hρ : Measurable ρ := by
+    unfold ρ
+    exact measurable_const.sub measurable_fract
+  have hker : AEStronglyMeasurable
+      (fun u : ℝ => iteratedDeriv k (fun s => kernel u s) t)
+      (volume.restrict (Set.Ici 0)) :=
+    (continuousOn_iteratedDeriv_kernel k t).aestronglyMeasurable measurableSet_Ici
+  exact (hρ.aestronglyMeasurable.mono_measure
+    (Measure.restrict_le_self)).mul hker
+
+/-- Integrability of `jIntegrand k t` on `Ici 0`. -/
+private lemma integrable_jIntegrand (k : ℕ) (t : ℝ) :
+    IntegrableOn (jIntegrand k t) (Set.Ici (0 : ℝ)) := by
+  -- Bound the integrand pointwise by `(C/2) · ((u+1/4)^(k+2))⁻¹`,
+  -- which is integrable on `Ici 0`.
+  obtain ⟨C, hC_nn, hC⟩ := exists_bound_iteratedDeriv_kernel k |t|
+  refine Integrable.mono'
+    ((integrableOn_pow_inv_shift k).const_mul (C / 2))
+    (aeStronglyMeasurable_jIntegrand k t) ?_
+  -- Pointwise bound on `Ici 0`.
+  refine (ae_restrict_iff' measurableSet_Ici).mpr ?_
+  refine Filter.Eventually.of_forall ?_
+  intro u hu
+  have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu
+  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (k + 2) := pow_pos hr_pos _
+  have h_inv_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (k + 2))⁻¹ :=
+    le_of_lt (inv_pos.mpr h_pow_pos)
+  have h_ker : |iteratedDeriv k (fun s => kernel u s) t|
+                ≤ C * ((u + 1 / 4) ^ (k + 2))⁻¹ :=
+    hC u hu_nn t (le_refl _)
+  have h_rho : |ρ u| ≤ 1 / 2 := by
+    unfold ρ
+    rw [abs_sub_comm, abs_le]
+    have h_fract_lt : Int.fract u < 1 := Int.fract_lt_one u
+    have h_fract_nn : 0 ≤ Int.fract u := Int.fract_nonneg u
+    constructor <;> linarith
+  change ‖jIntegrand k t u‖ ≤ C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹
+  rw [Real.norm_eq_abs]
+  unfold jIntegrand
+  rw [abs_mul]
+  calc |ρ u| * |iteratedDeriv k (fun s => kernel u s) t|
+      ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (k + 2))⁻¹) := by
+        gcongr
+    _ = C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹ := by ring
+
+/-- Family of kernel-integrals:  `jK k` equals `j` at `k = 0` and gives the
+    formal `k`-th derivative of `j` for higher `k` (after the differentiation
+    chain proved in Step 7). -/
+private noncomputable def jK (k : ℕ) (t : ℝ) : ℝ :=
+  ∫ u in Set.Ici (0 : ℝ), jIntegrand k t u
+
+/-- `jK 0 = j`:  the integrand at `k = 0` is exactly the `j`-integrand. -/
+private lemma jK_zero : jK 0 = j := by
+  funext t
+  unfold jK jIntegrand j kernel
+  congr 1
+  funext u
+  rw [iteratedDeriv_zero]
+  ring
+
+/-- One-step differentiation under the integral:
+    `(d/dt) jK k t = jK (k+1) t`.
+
+    The integrand `t' ↦ ρ(u)·iteratedDeriv k (kernel u ·) t'` has
+    `t`-derivative `ρ(u)·iteratedDeriv (k+1) (kernel u ·) t'`, dominated by
+    `(C/2)·(u+1/4)^{-(k+3)}` uniformly on the ball `B(t, t/2) ⊂ (0, ∞)`. -/
+private lemma hasDerivAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
+    HasDerivAt (jK k) (jK (k+1) t) t := by
+  -- Set up the small ball `s = ball t (t/2)`, contained in `(0, ∞)`.
+  set s : Set ℝ := Metric.ball t (t / 2) with hs_def
+  have h_s_mem : s ∈ nhds t :=
+    Metric.isOpen_ball.mem_nhds (Metric.mem_ball_self (half_pos ht))
+  have h_s_bound : ∀ x ∈ s, |x| ≤ 3 * t / 2 := by
+    intro x hx
+    rw [hs_def, Metric.mem_ball, Real.dist_eq] at hx
+    have h_lo : -(t / 2) < x - t := (abs_lt.mp hx).1
+    have h_hi : x - t < t / 2 := (abs_lt.mp hx).2
+    have h_x_pos : 0 < x := by linarith
+    rw [abs_of_pos h_x_pos]; linarith
+  -- Dominator constant from the order-(k+1) kernel bound on `[-3t/2, 3t/2]`.
+  obtain ⟨C, hC_nn, hC⟩ := exists_bound_iteratedDeriv_kernel (k + 1) (3 * t / 2)
+  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ (k + 3))⁻¹ with hbound_def
+  -- `bound` is integrable on `Ici 0` (transferred from `integrableOn_pow_inv_shift (k+1)`,
+  -- since `(k+1)+2 = k+3`).
+  have h_bound_int :
+      Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) := by
+    have h_aux : IntegrableOn
+        (fun u : ℝ => ((u + 1 / 4) ^ (k + 3))⁻¹) (Set.Ici 0) := by
+      have h_pre := integrableOn_pow_inv_shift (k + 1)
+      have h_ext : (k + 1) + 2 = k + 3 := by omega
+      exact h_ext ▸ h_pre
+    exact h_aux.const_mul (C / 2)
+  -- Apply the differentiation-under-the-integral lemma.
+  have h_app := hasDerivAt_integral_of_dominated_loc_of_deriv_le
+    (μ := volume.restrict (Set.Ici (0 : ℝ)))
+    (F := fun x : ℝ => jIntegrand k x) (F' := fun x : ℝ => jIntegrand (k + 1) x)
+    (x₀ := t) (s := s) (bound := bound)
+    h_s_mem
+    -- hF_meas: F is AEStronglyMeasurable for x in a nbhd of t.
+    (Filter.Eventually.of_forall (fun x => aeStronglyMeasurable_jIntegrand k x))
+    -- hF_int
+    (integrable_jIntegrand k t)
+    -- hF'_meas
+    (aeStronglyMeasurable_jIntegrand (k + 1) t)
+    -- h_bound: pointwise dominator bound on F'.
+    (by
+      refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
+      intro u hu_mem
+      intro x hx
+      have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
+      have h_xb : |x| ≤ 3 * t / 2 := h_s_bound x hx
+      have h_ker := hC u hu_nn x h_xb
+      have h_rho : |ρ u| ≤ 1 / 2 := by
+        unfold ρ; rw [abs_sub_comm, abs_le]
+        have h1 : Int.fract u < 1 := Int.fract_lt_one u
+        have h2 : 0 ≤ Int.fract u := Int.fract_nonneg u
+        refine ⟨?_, ?_⟩ <;> linarith
+      have h_target_eq :
+          (u + 1 / 4) ^ ((k + 1) + 2) = (u + 1 / 4) ^ (k + 3) := by
+        congr 1; omega
+      change ‖jIntegrand (k + 1) x u‖ ≤ bound u
+      rw [Real.norm_eq_abs]
+      unfold jIntegrand
+      rw [abs_mul]
+      have h_ker' : |iteratedDeriv (k + 1) (fun s => kernel u s) x|
+                    ≤ C * ((u + 1 / 4) ^ (k + 3))⁻¹ := by
+        rw [← h_target_eq]; exact h_ker
+      calc |ρ u| * |iteratedDeriv (k + 1) (fun s => kernel u s) x|
+          ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (k + 3))⁻¹) := by gcongr
+        _ = bound u := by simp only [hbound_def]; ring)
+    -- bound_integrable
+    h_bound_int
+    -- h_diff: pointwise HasDerivAt of F at x ∈ s, with derivative F' x.
+    (by
+      refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
+      intro u hu_mem
+      intro x _hx
+      have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
+      -- iteratedDeriv k (kernel u) is differentiable.
+      have h_diff_ker :
+          Differentiable ℝ (iteratedDeriv k (fun s => kernel u s)) :=
+        ((contDiff_kernel hu_nn).of_le (le_top : (k + 1 : ℕ∞ω) ≤ ⊤)).differentiable_iteratedDeriv' k
+      have h_da : HasDerivAt (iteratedDeriv k (fun s => kernel u s))
+            (deriv (iteratedDeriv k (fun s => kernel u s)) x) x :=
+        (h_diff_ker.differentiableAt).hasDerivAt
+      have h_eq : deriv (iteratedDeriv k (fun s => kernel u s)) x =
+                    iteratedDeriv (k + 1) (fun s => kernel u s) x := by
+        rw [show iteratedDeriv (k + 1) (fun s => kernel u s) =
+              deriv (iteratedDeriv k (fun s => kernel u s)) from
+              iteratedDeriv_succ]
+      rw [h_eq] at h_da
+      unfold jIntegrand
+      exact h_da.const_mul (ρ u))
+  -- Convert the lemma's conclusion (involving `fun n => ∫ a, F n a`) to the
+  -- `jK`-shaped statement via β-reduction.
+  simpa [jK] using h_app.2
+
+end ParametricIntegralJ
+
+/-!
   ## §3  Smoothness lemmas
 
   Derived from the axioms in §2 plus elementary Mathlib calculus.  The four
