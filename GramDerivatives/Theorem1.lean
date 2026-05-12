@@ -94,6 +94,15 @@ noncomputable def α_part (t : ℝ) : ℝ :=
 /-- The sawtooth function `ρ(u) = 1/2 − {u}`. -/
 noncomputable def ρ (u : ℝ) : ℝ := 1 / 2 - Int.fract u
 
+/-- The sawtooth `ρ` is bounded in absolute value by `1/2`.
+    Used as the `u`-dominator in every parametric-integral estimate for `j`. -/
+lemma abs_ρ_le_half (u : ℝ) : |ρ u| ≤ 1 / 2 := by
+  unfold ρ
+  rw [abs_sub_comm, abs_le]
+  have h_lt : Int.fract u < 1 := Int.fract_lt_one u
+  have h_nn : 0 ≤ Int.fract u := Int.fract_nonneg u
+  refine ⟨?_, ?_⟩ <;> linarith
+
 /-- The integral part of δ:  `j(t) = ∫₀^∞ ρ(u) / ((u + 1/4)² + (t/2)²) du`. -/
 noncomputable def j (t : ℝ) : ℝ :=
   ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
@@ -105,12 +114,12 @@ noncomputable def j (t : ℝ) : ℝ :=
 
     • Opaque target / step functions:  `S`, `N_step`.
     • Karatsuba–Korolev representation: `S_eq_φ_sub_δ_add_N`.
-    • Smoothness of the parametric integral:  `contDiffAt_j`.
     • Smoothness / vanishing of `N_step`:  `contDiffAt_N_step`,
       `N_step_iteratedDeriv_eq_zero`.
 
   Smoothness of `φ`, `α_part`, `δ`, and `t·j(t)` is *derived* in §3 from
-  `contDiffAt_j` plus elementary Mathlib calculus.
+  the §2.5 theorem `contDiffAt_j` (formerly an axiom; now built on the
+  joint induction `contDiffOn_jK`) plus elementary Mathlib calculus.
 -/
 
 /-- The function `S(t) = (1/π) · arg ζ(1/2 + it)`.  It is defined and smooth
@@ -435,155 +444,110 @@ private lemma jK_zero : jK 0 = j := by
   rw [iteratedDeriv_zero]
   ring
 
+/-- For `t > 0`, every point of the ball `ball t (t/2)` lies in `(t/2, 3t/2)`
+    and so has absolute value at most `3t/2`.  Used as the uniform `|x|`-bound
+    when invoking the kernel dominator on a neighborhood of `t`. -/
+private lemma abs_le_of_mem_ball_half_pos {t : ℝ} (ht : 0 < t) :
+    ∀ x ∈ Metric.ball t (t / 2), |x| ≤ 3 * t / 2 := by
+  intro x hx
+  rw [Metric.mem_ball, Real.dist_eq] at hx
+  have h_lo : -(t / 2) < x - t := (abs_lt.mp hx).1
+  have h_hi : x - t < t / 2 := (abs_lt.mp hx).2
+  have h_x_pos : 0 < x := by linarith
+  rw [abs_of_pos h_x_pos]; linarith
+
+/-- Pointwise dominator bound on the integrand:  `‖jIntegrand K x u‖ ≤ (C/2)·(u+1/4)^{-(K+2)}`
+    whenever `|iteratedDeriv K (kernel u ·) x| ≤ C·(u+1/4)^{-(K+2)}`.
+
+    Combines the kernel bound with `abs_ρ_le_half` (the `1/2` factor in the
+    final dominator comes from `|ρ u| ≤ 1/2`). -/
+private lemma norm_jIntegrand_le {K : ℕ} {C u x : ℝ}
+    (h_ker : |iteratedDeriv K (fun s => kernel u s) x|
+              ≤ C * ((u + 1 / 4) ^ (K + 2))⁻¹) :
+    ‖jIntegrand K x u‖ ≤ C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹ := by
+  rw [Real.norm_eq_abs]
+  unfold jIntegrand
+  rw [abs_mul]
+  calc |ρ u| * |iteratedDeriv K (fun s => kernel u s) x|
+      ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (K + 2))⁻¹) := by
+        gcongr; exact abs_ρ_le_half u
+    _ = C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹ := by ring
+
 /-- One-step differentiation under the integral:
     `(d/dt) jK k t = jK (k+1) t`.
 
     The integrand `t' ↦ ρ(u)·iteratedDeriv k (kernel u ·) t'` has
     `t`-derivative `ρ(u)·iteratedDeriv (k+1) (kernel u ·) t'`, dominated by
-    `(C/2)·(u+1/4)^{-(k+3)}` uniformly on the ball `B(t, t/2) ⊂ (0, ∞)`. -/
+    `(C/2)·(u+1/4)^{-((k+1)+2)}` uniformly on the ball `ball t (t/2) ⊂ (0, ∞)`. -/
 private lemma hasDerivAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
     HasDerivAt (jK k) (jK (k+1) t) t := by
-  -- Set up the small ball `s = ball t (t/2)`, contained in `(0, ∞)`.
-  set s : Set ℝ := Metric.ball t (t / 2) with hs_def
-  have h_s_mem : s ∈ nhds t :=
+  set nbhd : Set ℝ := Metric.ball t (t / 2)
+  have h_nbhd_mem : nbhd ∈ nhds t :=
     Metric.isOpen_ball.mem_nhds (Metric.mem_ball_self (half_pos ht))
-  have h_s_bound : ∀ x ∈ s, |x| ≤ 3 * t / 2 := by
-    intro x hx
-    rw [hs_def, Metric.mem_ball, Real.dist_eq] at hx
-    have h_lo : -(t / 2) < x - t := (abs_lt.mp hx).1
-    have h_hi : x - t < t / 2 := (abs_lt.mp hx).2
-    have h_x_pos : 0 < x := by linarith
-    rw [abs_of_pos h_x_pos]; linarith
-  -- Dominator constant from the order-(k+1) kernel bound on `[-3t/2, 3t/2]`.
-  obtain ⟨C, hC_nn, hC⟩ := exists_bound_iteratedDeriv_kernel (k + 1) (3 * t / 2)
-  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ (k + 3))⁻¹ with hbound_def
-  -- `bound` is integrable on `Ici 0` (transferred from `integrableOn_pow_inv_shift (k+1)`,
-  -- since `(k+1)+2 = k+3`).
-  have h_bound_int :
-      Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) := by
-    have h_aux : IntegrableOn
-        (fun u : ℝ => ((u + 1 / 4) ^ (k + 3))⁻¹) (Set.Ici 0) := by
-      have h_pre := integrableOn_pow_inv_shift (k + 1)
-      have h_ext : (k + 1) + 2 = k + 3 := by omega
-      exact h_ext ▸ h_pre
-    exact h_aux.const_mul (C / 2)
-  -- Apply the differentiation-under-the-integral lemma.
+  have h_nbhd_bound : ∀ x ∈ nbhd, |x| ≤ 3 * t / 2 :=
+    abs_le_of_mem_ball_half_pos ht
+  obtain ⟨C, _, hC⟩ := exists_bound_iteratedDeriv_kernel (k + 1) (3 * t / 2)
+  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ ((k + 1) + 2))⁻¹
+  have h_bound_int : Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) :=
+    (integrableOn_pow_inv_shift (k + 1)).const_mul (C / 2)
+  -- Apply differentiation-under-the-integral with uniform-`x` dominator on `nbhd`.
   have h_app := hasDerivAt_integral_of_dominated_loc_of_deriv_le
     (μ := volume.restrict (Set.Ici (0 : ℝ)))
     (F := fun x : ℝ => jIntegrand k x) (F' := fun x : ℝ => jIntegrand (k + 1) x)
-    (x₀ := t) (s := s) (bound := bound)
-    h_s_mem
-    -- hF_meas: F is AEStronglyMeasurable for x in a nbhd of t.
+    (x₀ := t) (s := nbhd) (bound := bound)
+    h_nbhd_mem
     (Filter.Eventually.of_forall (fun x => aeStronglyMeasurable_jIntegrand k x))
-    -- hF_int
     (integrable_jIntegrand k t)
-    -- hF'_meas
     (aeStronglyMeasurable_jIntegrand (k + 1) t)
-    -- h_bound: pointwise dominator bound on F'.
+    -- h_bound: pointwise dominator on F' for x in nbhd.
     (by
       refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
-      intro u hu_mem
-      intro x hx
+      intro u hu_mem x hx
       have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
-      have h_xb : |x| ≤ 3 * t / 2 := h_s_bound x hx
-      have h_ker := hC u hu_nn x h_xb
-      have h_rho : |ρ u| ≤ 1 / 2 := by
-        unfold ρ; rw [abs_sub_comm, abs_le]
-        have h1 : Int.fract u < 1 := Int.fract_lt_one u
-        have h2 : 0 ≤ Int.fract u := Int.fract_nonneg u
-        refine ⟨?_, ?_⟩ <;> linarith
-      have h_target_eq :
-          (u + 1 / 4) ^ ((k + 1) + 2) = (u + 1 / 4) ^ (k + 3) := by
-        norm_num
-      change ‖jIntegrand (k + 1) x u‖ ≤ bound u
-      rw [Real.norm_eq_abs]
-      unfold jIntegrand
-      rw [abs_mul]
-      have h_ker' : |iteratedDeriv (k + 1) (fun s => kernel u s) x|
-                    ≤ C * ((u + 1 / 4) ^ (k + 3))⁻¹ := by
-        rw [← h_target_eq]; exact h_ker
-      calc |ρ u| * |iteratedDeriv (k + 1) (fun s => kernel u s) x|
-          ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (k + 3))⁻¹) := by gcongr
-        _ = bound u := by simp only [hbound_def]; ring)
-    -- bound_integrable
+      exact norm_jIntegrand_le (hC u hu_nn x (h_nbhd_bound x hx)))
     h_bound_int
-    -- h_diff: pointwise HasDerivAt of F at x ∈ s, with derivative F' x.
+    -- h_diff: pointwise HasDerivAt of the integrand in `x` for ae `u`.
     (by
       refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
-      intro u hu_mem
-      intro x _hx
+      intro u hu_mem x _hx
       have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
-      -- iteratedDeriv k (kernel u) is differentiable.
-      have h_diff_ker :
-          Differentiable ℝ (iteratedDeriv k (fun s => kernel u s)) :=
+      have h_diff_ker : Differentiable ℝ (iteratedDeriv k (fun s => kernel u s)) :=
         ((contDiff_kernel hu_nn).of_le le_top).differentiable_iteratedDeriv' k
       have h_da : HasDerivAt (iteratedDeriv k (fun s => kernel u s))
-            (deriv (iteratedDeriv k (fun s => kernel u s)) x) x :=
-        (h_diff_ker.differentiableAt).hasDerivAt
-      have h_eq : deriv (iteratedDeriv k (fun s => kernel u s)) x =
-                    iteratedDeriv (k + 1) (fun s => kernel u s) x := by
-        rw [show iteratedDeriv (k + 1) (fun s => kernel u s) =
-              deriv (iteratedDeriv k (fun s => kernel u s)) from
-              iteratedDeriv_succ]
-      rw [h_eq] at h_da
+            (iteratedDeriv (k + 1) (fun s => kernel u s) x) x := by
+        rw [iteratedDeriv_succ]
+        exact h_diff_ker.differentiableAt.hasDerivAt
       unfold jIntegrand
       exact h_da.const_mul (ρ u))
-  -- Convert the lemma's conclusion (involving `fun n => ∫ a, F n a`) to the
-  -- `jK`-shaped statement via β-reduction.
   simpa [jK] using h_app.2
 
 /-- Continuity of `jK k` at any `t > 0`.
 
-    Same setup as `hasDerivAt_jK`: a small ball `s = ball t (t/2) ⊂ (0,∞)`,
-    the order-`k` dominator `(C/2)·(u+1/4)^{-(k+2)}` from
-    `exists_bound_iteratedDeriv_kernel k (3t/2)`, and continuity of the
-    integrand in `x` for each `u ≥ 0` from `contDiff_kernel`. -/
+    Same scaffolding as `hasDerivAt_jK` but invoking `continuousAt_of_dominated`
+    instead.  Continuity of the integrand in `x` (for each `u ≥ 0`) comes from
+    `contDiff_kernel`. -/
 private lemma continuousAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
     ContinuousAt (jK k) t := by
-  set s : Set ℝ := Metric.ball t (t / 2) with hs_def
-  have h_s_mem : s ∈ nhds t :=
+  set nbhd : Set ℝ := Metric.ball t (t / 2)
+  have h_nbhd_mem : nbhd ∈ nhds t :=
     Metric.isOpen_ball.mem_nhds (Metric.mem_ball_self (half_pos ht))
-  have h_s_bound : ∀ x ∈ s, |x| ≤ 3 * t / 2 := by
-    intro x hx
-    rw [hs_def, Metric.mem_ball, Real.dist_eq] at hx
-    have h_lo : -(t / 2) < x - t := (abs_lt.mp hx).1
-    have h_hi : x - t < t / 2 := (abs_lt.mp hx).2
-    have h_x_pos : 0 < x := by linarith
-    rw [abs_of_pos h_x_pos]; linarith
-  obtain ⟨C, hC_nn, hC⟩ := exists_bound_iteratedDeriv_kernel k (3 * t / 2)
-  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹ with hbound_def
-  have h_bound_int :
-      Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) :=
+  have h_nbhd_bound : ∀ x ∈ nbhd, |x| ≤ 3 * t / 2 :=
+    abs_le_of_mem_ball_half_pos ht
+  obtain ⟨C, _, hC⟩ := exists_bound_iteratedDeriv_kernel k (3 * t / 2)
+  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹
+  have h_bound_int : Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) :=
     (integrableOn_pow_inv_shift k).const_mul (C / 2)
-  -- Apply continuousAt_of_dominated.
   have h_app := continuousAt_of_dominated
     (μ := volume.restrict (Set.Ici (0 : ℝ)))
     (F := fun x : ℝ => jIntegrand k x)
     (x₀ := t) (bound := bound)
-    -- hF_meas
     (Filter.Eventually.of_forall (fun x => aeStronglyMeasurable_jIntegrand k x))
-    -- h_bound: uniform dominator for x ∈ s.
-    (Filter.eventually_of_mem h_s_mem (fun x hx => by
+    (Filter.eventually_of_mem h_nbhd_mem (fun x hx => by
       refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
       intro u hu_mem
       have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
-      have h_xb : |x| ≤ 3 * t / 2 := h_s_bound x hx
-      have h_ker := hC u hu_nn x h_xb
-      have h_rho : |ρ u| ≤ 1 / 2 := by
-        unfold ρ; rw [abs_sub_comm, abs_le]
-        have h1 : Int.fract u < 1 := Int.fract_lt_one u
-        have h2 : 0 ≤ Int.fract u := Int.fract_nonneg u
-        refine ⟨?_, ?_⟩ <;> linarith
-      change ‖jIntegrand k x u‖ ≤ bound u
-      rw [Real.norm_eq_abs]
-      unfold jIntegrand
-      rw [abs_mul]
-      calc |ρ u| * |iteratedDeriv k (fun s => kernel u s) x|
-          ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (k + 2))⁻¹) := by gcongr
-        _ = bound u := by simp only [hbound_def]; ring))
-    -- bound_integrable
+      exact norm_jIntegrand_le (hC u hu_nn x (h_nbhd_bound x hx))))
     h_bound_int
-    -- h_cont: integrand continuous in x for ae u.
     (by
       refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
       intro u hu_mem
@@ -591,7 +555,7 @@ private lemma continuousAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
       have h_iter_cont : Continuous (iteratedDeriv k (fun s => kernel u s)) :=
         (contDiff_kernel hu_nn).continuous_iteratedDeriv k le_top
       unfold jIntegrand
-      exact (h_iter_cont.continuousAt).const_mul (ρ u))
+      exact h_iter_cont.continuousAt.const_mul (ρ u))
   simpa [jK] using h_app
 
 /-- Iterated derivatives of `j` equal the formal kernel-integrals `jK n` on
@@ -1640,25 +1604,14 @@ end ErrorTermAlgebraic
 /-!
   ## §6  Error term (B2): iterated derivatives of the integral part of δ
 
-  Define
-
-      j(t) := ∫₀^∞  ρ(u) / ((u + 1/4)² + (t/2)²)  du
-
-  where  ρ(u) = 1/2 - {u}.  The paper (via integration by parts and
-  domination) shows  j^(n)(t) = O(t^(-n-2)).
-
-  The n-th derivative of  -(t/2) · j(t)  is then O(t^(-n-1)) by Leibniz.
+  With `j(t) = ∫₀^∞ ρ(u) / ((u + 1/4)² + (t/2)²) du` and §2.5 in place,
+  `iteratedDeriv n j t = jK n t` on `(0, ∞)` (lemma `iteratedDeriv_j_eqOn_jK`).
+  The asymptotic bound `j^(n)(t) = O(t^(-n-2))` therefore reduces to a
+  bound on `jK n` (lemma `jK_isO`).  The bound on `-(t/2)·j(t)` then
+  follows by the Leibniz product rule (`iteratedDeriv_tj_isO`).
 -/
 
 section ErrorTermIntegral
-
-/- The paper integrates `j` by parts once using the antiderivative
-   `σ(u) = ∫₀^u ρ(z) dz` (which satisfies `0 ≤ σ(u) ≤ 1/8`):
-
-       j(t) = 2 · ∫₀^∞  σ(u) · (u + 1/4) / ((u + 1/4)² + (t/2)²)²  du.
-
-   The estimate in the paper then differentiates this form n times under
-   the integral and splits at `u = t`. -/
 
 /-- Asymptotic bound on the formal `n`-th derivative integral `jK n`:
     `|jK n t| = O(t^(-n-2))` as `t → +∞`.
