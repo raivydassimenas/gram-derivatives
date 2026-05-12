@@ -37,16 +37,26 @@
   proof.  Every axiom is tagged `-- ASSUMPTION` and carries a docstring.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
-  • `iteratedDeriv_j_isO`   (§6) — IBP + dominated convergence.
-  • `iteratedDeriv_tj_isO`  (§6) — Leibniz on `-(t/2)·j(t)`; from the above.
-  • `contDiffAt_j`          (§2) — axiom: smoothness of the parametric
-                                   integral `j(t)`.  Two routes sketched
-                                   in its docstring.
+  • `jK_isO`                (§6) — asymptotic bound `|jK n t| = O(t^(-n-2))`
+                                   via IBP on `ρ` and split at `u = t`.
+                                   Consumed by `iteratedDeriv_j_isO` after
+                                   the Strategy-B EqOn reduction.
+  • `iteratedDeriv_tj_isO`  (§6) — Leibniz on `-(t/2)·j(t)`; uses
+                                   `iteratedDeriv_fun_mul` plus the now-derived
+                                   `contDiffAt_j` theorem (no longer axiom).
+
+  ─── Closed under Strategy B ───────────────────────────────────────────
+  • `contDiffAt_j`          (§2.5) — was an axiom; now a theorem derived
+                                     from `contDiffOn_jK` (a joint
+                                     induction in §2.5 that proves the
+                                     formula `iteratedDeriv n j = jK n` on
+                                     `(0, ∞)` and reads off smoothness).
 -/
 
 import Mathlib
 
 open Real Filter Asymptotics MeasureTheory
+open scoped ContDiff
 
 /-!
   ## §0  Notation and asymptotic infrastructure
@@ -120,26 +130,6 @@ axiom N_step : ℝ → ℝ -- ASSUMPTION
     `S t = φ t - (1/π) · δ t + N_step t`. -/
 axiom S_eq_φ_sub_δ_add_N (t : ℝ) (ht : 0 < t) :
     S t = φ t - (1 / Real.pi) * δ t + N_step t
-
-/-- ASSUMPTION: `j(t) = ∫₀^∞ ρ(u)/((u+1/4)² + (t/2)²) du` is smooth on
-    `(0, ∞)`.  This is the genuinely analytic input that cannot be derived
-    from elementary Mathlib lemmas:
-
-    • Mathlib's `ParametricIntegral.lean` only provides first-order results
-      (`hasDerivAt_integral_of_dominated_loc_of_lip` etc.); there is no
-      general `ContDiff` lemma for parametric integrals.
-
-    • Two viable strategies to discharge this axiom:
-        (a) Inductive dominated convergence — at each order `n`, exhibit
-            an integrable dominator `Cₙ·(u+1/4)^(-n-2)` for the `n`-th
-            `t`-derivative of the integrand.
-        (b) Binet's second formula — identify `j(t)` (up to `1/t`) with
-            `Im log Γ(1/4 + i·t/2)`, then use holomorphicity of log Γ
-            on `Re z > 0` and `ContDiff` of holomorphic functions.
-
-    Either route is a substantial subproject; see file header. -/
-axiom contDiffAt_j (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n j s
 
 /-- ASSUMPTION: away from ordinates of zeros of ζ, `N_step` is smooth
     (in fact locally constant). -/
@@ -504,7 +494,7 @@ private lemma hasDerivAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
         refine ⟨?_, ?_⟩ <;> linarith
       have h_target_eq :
           (u + 1 / 4) ^ ((k + 1) + 2) = (u + 1 / 4) ^ (k + 3) := by
-        congr 1; omega
+        norm_num
       change ‖jIntegrand (k + 1) x u‖ ≤ bound u
       rw [Real.norm_eq_abs]
       unfold jIntegrand
@@ -526,7 +516,7 @@ private lemma hasDerivAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
       -- iteratedDeriv k (kernel u) is differentiable.
       have h_diff_ker :
           Differentiable ℝ (iteratedDeriv k (fun s => kernel u s)) :=
-        ((contDiff_kernel hu_nn).of_le (le_top : (k + 1 : ℕ∞ω) ≤ ⊤)).differentiable_iteratedDeriv' k
+        ((contDiff_kernel hu_nn).of_le le_top).differentiable_iteratedDeriv' k
       have h_da : HasDerivAt (iteratedDeriv k (fun s => kernel u s))
             (deriv (iteratedDeriv k (fun s => kernel u s)) x) x :=
         (h_diff_ker.differentiableAt).hasDerivAt
@@ -542,7 +532,124 @@ private lemma hasDerivAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
   -- `jK`-shaped statement via β-reduction.
   simpa [jK] using h_app.2
 
+/-- Continuity of `jK k` at any `t > 0`.
+
+    Same setup as `hasDerivAt_jK`: a small ball `s = ball t (t/2) ⊂ (0,∞)`,
+    the order-`k` dominator `(C/2)·(u+1/4)^{-(k+2)}` from
+    `exists_bound_iteratedDeriv_kernel k (3t/2)`, and continuity of the
+    integrand in `x` for each `u ≥ 0` from `contDiff_kernel`. -/
+private lemma continuousAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
+    ContinuousAt (jK k) t := by
+  set s : Set ℝ := Metric.ball t (t / 2) with hs_def
+  have h_s_mem : s ∈ nhds t :=
+    Metric.isOpen_ball.mem_nhds (Metric.mem_ball_self (half_pos ht))
+  have h_s_bound : ∀ x ∈ s, |x| ≤ 3 * t / 2 := by
+    intro x hx
+    rw [hs_def, Metric.mem_ball, Real.dist_eq] at hx
+    have h_lo : -(t / 2) < x - t := (abs_lt.mp hx).1
+    have h_hi : x - t < t / 2 := (abs_lt.mp hx).2
+    have h_x_pos : 0 < x := by linarith
+    rw [abs_of_pos h_x_pos]; linarith
+  obtain ⟨C, hC_nn, hC⟩ := exists_bound_iteratedDeriv_kernel k (3 * t / 2)
+  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹ with hbound_def
+  have h_bound_int :
+      Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) :=
+    (integrableOn_pow_inv_shift k).const_mul (C / 2)
+  -- Apply continuousAt_of_dominated.
+  have h_app := continuousAt_of_dominated
+    (μ := volume.restrict (Set.Ici (0 : ℝ)))
+    (F := fun x : ℝ => jIntegrand k x)
+    (x₀ := t) (bound := bound)
+    -- hF_meas
+    (Filter.Eventually.of_forall (fun x => aeStronglyMeasurable_jIntegrand k x))
+    -- h_bound: uniform dominator for x ∈ s.
+    (Filter.eventually_of_mem h_s_mem (fun x hx => by
+      refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
+      intro u hu_mem
+      have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
+      have h_xb : |x| ≤ 3 * t / 2 := h_s_bound x hx
+      have h_ker := hC u hu_nn x h_xb
+      have h_rho : |ρ u| ≤ 1 / 2 := by
+        unfold ρ; rw [abs_sub_comm, abs_le]
+        have h1 : Int.fract u < 1 := Int.fract_lt_one u
+        have h2 : 0 ≤ Int.fract u := Int.fract_nonneg u
+        refine ⟨?_, ?_⟩ <;> linarith
+      change ‖jIntegrand k x u‖ ≤ bound u
+      rw [Real.norm_eq_abs]
+      unfold jIntegrand
+      rw [abs_mul]
+      calc |ρ u| * |iteratedDeriv k (fun s => kernel u s) x|
+          ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (k + 2))⁻¹) := by gcongr
+        _ = bound u := by simp only [hbound_def]; ring))
+    -- bound_integrable
+    h_bound_int
+    -- h_cont: integrand continuous in x for ae u.
+    (by
+      refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
+      intro u hu_mem
+      have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
+      have h_iter_cont : Continuous (iteratedDeriv k (fun s => kernel u s)) :=
+        (contDiff_kernel hu_nn).continuous_iteratedDeriv k le_top
+      unfold jIntegrand
+      exact (h_iter_cont.continuousAt).const_mul (ρ u))
+  simpa [jK] using h_app
+
+/-- Iterated derivatives of `j` equal the formal kernel-integrals `jK n` on
+    `(0, ∞)`.  Proved by induction: base case via `jK_zero`; step uses
+    `hasDerivAt_jK` plus eventual-equality of `iteratedDeriv n j` and `jK n`
+    on a neighborhood of each `t > 0`. -/
+private theorem iteratedDeriv_j_eqOn_jK (n : ℕ) :
+    Set.EqOn (iteratedDeriv n j) (jK n) (Set.Ioi (0 : ℝ)) := by
+  induction n with
+  | zero =>
+      intro t _
+      rw [iteratedDeriv_zero]
+      exact (congr_fun jK_zero t).symm
+  | succ n ih =>
+      intro t ht
+      have h_eq : (iteratedDeriv n j : ℝ → ℝ) =ᶠ[nhds t] jK n := by
+        filter_upwards [isOpen_Ioi.mem_nhds ht] with s hs
+        exact ih hs
+      rw [iteratedDeriv_succ, h_eq.deriv_eq]
+      exact (hasDerivAt_jK n ht).deriv
+
+/-- `jK k` is `C^n` on `(0, ∞)` for every `n` and every `k`.
+
+    Inducts on `n`; base case is continuity (from `continuousAt_jK`), step
+    uses `contDiffOn_succ_iff_deriv_of_isOpen` plus `(hasDerivAt_jK k).deriv`
+    to identify `deriv (jK k) = jK (k+1)` on `Ioi 0`. -/
+private lemma contDiffOn_jK : ∀ (n k : ℕ),
+    ContDiffOn ℝ (n : ℕ∞ω) (jK k) (Set.Ioi (0 : ℝ)) := by
+  intro n
+  induction n with
+  | zero =>
+      intro k
+      rw [Nat.cast_zero, contDiffOn_zero]
+      intro t ht
+      exact (continuousAt_jK k ht).continuousWithinAt
+  | succ n ih =>
+      intro k
+      rw [show ((n + 1 : ℕ) : ℕ∞ω) = (n : ℕ∞ω) + 1 by push_cast; ring,
+          contDiffOn_succ_iff_deriv_of_isOpen isOpen_Ioi]
+      refine ⟨?_, ?_, ?_⟩
+      · intro t ht
+        exact (hasDerivAt_jK k ht).differentiableAt.differentiableWithinAt
+      · intro h_eq
+        simp at h_eq
+      · exact (ih (k+1)).congr (fun t ht => (hasDerivAt_jK k ht).deriv)
+
 end ParametricIntegralJ
+
+/-- `j` is `C^n` on `(0, ∞)` for every `n`.
+
+    Derived from `contDiffOn_jK` (`jK 0 = j` is `C^n` on `Ioi 0` for every `n`)
+    by specialising at `k = 0` and converting `ContDiffOn` on an open set
+    into `ContDiffAt`.  Replaces the former axiom of the same name. -/
+theorem contDiffAt_j (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n j s := by
+  have h : ContDiffOn ℝ (n : ℕ∞ω) (jK 0) (Set.Ioi (0 : ℝ)) := contDiffOn_jK n 0
+  rw [jK_zero] at h
+  exact h.contDiffAt (isOpen_Ioi.mem_nhds hs)
 
 /-!
   ## §3  Smoothness lemmas
@@ -553,10 +660,13 @@ end ParametricIntegralJ
   decomposition.
 
   Dependency tree:
-    contDiffAt_j (axiom)  ──▶  contDiffAt_neg_tj  ──▶  contDiffAt_δ
-                                                     ▲
-    contDiffAt_α_part  ──────────────────────────────┘
+    contDiffAt_j (§2.5 thm)  ──▶  contDiffAt_neg_tj  ──▶  contDiffAt_δ
+                                                        ▲
+    contDiffAt_α_part  ─────────────────────────────────┘
     contDiffAt_φ                              (independent)
+
+  `contDiffAt_j` was an axiom; it is now derived in §2.5 from the joint
+  induction `contDiffOn_jK` and `jK_zero`.
 -/
 
 section Smoothness
@@ -1550,33 +1660,49 @@ section ErrorTermIntegral
    The estimate in the paper then differentiates this form n times under
    the integral and splits at `u = t`. -/
 
+/-- Asymptotic bound on the formal `n`-th derivative integral `jK n`:
+    `|jK n t| = O(t^(-n-2))` as `t → +∞`.
+
+    This is the genuine analytic core of `iteratedDeriv_j_isO` after the
+    Strategy-B factoring: with `iteratedDeriv_j_eqOn_jK` in hand, the
+    iterated derivative of `j` is replaced by the explicit integral
+    `jK n t = ∫₀^∞ ρ(u) · ∂ₜⁿ kernel(u,t) du`, which is then bounded by
+    IBP on `ρ` (yielding the σ-form `2 ∫ σ(u)(u+1/4) ∂ᵤ(-∂ₜⁿ kernel) du`)
+    followed by splitting the integral at `u = t`.
+
+    Open gap: the IBP + split estimate. -/
+private lemma jK_isO (n : ℕ) :
+    IsO (fun t => jK n t)
+        (fun t => t ^ (-(n : ℝ) - 2))
+        𝓝∞ := by
+  /- Proof strategy (mirroring the paper):
+     Write (after IBP on ρ)
+       jK n t = ∫₀^∞ σ(u) · ∂ᵤ(-∂ₜⁿ kernel)(u,t) du
+       (with σ(u) = ∫₀^u ρ, so 0 ≤ σ ≤ 1/8).
+
+     Split the integral at u = t and estimate each piece:
+       ∫₀ᵗ : dominated by ((u+1/4)·t^{-(2n+4)}); integral ≤ O(t^(-n-2)).
+       ∫ₜ^∞: dominated by (u+1/4)^{-(2n+3)}; integral ≤ O(t^(-n-2)).
+
+     In Lean this requires:
+       • Formal IBP for `ρ` on `Ici 0`;
+       • Pointwise estimates of `∂ₜⁿ kernel` from `iteratedDeriv_kernel`;
+       • Splitting and integrability of each piece. -/
+  sorry -- TODO (open): see strategy above
+
 /-- The n-th derivative of `j` is `O(t^(-n-2))`.
-    Key estimate from the paper, after the IBP step above. -/
+
+    Strategy-B reduction: rewrite `iteratedDeriv n j t = jK n t` for `t > 0`
+    via `iteratedDeriv_j_eqOn_jK`, then bound `jK n` directly. -/
 lemma iteratedDeriv_j_isO (n : ℕ) :
     IsO (fun t => iteratedDeriv n j t)
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  /- Proof strategy (mirroring the paper):
-     Write (after IBP)
-       j(t) = 2 ∫₀^∞  σ(u)(u+1/4) / ((u+1/4)²+(t/2)²)²  du.
-
-     Differentiate n times under the integral (justified by dominated
-     convergence — Mathlib: `MeasureTheory.integral_hasDerivAt_right`
-     with a dominating function g(u) proportional to
-       u^n · (u+1/4) / ((u+1/4)²+u²)^(n+2)  which is integrable).
-
-     Split the integral at u = t:
-       ∫₀ᵗ  O(tⁿ(4u+1)/((4u+1)²+4t²)^(n+2)) du
-       ≤ O(t^(-n-2))  (each factor estimated using u ≤ t in denominator)
-     and
-       ∫ₜ^∞ O(uⁿ(4u+1)/(4u+1)^(2n+4)) du
-       ≤ O(t^(-n-2))  (each factor estimated using u ≥ t in numerator).
-
-     In Lean this requires:
-       • Differentiability of j (Mathlib's `integral_differentiable`);
-       • Dominated convergence for derivatives under the integral;
-       • Estimation of the two split integrals. -/
-  sorry -- TODO (open): see strategy above
+  -- Rewrite iteratedDeriv n j as jK n eventually at +∞ (using ht : 0 < t).
+  have h_eq : (fun t => iteratedDeriv n j t) =ᶠ[Filter.atTop] (fun t => jK n t) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    exact iteratedDeriv_j_eqOn_jK n ht
+  exact h_eq.trans_isBigO (jK_isO n)
 
 /-- The n-th derivative of  -(t/2) · j(t)  is  O(t^(-n-1)).
 
@@ -1589,11 +1715,17 @@ lemma iteratedDeriv_tj_isO (n : ℕ) (hn : 1 ≤ n) :
     IsO (fun t => iteratedDeriv n (fun t => -(t / 2) * j t) t)
         (fun t => t ^ (-(n : ℝ) - 1))
         𝓝∞ := by
-  /- Apply `iteratedDeriv_mul` (Leibniz rule) to  -(t/2)  and  j(t).
-     The Leibniz sum has two nonzero types of terms:
-       • the k=0 term: -(t/2) · j^(n)(t)   = O(t · t^(-n-2)) = O(t^(-n-1))
-       • the k=1 term: -(1/2) · j^(n-1)(t) = O(t^(-n-1)).
-     All higher k give higher-order decay since -(t/2)^(k) = 0 for k ≥ 2. -/
+  /- Apply `iteratedDeriv_fun_mul` (Leibniz product rule) at every `t > 0`,
+     using `contDiffAt_id` for the factor `s ↦ -(s/2)` (after extracting the
+     constant `-(1/2)`) and `contDiffAt_j n ht` (now a theorem, no longer
+     an axiom) for `j`.  The resulting Finset sum has only two surviving
+     terms (since `iteratedDeriv k id = 0` for `k ≥ 2`):
+       • i=0: -(1/2)·t·iteratedDeriv n j t  = O(t · t^(-n-2)) = O(t^(-n-1)).
+       • i=1: -(1/2)·n·iteratedDeriv (n-1) j t = O(t^(-n-1)).
+     Each is bounded via `iteratedDeriv_j_isO`, so the sum is O(t^(-n-1)).
+
+     Open: the Finset.sum simplification plus the asymptotic combination.
+     Independent of Strategy B; requires no further axioms. -/
   sorry -- TODO (open): see strategy above
 
 end ErrorTermIntegral
