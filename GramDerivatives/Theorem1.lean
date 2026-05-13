@@ -201,6 +201,13 @@ private lemma contDiff_lor : ContDiff ℝ ⊤ lor := by
   exact ContDiff.div contDiff_const (contDiff_const.add (contDiff_id.pow 2))
     (fun s => ne_of_gt (lor_denom_pos s))
 
+/-- The linear combination of `lor⁽ⁿ⁾` and `lor⁽ⁿ⁺¹⁾` arising from differentiating
+    the rescaled `n`-th `t`-derivative of `kernel` in the parameter `u`:
+    `lorMix n x = −(n+2)·lor⁽ⁿ⁾(x) − x·lor⁽ⁿ⁺¹⁾(x)`.  Appears as the angular
+    factor of `∂ᵤ ∂ₜⁿ kernel` after rescaling. -/
+private noncomputable def lorMix (n : ℕ) (x : ℝ) : ℝ :=
+  -((n : ℝ) + 2) * iteratedDeriv n lor x - x * iteratedDeriv (n + 1) lor x
+
 /-- Rescaling identity:  `kernel u t = (u+1/4)^{-2} · lor(t / (2(u+1/4)))`.
     This factors out the `u`-dependence into a single negative power and
     leaves the `t`-dependence inside the bounded Lorentzian profile. -/
@@ -241,6 +248,90 @@ private lemma iteratedDeriv_kernel (k : ℕ) {u : ℝ} (hu : 0 ≤ u) (t : ℝ) 
           iteratedDeriv k lor ((1 / (2 * (u + 1 / 4))) * s)) from
       iteratedDeriv_comp_const_mul h_lor_k _]
   ring
+
+/-- The closed-form expression appearing as `∂ᵤ ∂ₜⁿ kernel`, in two-term sum form. -/
+private noncomputable def mixedDerivExpr (n : ℕ) (u t : ℝ) : ℝ :=
+  -(((n : ℝ) + 2) * (u + 1/4)^(n+1)) / ((u + 1/4)^(n+2))^2 * (1/2)^n *
+    iteratedDeriv n lor ((1 / (2 * (u + 1/4))) * t)
+  + ((u + 1/4)^(n+2))⁻¹ * (1/2)^n *
+    (iteratedDeriv (n + 1) lor ((1 / (2 * (u + 1/4))) * t) *
+      ((-2 / (2 * (u + 1/4))^2) * t))
+
+/-- Derivative of `u ↦ ∂ₜⁿ kernel(u, t)` in the parameter `u`.
+
+    Using the rescaling identity `∂ₜⁿ kernel(u, t) = ((u+1/4)²)⁻¹ · (1/(2(u+1/4)))ⁿ ·
+    lor⁽ⁿ⁾(t/(2(u+1/4)))`, the chain and product rules in `u` produce the
+    explicit two-term form `mixedDerivExpr n u t`.  The `lorMix`-shaped repackaging
+    is done in `mixedDerivExpr_eq_lorMix` below. -/
+private lemma hasDerivAt_iteratedDeriv_kernel (n : ℕ) {u : ℝ} (hu : 0 < u) (t : ℝ) :
+    HasDerivAt (fun v => iteratedDeriv n (fun s => kernel v s) t)
+      (mixedDerivExpr n u t) u := by
+  have hu_pos : 0 < u + 1/4 := by linarith
+  have hu_ne : (u + 1/4) ≠ 0 := ne_of_gt hu_pos
+  have hu_pow_ne : (u + 1/4)^(n+2) ≠ 0 := pow_ne_zero _ hu_ne
+  have h2u_pos : 0 < 2 * (u + 1/4) := by linarith
+  have h2u_ne : (2 * (u + 1/4)) ≠ 0 := ne_of_gt h2u_pos
+  -- (A) Eventual equality with a SIMPLIFIED rescaled form that collects all `(v+1/4)`
+  -- powers into `(v+1/4)^(n+2)` — eliminating the `n - 1` exponent that arises from
+  -- `HasDerivAt.pow` and breaks `ring`.
+  have h_eq : (fun v : ℝ => iteratedDeriv n (fun s => kernel v s) t) =ᶠ[nhds u]
+              fun v : ℝ => ((v + 1/4)^(n+2))⁻¹ * (1/2)^n *
+                          iteratedDeriv n lor ((1/(2*(v + 1/4))) * t) := by
+    filter_upwards [isOpen_Ioi.mem_nhds hu] with v hv
+    have h_v0 : 0 < v := Set.mem_Ioi.mp hv
+    have h_vpos : 0 < v + 1/4 := by linarith
+    have h_vne : v + 1/4 ≠ 0 := ne_of_gt h_vpos
+    have h_2v_ne : (2 * (v + 1/4)) ≠ 0 := by positivity
+    have h_pow_ne : (v + 1/4)^(n+2) ≠ 0 := pow_ne_zero _ h_vne
+    have h_pown_ne : (v + 1/4)^n ≠ 0 := pow_ne_zero _ h_vne
+    have h_2pown_ne : ((2 : ℝ)^n) ≠ 0 := pow_ne_zero _ two_ne_zero
+    rw [iteratedDeriv_kernel n h_v0.le t]
+    -- ((v+1/4)^2)⁻¹ · (1/(2(v+1/4)))^n = ((v+1/4)^(n+2))⁻¹ · (1/2)^n.
+    have h_rw : ((v + 1 / 4) ^ 2)⁻¹ * (1 / (2 * (v + 1 / 4))) ^ n =
+                ((v + 1/4)^(n+2))⁻¹ * (1/2)^n := by
+      rw [pow_add (v + 1/4) n 2]
+      field_simp
+      ring
+    rw [h_rw]
+  -- (B) Build HasDerivAt of the simplified form piece by piece.
+  have h_r : HasDerivAt (fun v : ℝ => v + 1/4) 1 u :=
+    (hasDerivAt_id u).add_const _
+  -- (v + 1/4)^(n+2), deriv at u is (n+2) * (u+1/4)^(n+1).
+  have h_r_pow : HasDerivAt (fun v : ℝ => (v + 1/4)^(n+2))
+                  (((n : ℝ) + 2) * (u + 1/4)^(n+1)) u := by
+    have h := h_r.pow (n+2)
+    have h_ns : (n + 2 - 1 : ℕ) = n + 1 := by omega
+    rw [h_ns] at h
+    convert h using 1
+    push_cast; ring
+  have h_inv : HasDerivAt (fun v : ℝ => ((v + 1/4)^(n+2))⁻¹)
+                (-(((n : ℝ) + 2) * (u + 1/4)^(n+1)) / ((u + 1/4)^(n+2))^2) u :=
+    h_r_pow.inv hu_pow_ne
+  have h_AB : HasDerivAt (fun v : ℝ => ((v + 1/4)^(n+2))⁻¹ * (1/2)^n)
+                ((-(((n : ℝ) + 2) * (u + 1/4)^(n+1)) / ((u + 1/4)^(n+2))^2) * (1/2)^n) u :=
+    h_inv.mul_const _
+  -- Argument of `lor⁽ⁿ⁾`: `(1/(2*(v+1/4))) * t`.
+  have h_2r : HasDerivAt (fun v : ℝ => 2 * (v + 1/4)) 2 u := by
+    have := h_r.const_mul 2; convert this using 1; ring
+  have h_inv_2r : HasDerivAt (fun v : ℝ => 1 / (2 * (v + 1/4)))
+                    (-2 / (2 * (u + 1/4))^2) u := by
+    have := (hasDerivAt_const u (1 : ℝ)).div h_2r h2u_ne
+    convert this using 1; ring
+  have h_lor_arg : HasDerivAt (fun v : ℝ => (1 / (2 * (v + 1/4))) * t)
+                    ((-2 / (2 * (u + 1/4))^2) * t) u :=
+    h_inv_2r.mul_const t
+  have h_lor_n_diff : Differentiable ℝ (iteratedDeriv n lor) :=
+    (contDiff_lor.of_le le_top).differentiable_iteratedDeriv' n
+  have h_lor_n_at : HasDerivAt (iteratedDeriv n lor)
+                      (iteratedDeriv (n + 1) lor ((1 / (2 * (u + 1/4))) * t))
+                      ((1 / (2 * (u + 1/4))) * t) := by
+    rw [iteratedDeriv_succ]
+    exact h_lor_n_diff.differentiableAt.hasDerivAt
+  have h_C := h_lor_n_at.comp u h_lor_arg
+  have h_full := h_AB.mul h_C
+  -- The function form `h_AB * h_C` has the rescaled form; transfer to the LHS via h_eq.
+  -- The derivative of `h_full` is exactly `mixedDerivExpr n u t` (by unfolding).
+  exact h_full.congr_of_eventuallyEq h_eq
 
 /-- `iteratedDeriv k lor` is bounded on every closed interval `[-R, R]`. -/
 private lemma exists_bound_iteratedDeriv_lor (k : ℕ) (R : ℝ) :
@@ -1612,6 +1703,83 @@ end ErrorTermAlgebraic
 -/
 
 section ErrorTermIntegral
+
+/-! ### Sawtooth antiderivative `σ`
+
+`σ(u) = (fract u)·(1 − fract u)/2` is the unique continuous antiderivative of `ρ`
+that vanishes at every integer.  On `[k, k+1]` it agrees with `∫₀^u ρ`, satisfies
+`0 ≤ σ ≤ 1/8`, and `σ k = σ (k+1) = 0` makes the IBP boundary terms vanish. -/
+
+/-- Bounded antiderivative of the sawtooth `ρ`. -/
+private noncomputable def σ (u : ℝ) : ℝ :=
+  Int.fract u * (1 - Int.fract u) / 2
+
+/-- `σ` is non-negative:  `fract u ∈ [0, 1]` so `fract u · (1 − fract u) ≥ 0`. -/
+private lemma σ_nonneg (u : ℝ) : 0 ≤ σ u := by
+  have h1 : 0 ≤ Int.fract u := Int.fract_nonneg u
+  have h2 : Int.fract u ≤ 1 := (Int.fract_lt_one u).le
+  have h3 : 0 ≤ Int.fract u * (1 - Int.fract u) :=
+    mul_nonneg h1 (by linarith)
+  unfold σ; linarith
+
+/-- `σ` is bounded by `1/8`:  on `[0, 1]`, `x(1−x) ≤ 1/4` (AM–GM via `(2x−1)² ≥ 0`),
+    so `σ u = x(1−x)/2 ≤ 1/8`. -/
+private lemma σ_le_eighth (u : ℝ) : σ u ≤ 1 / 8 := by
+  have h_key : Int.fract u * (1 - Int.fract u) ≤ 1 / 4 := by
+    nlinarith [sq_nonneg (2 * Int.fract u - 1)]
+  unfold σ; linarith
+
+/-- `σ` is continuous on `ℝ`:  factor as `g ∘ fract` with `g x = x(1−x)/2`,
+    invoke `ContinuousOn.comp_fract''` (using `g 0 = g 1 = 0`). -/
+private lemma σ_continuous : Continuous σ := by
+  set g : ℝ → ℝ := fun x => x * (1 - x) / 2 with hg_def
+  have h_g_cont : Continuous g :=
+    (continuous_id.mul (continuous_const.sub continuous_id)).div_const 2
+  have h_g_end : g 0 = g 1 := by simp [hg_def]
+  have h_eq : σ = g ∘ Int.fract := by funext u; rfl
+  rw [h_eq]
+  exact ContinuousOn.comp_fract'' h_g_cont.continuousOn h_g_end
+
+/-- `σ` vanishes at every natural number:  `fract k = 0`. -/
+private lemma σ_natCast_eq_zero (k : ℕ) : σ (k : ℝ) = 0 := by
+  unfold σ; rw [Int.fract_natCast]; ring
+
+/-- On the open interval `(k, k+1)` between consecutive integers,
+    `σ` is differentiable with derivative `ρ`. -/
+private lemma hasDerivAt_σ_on_Ioo (k : ℕ) {u : ℝ}
+    (hu : u ∈ Set.Ioo ((k : ℝ)) ((k : ℝ) + 1)) :
+    HasDerivAt σ (ρ u) u := by
+  have h_floor_u : Int.floor u = (k : ℤ) := by
+    apply Int.floor_eq_iff.mpr
+    refine ⟨?_, ?_⟩
+    · push_cast; linarith [hu.1]
+    · push_cast; linarith [hu.2]
+  have h_fract_u : Int.fract u = u - k := by
+    rw [Int.fract, h_floor_u]; push_cast; ring
+  -- σ coincides with the polynomial `(s − k)(1 − (s − k))/2` on a neighbourhood of `u`.
+  have h_eq : σ =ᶠ[nhds u] fun s : ℝ => (s - k) * (1 - (s - k)) / 2 := by
+    filter_upwards [isOpen_Ioo.mem_nhds hu] with s hs
+    have h_floor_s : Int.floor s = (k : ℤ) := by
+      apply Int.floor_eq_iff.mpr
+      refine ⟨?_, ?_⟩
+      · push_cast; linarith [hs.1]
+      · push_cast; linarith [hs.2]
+    have h_fract_s : Int.fract s = s - k := by
+      rw [Int.fract, h_floor_s]; push_cast; ring
+    change σ s = _
+    unfold σ; rw [h_fract_s]
+  -- Differentiate the polynomial pointwise.
+  have h_f : HasDerivAt (fun s : ℝ => s - (k : ℝ)) 1 u :=
+    (hasDerivAt_id u).sub_const (k : ℝ)
+  have h_g : HasDerivAt (fun s : ℝ => 1 - (s - (k : ℝ))) (-1) u := by
+    have h := (hasDerivAt_const u (1 : ℝ)).sub h_f
+    convert h using 1; ring
+  have h_poly : HasDerivAt (fun s : ℝ => (s - k) * (1 - (s - k)) / 2) (ρ u) u := by
+    have h_prod := h_f.mul h_g
+    have h_div := h_prod.div_const 2
+    convert h_div using 1
+    unfold ρ; rw [h_fract_u]; ring
+  exact h_poly.congr_of_eventuallyEq h_eq
 
 /-- Asymptotic bound on the formal `n`-th derivative integral `jK n`:
     `|jK n t| = O(t^(-n-2))` as `t → +∞`.
