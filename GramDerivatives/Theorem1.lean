@@ -287,12 +287,18 @@ private lemma hasDerivAt_iteratedDeriv_kernel (n : ℕ) {u : ℝ} (hu : 0 < u) (
     have h_2pown_ne : ((2 : ℝ)^n) ≠ 0 := pow_ne_zero _ two_ne_zero
     rw [iteratedDeriv_kernel n h_v0.le t]
     -- ((v+1/4)^2)⁻¹ · (1/(2(v+1/4)))^n = ((v+1/4)^(n+2))⁻¹ · (1/2)^n.
-    have h_rw : ((v + 1 / 4) ^ 2)⁻¹ * (1 / (2 * (v + 1 / 4))) ^ n =
-                ((v + 1/4)^(n+2))⁻¹ * (1/2)^n := by
-      rw [pow_add (v + 1/4) n 2]
-      field_simp
-      ring
-    rw [h_rw]
+    -- `ring` treats `⁻¹` as opaque, so we rewrite both sides into a common
+    -- inverse-of-power form via three auxiliary identities, then close by `ring`.
+    have eq1 : (1 / (2 * (v + 1 / 4)) : ℝ) ^ n
+                = ((v + 1 / 4) ^ n)⁻¹ * (2 ^ n)⁻¹ := by
+      rw [div_pow, one_pow, mul_pow, one_div, mul_inv]; ring
+    have eq2 : ((1 : ℝ) / 2) ^ n = (2 ^ n)⁻¹ := by
+      rw [div_pow, one_pow, one_div]
+    have eq3 : ((v + 1 / 4 : ℝ) ^ (n + 2))⁻¹
+                = ((v + 1 / 4) ^ n)⁻¹ * ((v + 1 / 4) ^ 2)⁻¹ := by
+      rw [pow_add, mul_inv]
+    rw [eq1, eq2, eq3]
+    ring
   -- (B) Build HasDerivAt of the simplified form piece by piece.
   have h_r : HasDerivAt (fun v : ℝ => v + 1/4) 1 u :=
     (hasDerivAt_id u).add_const _
