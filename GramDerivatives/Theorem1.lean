@@ -1844,16 +1844,85 @@ lemma iteratedDeriv_tj_isO (n : ℕ) (hn : 1 ≤ n) :
         𝓝∞ := by
   /- Apply `iteratedDeriv_fun_mul` (Leibniz product rule) at every `t > 0`,
      using `contDiffAt_id` for the factor `s ↦ -(s/2)` (after extracting the
-     constant `-(1/2)`) and `contDiffAt_j n ht` (now a theorem, no longer
-     an axiom) for `j`.  The resulting Finset sum has only two surviving
-     terms (since `iteratedDeriv k id = 0` for `k ≥ 2`):
+     constant `-(1/2)`) and `contDiffAt_j n ht` for `j`.  The resulting
+     Finset sum has only two surviving terms (since `iteratedDeriv k id = 0`
+     for `k ≥ 2`):
        • i=0: -(1/2)·t·iteratedDeriv n j t  = O(t · t^(-n-2)) = O(t^(-n-1)).
-       • i=1: -(1/2)·n·iteratedDeriv (n-1) j t = O(t^(-n-1)).
-     Each is bounded via `iteratedDeriv_j_isO`, so the sum is O(t^(-n-1)).
-
-     Open: the Finset.sum simplification plus the asymptotic combination.
-     Independent of Strategy B; requires no further axioms. -/
-  sorry -- TODO (open): see strategy above
+       • i=1: -(1/2)·n·iteratedDeriv (n-1) j t = O(t^(-n-1)). -/
+  -- Step 1: closed-form for the iterated derivative on `(0, ∞)`.
+  have h_eq :
+      (fun t : ℝ => iteratedDeriv n (fun t => -(t / 2) * j t) t)
+        =ᶠ[Filter.atTop]
+      (fun t : ℝ => -(1 / 2) *
+        (t * iteratedDeriv n j t + (n : ℝ) * iteratedDeriv (n - 1) j t)) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    -- `-(s/2) · j s = -(1/2) · (s · j s)`; pull out the constant `-(1/2)`.
+    have h_funeq :
+        (fun s : ℝ => -(s / 2) * j s) = (fun s : ℝ => -(1 / 2 : ℝ) * (s * j s)) := by
+      funext s; ring
+    rw [h_funeq, iteratedDeriv_const_mul' (-(1 / 2 : ℝ)) (fun s => s * j s) n t]
+    -- Leibniz product rule for `s · j s`.
+    have h_id : ContDiffAt ℝ n (fun s : ℝ => s) t := contDiffAt_id
+    have h_j : ContDiffAt ℝ n j t := contDiffAt_j n ht
+    rw [iteratedDeriv_fun_mul h_id h_j]
+    -- Collapse the Leibniz sum: only `i = 0` and `i = 1` survive.
+    have hsplit :
+        Finset.range (n + 1) = Finset.range 2 ∪ Finset.Ico 2 (n + 1) := by
+      ext i; simp only [Finset.mem_union, Finset.mem_range, Finset.mem_Ico]; omega
+    have hdisj : Disjoint (Finset.range 2) (Finset.Ico 2 (n + 1)) := by
+      rw [Finset.disjoint_left]
+      intro i hi₁ hi₂
+      simp only [Finset.mem_range, Finset.mem_Ico] at hi₁ hi₂
+      omega
+    rw [hsplit, Finset.sum_union hdisj]
+    -- Tail (`i ≥ 2`) is zero because `iteratedDeriv i id = 0`.
+    have h_tail_zero :
+        ∀ i ∈ Finset.Ico 2 (n + 1),
+          ((n.choose i : ℝ) * iteratedDeriv i (fun s : ℝ => s) t *
+            iteratedDeriv (n - i) j t) = 0 := by
+      intro i hi
+      have hi2 : 2 ≤ i := (Finset.mem_Ico.mp hi).1
+      have h_id_zero : iteratedDeriv i (fun s : ℝ => s) t = 0 := by
+        rw [iteratedDeriv_fun_id, if_neg (by omega : i ≠ 0),
+            if_neg (by omega : i ≠ 1)]
+      rw [h_id_zero]; ring
+    rw [Finset.sum_eq_zero h_tail_zero, add_zero]
+    -- Range-2 part: `i = 0` and `i = 1`.
+    rw [show (2 : ℕ) = 1 + 1 from rfl,
+        Finset.sum_range_succ, Finset.sum_range_succ, Finset.sum_range_zero,
+        zero_add]
+    have h_id0 : iteratedDeriv 0 (fun s : ℝ => s) t = t := by
+      rw [iteratedDeriv_fun_id]; simp
+    have h_id1 : iteratedDeriv 1 (fun s : ℝ => s) t = 1 := by
+      rw [iteratedDeriv_fun_id]; simp
+    rw [h_id0, h_id1]
+    simp only [Nat.choose_zero_right, Nat.choose_one_right, Nat.cast_one,
+               Nat.sub_zero]
+    ring
+  -- Step 2: bound the closed form by `O(t^(-n-1))`.
+  refine h_eq.trans_isBigO ?_
+  refine IsBigO.const_mul_left ?_ _
+  refine IsBigO.add ?_ ?_
+  · -- `t · iteratedDeriv n j t = O(t · t^(-n-2)) = O(t^(-n-1))`.
+    have h_prod := (isBigO_refl (fun t : ℝ => t) Filter.atTop).mul
+                     (iteratedDeriv_j_isO n)
+    refine h_prod.trans_eventuallyEq ?_
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    rw [show (-(n : ℝ) - 1) = (-(n : ℝ) - 2) + 1 from by ring,
+        Real.rpow_add_one ht.ne']
+    ring
+  · -- `n · iteratedDeriv (n-1) j t = O(t^(-(n-1)-2)) = O(t^(-n-1))`.
+    refine IsBigO.const_mul_left ?_ _
+    have h := iteratedDeriv_j_isO (n - 1)
+    have h_pow_eq :
+        (fun t : ℝ => t ^ (-((n - 1 : ℕ) : ℝ) - 2)) =
+          (fun t : ℝ => t ^ (-(n : ℝ) - 1)) := by
+      funext t
+      congr 1
+      rw [Nat.cast_sub hn]
+      push_cast; ring
+    rw [h_pow_eq] at h
+    exact h
 
 end ErrorTermIntegral
 
