@@ -1804,6 +1804,178 @@ private lemma hasDerivAt_σ_on_Ioo (k : ℕ) {u : ℝ}
     unfold ρ; rw [h_fract_u]; ring
   exact h_poly.congr_of_eventuallyEq h_eq
 
+/-! ### Auxiliary integrability/continuity for the IBP identity
+
+The per-interval IBP needs:
+* `intervalIntegrable_ρ`             — ρ is interval-integrable (bounded by 1/2,
+                                       measurable);
+* `continuousOn_mixedDerivExpr`      — `u ↦ mixedDerivExpr n u t` is continuous
+                                       on `Ici 0` (each factor is continuous
+                                       and the denominators are nonzero there);
+* `intervalIntegrable_mixedDerivExpr` — restriction of the above to `[k, k+1]`. -/
+
+/-- `ρ` is interval-integrable on any `[a, b]`.  Bounded by `1/2` and Borel
+    measurable, hence integrable on every finite-measure interval. -/
+private lemma intervalIntegrable_ρ (a b : ℝ) :
+    IntervalIntegrable ρ MeasureTheory.volume a b := by
+  have h_const_int : IntervalIntegrable (fun _ : ℝ => (1 / 2 : ℝ))
+      MeasureTheory.volume a b := intervalIntegrable_const
+  have h_meas : Measurable ρ := measurable_const.sub measurable_fract
+  have h_bd : ∀ x, ‖ρ x‖ ≤ (1 / 2 : ℝ) := fun x => by
+    rw [Real.norm_eq_abs]; exact abs_ρ_le_half x
+  rw [intervalIntegrable_iff] at h_const_int ⊢
+  exact MeasureTheory.Integrable.mono' h_const_int h_meas.aestronglyMeasurable
+    (Filter.Eventually.of_forall h_bd)
+
+/-- `u ↦ mixedDerivExpr n u t` is continuous on `Ici 0`.  Each of the two
+    summands is built from `(u + 1/4)^k`, `1/(2(u+1/4))`, and `iteratedDeriv
+    k lor` composed with `(1/(2(u+1/4)))·t`; all denominators stay strictly
+    positive on `Ici 0` since `u + 1/4 ≥ 1/4`. -/
+private lemma continuousOn_mixedDerivExpr (n : ℕ) (t : ℝ) :
+    ContinuousOn (fun u : ℝ => mixedDerivExpr n u t) (Set.Ici (0 : ℝ)) := by
+  unfold mixedDerivExpr
+  have h_pos : ∀ u ∈ Set.Ici (0 : ℝ), (0 : ℝ) < u + 1 / 4 := fun u hu => by
+    have : (0 : ℝ) ≤ u := Set.mem_Ici.mp hu; linarith
+  have h_ne : ∀ u ∈ Set.Ici (0 : ℝ), u + 1 / 4 ≠ 0 := fun u hu => ne_of_gt (h_pos u hu)
+  have h_pow_ne : ∀ k, ∀ u ∈ Set.Ici (0 : ℝ), (u + 1 / 4) ^ k ≠ 0 :=
+    fun k u hu => pow_ne_zero k (h_ne u hu)
+  have h_pow_sq_ne : ∀ u ∈ Set.Ici (0 : ℝ), ((u + 1 / 4) ^ (n + 2)) ^ 2 ≠ 0 :=
+    fun u hu => pow_ne_zero _ (h_pow_ne (n + 2) u hu)
+  have h_2_pos : ∀ u ∈ Set.Ici (0 : ℝ), (0 : ℝ) < 2 * (u + 1 / 4) :=
+    fun u hu => by linarith [h_pos u hu]
+  have h_2sq_ne : ∀ u ∈ Set.Ici (0 : ℝ), (2 * (u + 1 / 4)) ^ 2 ≠ 0 :=
+    fun u hu => pow_ne_zero _ (ne_of_gt (h_2_pos u hu))
+  -- Basic continuous functions.
+  have hr : Continuous (fun u : ℝ => u + 1 / 4) := continuous_id.add continuous_const
+  have hrk : ∀ k, Continuous (fun u : ℝ => (u + 1 / 4) ^ k) := fun k => hr.pow k
+  have h_2r : Continuous (fun u : ℝ => 2 * (u + 1 / 4)) := continuous_const.mul hr
+  have h_lor : ∀ k, Continuous (iteratedDeriv k lor) := fun k =>
+    contDiff_lor.continuous_iteratedDeriv k le_top
+  -- Composition with the rescaled argument.
+  have h_inv_2r : ContinuousOn (fun u : ℝ => 1 / (2 * (u + 1 / 4))) (Set.Ici 0) :=
+    continuousOn_const.div h_2r.continuousOn (fun u hu => ne_of_gt (h_2_pos u hu))
+  have h_arg : ContinuousOn (fun u : ℝ => (1 / (2 * (u + 1 / 4))) * t) (Set.Ici 0) :=
+    h_inv_2r.mul continuousOn_const
+  have h_lor_comp : ∀ k, ContinuousOn
+      (fun u : ℝ => iteratedDeriv k lor ((1 / (2 * (u + 1 / 4))) * t)) (Set.Ici 0) :=
+    fun k => (h_lor k).comp_continuousOn h_arg
+  -- First summand.
+  have h_num : ContinuousOn
+      (fun u : ℝ => -(((n : ℝ) + 2) * (u + 1 / 4) ^ (n + 1))) (Set.Ici 0) :=
+    (continuousOn_const.mul (hrk (n + 1)).continuousOn).neg
+  have h_den : ContinuousOn
+      (fun u : ℝ => ((u + 1 / 4) ^ (n + 2)) ^ 2) (Set.Ici 0) :=
+    ((hrk (n + 2)).pow 2).continuousOn
+  have h_frac : ContinuousOn
+      (fun u : ℝ => -(((n : ℝ) + 2) * (u + 1 / 4) ^ (n + 1)) / ((u + 1 / 4) ^ (n + 2)) ^ 2)
+      (Set.Ici 0) := h_num.div h_den h_pow_sq_ne
+  have h_t1 : ContinuousOn
+      (fun u : ℝ =>
+        -(((n : ℝ) + 2) * (u + 1 / 4) ^ (n + 1)) / ((u + 1 / 4) ^ (n + 2)) ^ 2 *
+          (1 / 2) ^ n * iteratedDeriv n lor ((1 / (2 * (u + 1 / 4))) * t))
+      (Set.Ici 0) := (h_frac.mul continuousOn_const).mul (h_lor_comp n)
+  -- Second summand.
+  have h_inv : ContinuousOn (fun u : ℝ => ((u + 1 / 4) ^ (n + 2))⁻¹) (Set.Ici 0) :=
+    (hrk (n + 2)).continuousOn.inv₀ (fun u hu => h_pow_ne (n + 2) u hu)
+  have h_2r_sq : ContinuousOn (fun u : ℝ => (2 * (u + 1 / 4)) ^ 2) (Set.Ici 0) :=
+    (h_2r.pow 2).continuousOn
+  have h_neg2_div : ContinuousOn
+      (fun u : ℝ => (-2 : ℝ) / (2 * (u + 1 / 4)) ^ 2) (Set.Ici 0) :=
+    continuousOn_const.div h_2r_sq h_2sq_ne
+  have h_neg2_t : ContinuousOn
+      (fun u : ℝ => ((-2 : ℝ) / (2 * (u + 1 / 4)) ^ 2) * t) (Set.Ici 0) :=
+    h_neg2_div.mul continuousOn_const
+  have h_inner : ContinuousOn
+      (fun u : ℝ => iteratedDeriv (n + 1) lor ((1 / (2 * (u + 1 / 4))) * t) *
+        (((-2 : ℝ) / (2 * (u + 1 / 4)) ^ 2) * t)) (Set.Ici 0) :=
+    (h_lor_comp (n + 1)).mul h_neg2_t
+  have h_t2 : ContinuousOn
+      (fun u : ℝ => ((u + 1 / 4) ^ (n + 2))⁻¹ * (1 / 2) ^ n *
+        (iteratedDeriv (n + 1) lor ((1 / (2 * (u + 1 / 4))) * t) *
+          (((-2 : ℝ) / (2 * (u + 1 / 4)) ^ 2) * t)))
+      (Set.Ici 0) := (h_inv.mul continuousOn_const).mul h_inner
+  exact h_t1.add h_t2
+
+/-- Per-unit-interval integrability of `u ↦ mixedDerivExpr n u t`.
+    Restriction of `continuousOn_mixedDerivExpr` to `[k, k+1] ⊆ Ici 0`. -/
+private lemma intervalIntegrable_mixedDerivExpr (n : ℕ) (t : ℝ) (k : ℕ) :
+    IntervalIntegrable (fun u => mixedDerivExpr n u t) MeasureTheory.volume
+      (k : ℝ) ((k : ℝ) + 1) := by
+  have hab : ((k : ℝ)) ≤ ((k : ℝ) + 1) := by linarith
+  refine ContinuousOn.intervalIntegrable ?_
+  rw [Set.uIcc_of_le hab]
+  refine (continuousOn_mixedDerivExpr n t).mono ?_
+  intro x hx
+  rw [Set.mem_Icc] at hx
+  rw [Set.mem_Ici]
+  have : (0 : ℝ) ≤ k := by exact_mod_cast Nat.zero_le k
+  linarith [hx.1]
+
+/-- **Per-unit-interval IBP identity.**
+
+    On `[k, k+1]` with `σ' = ρ` (from `hasDerivAt_σ_on_Ioo`) and
+    `∂_u [iteratedDeriv n (kernel · ·) t] = mixedDerivExpr n · t` (from
+    `hasDerivAt_iteratedDeriv_kernel`, valid since `u > 0` on the open
+    interior), Mathlib's IBP gives a formula whose boundary terms vanish
+    thanks to `σ_natCast_eq_zero`. -/
+private lemma jK_ibp_unit_interval (n : ℕ) (t : ℝ) (k : ℕ) :
+    ∫ u in (k : ℝ)..((k : ℝ) + 1), ρ u * iteratedDeriv n (fun s => kernel u s) t
+      = -∫ u in (k : ℝ)..((k : ℝ) + 1), σ u * mixedDerivExpr n u t := by
+  have hab : ((k : ℝ)) ≤ ((k : ℝ) + 1) := by linarith
+  have hk_nn : (0 : ℝ) ≤ (k : ℝ) := by exact_mod_cast Nat.zero_le k
+  have h_uIcc : Set.uIcc ((k : ℝ)) ((k : ℝ) + 1) = Set.Icc ((k : ℝ)) ((k : ℝ) + 1) :=
+    Set.uIcc_of_le hab
+  have h_min : min ((k : ℝ)) ((k : ℝ) + 1) = (k : ℝ) := min_eq_left hab
+  have h_max : max ((k : ℝ)) ((k : ℝ) + 1) = (k : ℝ) + 1 := max_eq_right hab
+  -- Continuity hypotheses.
+  have hσ_cont : ContinuousOn σ (Set.uIcc ((k : ℝ)) ((k : ℝ) + 1)) :=
+    σ_continuous.continuousOn
+  have hK_cont :
+      ContinuousOn (fun u : ℝ => iteratedDeriv n (fun s => kernel u s) t)
+        (Set.uIcc ((k : ℝ)) ((k : ℝ) + 1)) := by
+    rw [h_uIcc]
+    refine (continuousOn_iteratedDeriv_kernel n t).mono ?_
+    intro x hx
+    rw [Set.mem_Icc] at hx
+    rw [Set.mem_Ici]
+    linarith [hx.1]
+  -- Derivative hypotheses on the open interior.
+  have hσ_deriv : ∀ x ∈ Set.Ioo (min ((k : ℝ)) ((k : ℝ) + 1))
+      (max ((k : ℝ)) ((k : ℝ) + 1)), HasDerivAt σ (ρ x) x := by
+    intro x hx
+    rw [h_min, h_max] at hx
+    exact hasDerivAt_σ_on_Ioo k hx
+  have hK_deriv : ∀ x ∈ Set.Ioo (min ((k : ℝ)) ((k : ℝ) + 1))
+      (max ((k : ℝ)) ((k : ℝ) + 1)),
+      HasDerivAt (fun v : ℝ => iteratedDeriv n (fun s => kernel v s) t)
+        (mixedDerivExpr n x t) x := by
+    intro x hx
+    rw [h_min, h_max] at hx
+    have hx_pos : 0 < x := by
+      have hlo := hx.1
+      rcases Nat.eq_zero_or_pos k with hk0 | hk_pos
+      · subst hk0
+        simpa using hlo
+      · have : (1 : ℝ) ≤ (k : ℝ) := by exact_mod_cast hk_pos
+        linarith
+    exact hasDerivAt_iteratedDeriv_kernel n hx_pos t
+  -- Integrability hypotheses.
+  have hρ_int : IntervalIntegrable ρ MeasureTheory.volume ((k : ℝ)) ((k : ℝ) + 1) :=
+    intervalIntegrable_ρ _ _
+  have hM_int :
+      IntervalIntegrable (fun u => mixedDerivExpr n u t) MeasureTheory.volume
+        ((k : ℝ)) ((k : ℝ) + 1) := intervalIntegrable_mixedDerivExpr n t k
+  -- Apply Mathlib's IBP.
+  have h_ibp := intervalIntegral.integral_mul_deriv_eq_deriv_mul_of_hasDerivAt
+    hσ_cont hK_cont hσ_deriv hK_deriv hρ_int hM_int
+  -- σ vanishes at both endpoints — boundary terms drop.
+  have hσa : σ ((k : ℝ)) = 0 := σ_natCast_eq_zero k
+  have hσb : σ ((k : ℝ) + 1) = 0 := by
+    have hb_eq : ((k : ℝ)) + 1 = ((k + 1 : ℕ) : ℝ) := by push_cast; ring
+    rw [hb_eq]; exact σ_natCast_eq_zero (k + 1)
+  rw [hσa, hσb, zero_mul, zero_mul, sub_zero, zero_sub] at h_ibp
+  linarith
+
 /-! ### IBP identity and the asymptotic bound
 
 The proof of `jK_isO` decomposes into:
