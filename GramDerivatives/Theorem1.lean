@@ -37,13 +37,30 @@
   proof.  Every axiom is tagged `-- ASSUMPTION` and carries a docstring.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
-  • `jK_isO`                (§6) — asymptotic bound `|jK n t| = O(t^(-n-2))`
-                                   via IBP on `ρ` and split at `u = t`.
-                                   Consumed by `iteratedDeriv_j_isO` after
-                                   the Strategy-B EqOn reduction.
-  • `iteratedDeriv_tj_isO`  (§6) — Leibniz on `-(t/2)·j(t)`; uses
-                                   `iteratedDeriv_fun_mul` plus the now-derived
-                                   `contDiffAt_j` theorem (no longer axiom).
+  `jK_isO` (§6) is now decomposed into two open sub-lemmas; the top-level
+  proof of `jK_isO` itself is fully discharged from these two.
+
+  • `jK_eq_sigma_integral`         (§6) — IBP identity
+                                          `jK n t = -∫ σ(u)·mixedDerivExpr n u t du`.
+                                          Needs unit-interval IBP via
+                                          `intervalIntegral.integral_eq_sub_of_hasDerivAt`
+                                          plus countable splitting of `Ici 0`.
+  • `sigma_mixedDerivExpr_isO`     (§6) — asymptotic bound
+                                          `|∫ σ·mixedDerivExpr n du| = O(t^(-n-2))`.
+                                          Needs the change of variables
+                                          `x = t/(2(u+1/4))` and the `lorMix`
+                                          cancellation showing
+                                          `lorMix n x = O(1/x^(n+4))`.
+
+  ─── Closed under Strategy B ───────────────────────────────────────────
+  • `contDiffAt_j`          (§2.5) — was an axiom; now a theorem derived
+                                     from `contDiffOn_jK` (a joint
+                                     induction in §2.5 that proves the
+                                     formula `iteratedDeriv n j = jK n` on
+                                     `(0, ∞)` and reads off smoothness).
+  • `iteratedDeriv_tj_isO`  (§6)  — fully proved via Leibniz on
+                                     `-(t/2)·j(t)` plus the derived
+                                     `contDiffAt_j` theorem.
 
   ─── Closed under Strategy B ───────────────────────────────────────────
   • `contDiffAt_j`          (§2.5) — was an axiom; now a theorem derived
@@ -1787,35 +1804,89 @@ private lemma hasDerivAt_σ_on_Ioo (k : ℕ) {u : ℝ}
     unfold ρ; rw [h_fract_u]; ring
   exact h_poly.congr_of_eventuallyEq h_eq
 
+/-! ### IBP identity and the asymptotic bound
+
+The proof of `jK_isO` decomposes into:
+
+* `jK_eq_sigma_integral` — the integration-by-parts identity
+  `jK n t = -∫₀^∞ σ(u) · mixedDerivExpr n u t du`.  The σ machinery above
+  is engineered so that the per-unit-interval boundary terms vanish
+  (`σ_natCast_eq_zero`).
+* `sigma_mixedDerivExpr_isO` — the asymptotic bound on the resulting
+  σ-weighted integral.
+
+`jK_isO` then follows by trivial arithmetic. -/
+
+/-- Integration-by-parts identity for `jK n` (the σ-form).
+
+    On each unit interval `(k, k+1)`, `σ' = ρ` and `σ` vanishes at both
+    endpoints (`σ_natCast_eq_zero`), so the per-interval IBP
+        `∫_k^{k+1} ρ(u)·∂ₜⁿ kernel(u,t) du
+          = [σ·∂ₜⁿ kernel]_k^{k+1} - ∫_k^{k+1} σ(u)·∂ᵤ ∂ₜⁿ kernel(u,t) du
+          = - ∫_k^{k+1} σ(u)·mixedDerivExpr n u t du`
+    is boundary-term-free.  Summing over `k ∈ ℕ` (justified by the
+    integrability bound `exists_bound_iteratedDeriv_kernel` plus
+    `(u+1/4)^(-(n+3))` for the σ-integrand) yields the displayed identity.
+
+    In Lean this requires:
+      • Splitting `Ici 0` into `⋃ k, Ico (k:ℝ) (k+1)` (Lebesgue-a.e.);
+      • `intervalIntegral.integral_eq_sub_of_hasDerivAt`-style IBP using
+        `hasDerivAt_σ_on_Ioo` and `hasDerivAt_iteratedDeriv_kernel`;
+      • Boundary cancellation via `σ_natCast_eq_zero`. -/
+private lemma jK_eq_sigma_integral (n : ℕ) {t : ℝ} (ht : 0 < t) :
+    jK n t = -∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t := by
+  sorry -- TODO (open): IBP via unit-interval splitting; see strategy above
+
+/-- Asymptotic bound on the σ-weighted integral of `mixedDerivExpr n u t`:
+    `|∫₀^∞ σ(u) · mixedDerivExpr n u t du| = O(t^(-n-2))` as `t → +∞`.
+
+    Strategy:  with `c = 1/(2(u+1/4))` and the rescaling
+    `mixedDerivExpr n u t = -2^{-n} · (u+1/4)^{-(n+3)} · lorMix n (c·t)`
+    (a direct consequence of `mixedDerivExpr`'s definition and the chain
+    rule on the rescaled kernel), the change of variable `x = c·t = t/(2(u+1/4))`
+    converts the integral into
+        `(C/t^(n+2)) · ∫₀^{2t} x^(n+1) · σ(t/(2x) − 1/4) · lorMix n x dx`.
+
+    Bounded by `|σ| ≤ 1/8` and `|lorMix n x| ≲ min(1, x^(-(n+4)))`.  The
+    upper-bound on `|lorMix n x|` at `|x| → ∞` is the cancellation lemma:
+    in the asymptotic expansion of `lor⁽ⁿ⁾(x) = (-1)ⁿ(n+1)!/x^(n+2)
+      − (-1)ⁿ(n+3)!/(6 x^(n+4)) + O(x^(-(n+6)))`,
+    the `1/x^(n+2)` terms in `-(n+2)·lor⁽ⁿ⁾` and `x·lor⁽ⁿ⁺¹⁾` are equal
+    and opposite, so they cancel and `lorMix n x = O(1/x^(n+4))`.
+
+    The residual `∫₀^∞ x^(n+1) · min(1, x^(-(n+4))) dx` is a finite
+    `n`-dependent constant, giving the displayed `O(t^(-n-2))`. -/
+private lemma sigma_mixedDerivExpr_isO (n : ℕ) :
+    IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t)
+        (fun t => t ^ (-(n : ℝ) - 2))
+        𝓝∞ := by
+  sorry -- TODO (open): change of variables + lorMix cancellation; see strategy above
+
 /-- Asymptotic bound on the formal `n`-th derivative integral `jK n`:
     `|jK n t| = O(t^(-n-2))` as `t → +∞`.
 
-    This is the genuine analytic core of `iteratedDeriv_j_isO` after the
-    Strategy-B factoring: with `iteratedDeriv_j_eqOn_jK` in hand, the
-    iterated derivative of `j` is replaced by the explicit integral
-    `jK n t = ∫₀^∞ ρ(u) · ∂ₜⁿ kernel(u,t) du`, which is then bounded by
-    IBP on `ρ` (yielding the σ-form `2 ∫ σ(u)(u+1/4) ∂ᵤ(-∂ₜⁿ kernel) du`)
-    followed by splitting the integral at `u = t`.
-
-    Open gap: the IBP + split estimate. -/
+    Immediate from the IBP identity `jK_eq_sigma_integral` and the
+    σ-integral bound `sigma_mixedDerivExpr_isO`; the residual `-(·)` is
+    absorbed by `IsBigO.const_mul_left (-1)`. -/
 private lemma jK_isO (n : ℕ) :
     IsO (fun t => jK n t)
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  /- Proof strategy (mirroring the paper):
-     Write (after IBP on ρ)
-       jK n t = ∫₀^∞ σ(u) · ∂ᵤ(-∂ₜⁿ kernel)(u,t) du
-       (with σ(u) = ∫₀^u ρ, so 0 ≤ σ ≤ 1/8).
-
-     Split the integral at u = t and estimate each piece:
-       ∫₀ᵗ : dominated by ((u+1/4)·t^{-(2n+4)}); integral ≤ O(t^(-n-2)).
-       ∫ₜ^∞: dominated by (u+1/4)^{-(2n+3)}; integral ≤ O(t^(-n-2)).
-
-     In Lean this requires:
-       • Formal IBP for `ρ` on `Ici 0`;
-       • Pointwise estimates of `∂ₜⁿ kernel` from `iteratedDeriv_kernel`;
-       • Splitting and integrability of each piece. -/
-  sorry -- TODO (open): see strategy above
+  -- Rewrite via the IBP identity, then bound the σ-integral.
+  have h_eq :
+      (fun t : ℝ => jK n t) =ᶠ[Filter.atTop]
+      (fun t : ℝ => -∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    exact jK_eq_sigma_integral n ht
+  refine h_eq.trans_isBigO ?_
+  -- Convert `-X` into `(-1) · X` and absorb the sign.
+  have h_neg :
+      (fun t : ℝ => -∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t) =
+      (fun t : ℝ => (-1 : ℝ) *
+        (∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t)) := by
+    funext t; ring
+  rw [h_neg]
+  exact (sigma_mixedDerivExpr_isO n).const_mul_left _
 
 /-- The n-th derivative of `j` is `O(t^(-n-2))`.
 
