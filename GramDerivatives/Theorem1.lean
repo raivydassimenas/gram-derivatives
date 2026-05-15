@@ -73,7 +73,7 @@
 import Mathlib
 
 open Real Filter Asymptotics MeasureTheory
-open scoped ContDiff
+open scoped ContDiff Function
 
 /-!
   ## §0  Notation and asymptotic infrastructure
@@ -1911,6 +1911,195 @@ private lemma intervalIntegrable_mixedDerivExpr (n : ℕ) (t : ℝ) (k : ℕ) :
   have : (0 : ℝ) ≤ k := by exact_mod_cast Nat.zero_le k
   linarith [hx.1]
 
+/-- Uniform-in-`u` bound for `|mixedDerivExpr n u t|` on `u ≥ 0`, `|t| ≤ R`.
+
+    Same shape as `exists_bound_iteratedDeriv_kernel` but for the parameter
+    derivative `mixedDerivExpr`.  The bound is `C(n, R) · (u + 1/4)^{-(n+3)}`,
+    obtained by rewriting `mixedDerivExpr n u t` as a sum
+    `T₁ · (u+1/4)^{-(n+3)} + T₂ · (u+1/4)^{-(n+4)}` (with `|T₁|, |T₂|` bounded
+    uniformly via `exists_bound_iteratedDeriv_lor`), and using
+    `((u+1/4)^(n+4))⁻¹ ≤ 4 · ((u+1/4)^(n+3))⁻¹` (since `u + 1/4 ≥ 1/4`). -/
+private lemma exists_bound_mixedDerivExpr (n : ℕ) (R : ℝ) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ u : ℝ, 0 ≤ u → ∀ t : ℝ, |t| ≤ R →
+      |mixedDerivExpr n u t| ≤ C * ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+  rcases lt_or_ge R 0 with hR | hR
+  · refine ⟨0, le_refl 0, ?_⟩
+    intro u _ t ht
+    exact absurd (lt_of_le_of_lt ht hR) (not_lt.mpr (abs_nonneg t))
+  obtain ⟨Mₙ, hMₙ_nn, hMₙ⟩ := exists_bound_iteratedDeriv_lor n (2 * R)
+  obtain ⟨Mₙ₁, hMₙ₁_nn, hMₙ₁⟩ := exists_bound_iteratedDeriv_lor (n + 1) (2 * R)
+  refine ⟨((n : ℝ) + 2) * (1 / 2) ^ n * Mₙ + 2 * R * (1 / 2) ^ n * Mₙ₁, ?_, ?_⟩
+  · have h1 : (0 : ℝ) ≤ ((n : ℝ) + 2) * (1 / 2) ^ n * Mₙ := by positivity
+    have h2 : (0 : ℝ) ≤ 2 * R * (1 / 2) ^ n * Mₙ₁ := by positivity
+    linarith
+  intro u hu t ht
+  -- Basic positivity facts.
+  have h_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_2_pos : (0 : ℝ) < 2 * (u + 1 / 4) := by linarith
+  have h_ge_quarter : (1 / 4 : ℝ) ≤ u + 1 / 4 := by linarith
+  have h_inv_pos : (0 : ℝ) < 1 / (2 * (u + 1 / 4)) := by positivity
+  have h_inv_le : 1 / (2 * (u + 1 / 4)) ≤ 2 := by
+    rw [div_le_iff₀ h_2_pos]; linarith
+  have h_arg_abs : |1 / (2 * (u + 1 / 4)) * t| ≤ 2 * R := by
+    rw [abs_mul, abs_of_pos h_inv_pos]
+    calc 1 / (2 * (u + 1 / 4)) * |t|
+        ≤ 2 * |t| := by gcongr
+      _ ≤ 2 * R := by linarith
+  have h_lor_n : |iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t)| ≤ Mₙ :=
+    hMₙ _ h_arg_abs
+  have h_lor_n1 : |iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t)| ≤ Mₙ₁ :=
+    hMₙ₁ _ h_arg_abs
+  have h_pow_pos : ∀ m : ℕ, (0 : ℝ) < (u + 1 / 4) ^ m := fun m => pow_pos h_pos m
+  have h_inv_pow_pos : ∀ m : ℕ, (0 : ℝ) < ((u + 1 / 4) ^ m)⁻¹ :=
+    fun m => inv_pos.mpr (h_pow_pos m)
+  have h_inv_pow_nn : ∀ m : ℕ, (0 : ℝ) ≤ ((u + 1 / 4) ^ m)⁻¹ :=
+    fun m => le_of_lt (h_inv_pow_pos m)
+  have h_half_nn : (0 : ℝ) ≤ ((1 : ℝ) / 2) ^ n := by positivity
+  -- (a) (u+1/4)^{-(n+4)} ≤ 4 · (u+1/4)^{-(n+3)}.
+  have h_inv_le_4 : (u + 1 / 4)⁻¹ ≤ 4 := by
+    have h_step : (u + 1 / 4)⁻¹ ≤ (1 / 4 : ℝ)⁻¹ :=
+      inv_anti₀ (by norm_num) h_ge_quarter
+    have : ((1 / 4 : ℝ))⁻¹ = 4 := by norm_num
+    linarith [h_step, this]
+  have h_inv_n4_le :
+      ((u + 1 / 4) ^ (n + 4))⁻¹ ≤ 4 * ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+    have h_split : (u + 1 / 4) ^ (n + 4)
+                  = (u + 1 / 4) ^ (n + 3) * (u + 1 / 4) := by
+      rw [show (n + 4 : ℕ) = (n + 3) + 1 from rfl, pow_succ]
+    rw [h_split, mul_inv]
+    have h_n3_inv_nn : 0 ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := h_inv_pow_nn (n + 3)
+    calc ((u + 1 / 4) ^ (n + 3))⁻¹ * (u + 1 / 4)⁻¹
+        ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ * 4 :=
+          mul_le_mul_of_nonneg_left h_inv_le_4 h_n3_inv_nn
+      _ = 4 * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
+  -- (b) Closed form of mixedDerivExpr as a sum of two "constant · power" pieces.
+  have h_form :
+      mixedDerivExpr n u t
+        = (-((n : ℝ) + 2) * (1 / 2) ^ n *
+              iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t))
+              * ((u + 1 / 4) ^ (n + 3))⁻¹
+          + (-(t / 2) * (1 / 2) ^ n *
+              iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t))
+              * ((u + 1 / 4) ^ (n + 4))⁻¹ := by
+    unfold mixedDerivExpr
+    have h_pow_n2_sq : ((u + 1 / 4) ^ (n + 2)) ^ 2
+                      = (u + 1 / 4) ^ (n + 1) * (u + 1 / 4) ^ (n + 3) := by
+      rw [← pow_mul, show (n + 2) * 2 = (n + 1) + (n + 3) from by ring, pow_add]
+    have h_pow_n4 : (u + 1 / 4) ^ (n + 4)
+                    = (u + 1 / 4) ^ (n + 2) * (u + 1 / 4) ^ 2 := by
+      rw [← pow_add]
+    have h_2sq : (2 * (u + 1 / 4)) ^ 2 = 4 * (u + 1 / 4) ^ 2 := by ring
+    have h_n1_ne : ((u + 1 / 4) ^ (n + 1) : ℝ) ≠ 0 := ne_of_gt (h_pow_pos (n + 1))
+    have h_n2_ne : ((u + 1 / 4) ^ (n + 2) : ℝ) ≠ 0 := ne_of_gt (h_pow_pos (n + 2))
+    have h_n3_ne : ((u + 1 / 4) ^ (n + 3) : ℝ) ≠ 0 := ne_of_gt (h_pow_pos (n + 3))
+    have h_n4_ne : ((u + 1 / 4) ^ (n + 4) : ℝ) ≠ 0 := ne_of_gt (h_pow_pos (n + 4))
+    have h_sq_ne : ((u + 1 / 4) ^ 2 : ℝ) ≠ 0 := ne_of_gt (h_pow_pos 2)
+    -- Abbreviate the two iteratedDeriv expressions as opaque variables for `ring`.
+    set L₁ : ℝ := iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t)
+    set L₂ : ℝ := iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t)
+    rw [h_pow_n2_sq, h_pow_n4, h_2sq]
+    field_simp
+    ring
+  -- (c) Bound on each summand of (b).
+  have h_const1_nn : (0 : ℝ) ≤ ((n : ℝ) + 2) * (1 / 2) ^ n := by positivity
+  have h_abs1 :
+      |(-((n : ℝ) + 2) * (1 / 2) ^ n *
+          iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t))|
+        ≤ ((n : ℝ) + 2) * (1 / 2) ^ n * Mₙ := by
+    rw [show -((n : ℝ) + 2) * (1 / 2) ^ n *
+              iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t)
+            = -(((n : ℝ) + 2) * (1 / 2) ^ n) *
+              iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t) from by ring,
+        abs_mul, abs_neg, abs_of_nonneg h_const1_nn]
+    exact mul_le_mul_of_nonneg_left h_lor_n h_const1_nn
+  have h_abs2 :
+      |(-(t / 2) * (1 / 2) ^ n *
+          iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t))|
+        ≤ R / 2 * (1 / 2) ^ n * Mₙ₁ := by
+    rw [show -(t / 2) * (1 / 2) ^ n *
+              iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t)
+            = -((t / 2) * (1 / 2) ^ n) *
+              iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t) from by ring,
+        abs_mul, abs_neg]
+    have h_inner_eq : |(t / 2) * (1 / 2) ^ n| = |t| / 2 * (1 / 2) ^ n := by
+      rw [abs_mul, abs_of_nonneg h_half_nn,
+          abs_div, abs_of_nonneg (by norm_num : (0 : ℝ) ≤ 2)]
+    rw [h_inner_eq]
+    have h_t_half : |t| / 2 ≤ R / 2 := by linarith
+    gcongr
+  -- (d) Combine using h_form and abs_add_le.
+  rw [h_form]
+  calc |(-((n : ℝ) + 2) * (1 / 2) ^ n *
+            iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t)) *
+              ((u + 1 / 4) ^ (n + 3))⁻¹
+        + (-(t / 2) * (1 / 2) ^ n *
+            iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t)) *
+              ((u + 1 / 4) ^ (n + 4))⁻¹|
+      ≤ |(-((n : ℝ) + 2) * (1 / 2) ^ n *
+            iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t)) *
+              ((u + 1 / 4) ^ (n + 3))⁻¹|
+          + |(-(t / 2) * (1 / 2) ^ n *
+            iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t)) *
+              ((u + 1 / 4) ^ (n + 4))⁻¹| := abs_add_le _ _
+    _ = |(-((n : ℝ) + 2) * (1 / 2) ^ n *
+            iteratedDeriv n lor (1 / (2 * (u + 1 / 4)) * t))|
+              * ((u + 1 / 4) ^ (n + 3))⁻¹
+          + |(-(t / 2) * (1 / 2) ^ n *
+            iteratedDeriv (n + 1) lor (1 / (2 * (u + 1 / 4)) * t))|
+              * ((u + 1 / 4) ^ (n + 4))⁻¹ := by
+          congr 1
+          · rw [abs_mul, abs_of_nonneg (h_inv_pow_nn (n + 3))]
+          · rw [abs_mul, abs_of_nonneg (h_inv_pow_nn (n + 4))]
+    _ ≤ ((n : ℝ) + 2) * (1 / 2) ^ n * Mₙ * ((u + 1 / 4) ^ (n + 3))⁻¹
+          + R / 2 * (1 / 2) ^ n * Mₙ₁ * ((u + 1 / 4) ^ (n + 4))⁻¹ := by
+          gcongr
+    _ ≤ ((n : ℝ) + 2) * (1 / 2) ^ n * Mₙ * ((u + 1 / 4) ^ (n + 3))⁻¹
+          + R / 2 * (1 / 2) ^ n * Mₙ₁ * (4 * ((u + 1 / 4) ^ (n + 3))⁻¹) := by
+          have h_nn : 0 ≤ R / 2 * (1 / 2) ^ n * Mₙ₁ := by positivity
+          have h_mono := mul_le_mul_of_nonneg_left h_inv_n4_le h_nn
+          linarith
+    _ = (((n : ℝ) + 2) * (1 / 2) ^ n * Mₙ + 2 * R * (1 / 2) ^ n * Mₙ₁)
+          * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
+
+/-- Integrability of `u ↦ σ u · mixedDerivExpr n u t` on `Ici 0`.
+
+    Bounds the integrand by `(C/8) · ((u+1/4)^(n+3))⁻¹` via `σ_le_eighth` and
+    `exists_bound_mixedDerivExpr`, then applies `Integrable.mono'` against the
+    dominator `integrableOn_pow_inv_shift (n+1)`. -/
+private lemma integrable_sigma_mixedDerivExpr (n : ℕ) (t : ℝ) :
+    IntegrableOn (fun u : ℝ => σ u * mixedDerivExpr n u t) (Set.Ici (0 : ℝ)) := by
+  obtain ⟨C, hC_nn, hC⟩ := exists_bound_mixedDerivExpr n |t|
+  have h_meas : AEStronglyMeasurable (fun u => σ u * mixedDerivExpr n u t)
+      (volume.restrict (Set.Ici (0 : ℝ))) := by
+    have h_σ : AEStronglyMeasurable σ (volume.restrict (Set.Ici (0 : ℝ))) :=
+      σ_continuous.aestronglyMeasurable.mono_measure Measure.restrict_le_self
+    have h_med : AEStronglyMeasurable (fun u => mixedDerivExpr n u t)
+        (volume.restrict (Set.Ici (0 : ℝ))) :=
+      (continuousOn_mixedDerivExpr n t).aestronglyMeasurable measurableSet_Ici
+    exact h_σ.mul h_med
+  refine Integrable.mono'
+    ((integrableOn_pow_inv_shift (n + 1)).const_mul (C / 8))
+    h_meas ?_
+  refine (ae_restrict_iff' measurableSet_Ici).mpr ?_
+  refine Filter.Eventually.of_forall ?_
+  intro u hu
+  have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu
+  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
+  have h_inv_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ :=
+    le_of_lt (inv_pos.mpr h_pow_pos)
+  have h_σ_nn : 0 ≤ σ u := σ_nonneg u
+  have h_σ_le : σ u ≤ 1 / 8 := σ_le_eighth u
+  have h_bound : |mixedDerivExpr n u t| ≤ C * ((u + 1 / 4) ^ (n + 3))⁻¹ :=
+    hC u hu_nn t (le_refl _)
+  change ‖σ u * mixedDerivExpr n u t‖
+          ≤ C / 8 * ((u + 1 / 4) ^ ((n + 1) + 2))⁻¹
+  rw [show (n + 1) + 2 = n + 3 from rfl]
+  rw [Real.norm_eq_abs, abs_mul, abs_of_nonneg h_σ_nn]
+  calc σ u * |mixedDerivExpr n u t|
+      ≤ (1 / 8) * (C * ((u + 1 / 4) ^ (n + 3))⁻¹) := by gcongr
+    _ = C / 8 * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
+
 /-- **Per-unit-interval IBP identity.**
 
     On `[k, k+1]` with `σ' = ρ` (from `hasDerivAt_σ_on_Ioo`) and
@@ -1989,25 +2178,109 @@ The proof of `jK_isO` decomposes into:
 
 `jK_isO` then follows by trivial arithmetic. -/
 
+/-- `Ici 0` is the countable disjoint union of `Ico (k:ℝ) (k+1)` over `k : ℕ`. -/
+private lemma Ici_zero_eq_iUnion_Ico_nat :
+    Set.Ici (0 : ℝ) = ⋃ k : ℕ, Set.Ico ((k : ℝ)) ((k : ℝ) + 1) := by
+  ext x
+  constructor
+  · intro hx
+    have hx_nn : (0 : ℝ) ≤ x := Set.mem_Ici.mp hx
+    refine Set.mem_iUnion.mpr ⟨⌊x⌋₊, ?_⟩
+    refine Set.mem_Ico.mpr ⟨?_, ?_⟩
+    · exact Nat.floor_le hx_nn
+    · exact_mod_cast Nat.lt_floor_add_one x
+  · intro hx
+    rcases Set.mem_iUnion.mp hx with ⟨k, hk⟩
+    have hk_lo := (Set.mem_Ico.mp hk).1
+    have hk_nn : (0 : ℝ) ≤ (k : ℝ) := by exact_mod_cast Nat.zero_le k
+    exact Set.mem_Ici.mpr (le_trans hk_nn hk_lo)
+
+/-- The unit intervals `Ico (k:ℝ) (k+1)` are pairwise disjoint for distinct `k : ℕ`. -/
+private lemma pairwise_disjoint_Ico_nat :
+    Pairwise (Disjoint on fun k : ℕ => Set.Ico ((k : ℝ)) ((k : ℝ) + 1)) := by
+  intro k m hkm
+  refine Set.disjoint_iff_forall_ne.mpr ?_
+  intro x hx y hy hxy
+  subst hxy
+  rcases lt_or_gt_of_ne hkm with h | h
+  · have h_le : ((k : ℝ)) + 1 ≤ (m : ℝ) := by exact_mod_cast h
+    have h1 := (Set.mem_Ico.mp hx).2
+    have h2 := (Set.mem_Ico.mp hy).1
+    linarith
+  · have h_le : ((m : ℝ)) + 1 ≤ (k : ℝ) := by exact_mod_cast h
+    have h1 := (Set.mem_Ico.mp hy).2
+    have h2 := (Set.mem_Ico.mp hx).1
+    linarith
+
 /-- Integration-by-parts identity for `jK n` (the σ-form).
 
     On each unit interval `(k, k+1)`, `σ' = ρ` and `σ` vanishes at both
-    endpoints (`σ_natCast_eq_zero`), so the per-interval IBP
-        `∫_k^{k+1} ρ(u)·∂ₜⁿ kernel(u,t) du
-          = [σ·∂ₜⁿ kernel]_k^{k+1} - ∫_k^{k+1} σ(u)·∂ᵤ ∂ₜⁿ kernel(u,t) du
-          = - ∫_k^{k+1} σ(u)·mixedDerivExpr n u t du`
-    is boundary-term-free.  Summing over `k ∈ ℕ` (justified by the
-    integrability bound `exists_bound_iteratedDeriv_kernel` plus
-    `(u+1/4)^(-(n+3))` for the σ-integrand) yields the displayed identity.
-
-    In Lean this requires:
-      • Splitting `Ici 0` into `⋃ k, Ico (k:ℝ) (k+1)` (Lebesgue-a.e.);
-      • `intervalIntegral.integral_eq_sub_of_hasDerivAt`-style IBP using
-        `hasDerivAt_σ_on_Ioo` and `hasDerivAt_iteratedDeriv_kernel`;
-      • Boundary cancellation via `σ_natCast_eq_zero`. -/
-private lemma jK_eq_sigma_integral (n : ℕ) {t : ℝ} (ht : 0 < t) :
+    endpoints (`σ_natCast_eq_zero`), so the per-interval IBP gives
+    `∫_k^{k+1} ρ · ∂ₜⁿ kernel = -∫_k^{k+1} σ · mixedDerivExpr n · t`
+    (`jK_ibp_unit_interval`).  Splitting `Ici 0 = ⋃ k, Ico (k:ℝ) (k+1)` and
+    applying `MeasureTheory.integral_iUnion` on both sides aggregates this
+    into the displayed identity. -/
+private lemma jK_eq_sigma_integral (n : ℕ) {t : ℝ} (_ht : 0 < t) :
     jK n t = -∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t := by
-  sorry -- TODO (open): IBP via unit-interval splitting; see strategy above
+  -- (The hypothesis `0 < t` is currently unused: the IBP machinery, the
+  -- integrability of `σ · mixedDerivExpr`, and `integrable_jIntegrand` all
+  -- work for any `t : ℝ`.  Kept in the signature for parity with the rest
+  -- of §6's API.)
+  set F : ℝ → ℝ := fun u => ρ u * iteratedDeriv n (fun s => kernel u s) t with hF
+  set G : ℝ → ℝ := fun u => σ u * mixedDerivExpr n u t with hG
+  have h_dec : Set.Ici (0 : ℝ) = ⋃ k : ℕ, Set.Ico ((k : ℝ)) ((k : ℝ) + 1) :=
+    Ici_zero_eq_iUnion_Ico_nat
+  have h_meas : ∀ k : ℕ, MeasurableSet (Set.Ico ((k : ℝ)) ((k : ℝ) + 1)) :=
+    fun _ => measurableSet_Ico
+  have h_disj : Pairwise (Disjoint on fun k : ℕ => Set.Ico ((k : ℝ)) ((k : ℝ) + 1)) :=
+    pairwise_disjoint_Ico_nat
+  -- Integrability of F and G on Ici 0.
+  have hF_int : IntegrableOn F (Set.Ici (0 : ℝ)) := by
+    have := integrable_jIntegrand n t
+    unfold jIntegrand at this
+    exact this
+  have hG_int : IntegrableOn G (Set.Ici (0 : ℝ)) :=
+    integrable_sigma_mixedDerivExpr n t
+  have hF_iU : IntegrableOn F (⋃ k : ℕ, Set.Ico ((k : ℝ)) ((k : ℝ) + 1)) := by
+    rw [← h_dec]; exact hF_int
+  have hG_iU : IntegrableOn G (⋃ k : ℕ, Set.Ico ((k : ℝ)) ((k : ℝ) + 1)) := by
+    rw [← h_dec]; exact hG_int
+  -- Decompose both integrals over the iUnion.
+  have hF_sum :
+      (∫ u in Set.Ici (0 : ℝ), F u)
+        = ∑' k : ℕ, ∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), F u := by
+    rw [h_dec]; exact integral_iUnion h_meas h_disj hF_iU
+  have hG_sum :
+      (∫ u in Set.Ici (0 : ℝ), G u)
+        = ∑' k : ℕ, ∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), G u := by
+    rw [h_dec]; exact integral_iUnion h_meas h_disj hG_iU
+  -- Per-k IBP identity rewritten in set-integral form.
+  have h_piece : ∀ k : ℕ,
+      ∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), F u
+        = -∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), G u := by
+    intro k
+    have hab : ((k : ℝ)) ≤ ((k : ℝ) + 1) := by linarith
+    have h_F_eq :
+        ∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), F u
+          = ∫ u in ((k : ℝ))..((k : ℝ) + 1), F u := by
+      rw [integral_Ico_eq_integral_Ioc, intervalIntegral.integral_of_le hab]
+    have h_G_eq :
+        ∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), G u
+          = ∫ u in ((k : ℝ))..((k : ℝ) + 1), G u := by
+      rw [integral_Ico_eq_integral_Ioc, intervalIntegral.integral_of_le hab]
+    rw [h_F_eq, h_G_eq]
+    exact jK_ibp_unit_interval n t k
+  -- Combine.
+  have h_jK : jK n t = ∫ u in Set.Ici (0 : ℝ), F u := by
+    unfold jK jIntegrand
+    rfl
+  rw [h_jK, hF_sum]
+  have h_tsum :
+      (∑' k : ℕ, ∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), F u)
+        = -∑' k : ℕ, ∫ u in Set.Ico ((k : ℝ)) ((k : ℝ) + 1), G u := by
+    rw [← tsum_neg]
+    exact tsum_congr h_piece
+  rw [h_tsum, ← hG_sum]
 
 /-- Asymptotic bound on the σ-weighted integral of `mixedDerivExpr n u t`:
     `|∫₀^∞ σ(u) · mixedDerivExpr n u t du| = O(t^(-n-2))` as `t → +∞`.
