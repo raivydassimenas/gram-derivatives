@@ -2330,20 +2330,137 @@ private lemma mixedDerivExpr_eq_lorMix (n : ℕ) {u : ℝ} (hu : 0 ≤ u) (t : �
   field_simp
   ring
 
-/-- **lorMix cancellation at infinity.**
+/-! ### Helpers for `lorMix_isO`: identification with `iteratedDeriv lor²`.
 
-    The leading-order term of `-(n+2)·lor⁽ⁿ⁾(x)` is exactly cancelled by
-    the leading-order term of `x·lor⁽ⁿ⁺¹⁾(x)`, so
-        `lorMix n x = O(x^{-(n+4)})  as  x → +∞`.
+The cancellation in `lorMix n x = O(x^{-(n+4)})` is equivalent to the cleaner
+statement that `lorMix n s = -2 · (d/ds)^n (lor²)(s)`, where `lor² s = (lor s)²`
+decays as `O(s^{-4})`.  Each derivative of `lor²` decays one order faster,
+giving the desired `O(s^{-(n+4)})`. -/
 
-    Strategy: from the Taylor expansion of `lor⁽ⁿ⁾` at infinity,
-    `lor⁽ⁿ⁾(x) = (-1)ⁿ · n! · x^{-(n+1)} + (next-order corrections)`,
-    one computes
-        `-(n+2)·lor⁽ⁿ⁾(x) + x·lor⁽ⁿ⁺¹⁾(x)` has its `x^{-(n+2)}` terms
-    cancelling exactly (Karatsuba–Korolev cancellation). -/
+/-- Squared Lorentzian profile `lorSq s = (lor s)² = 1/(1+s²)²`.  Closed
+    form for `lorMix 0` (cf. `lorMix_zero` below), and the iterate-decay
+    target for `lorMix_isO`. -/
+private noncomputable def lorSq (s : ℝ) : ℝ := lor s ^ 2
+
+private lemma contDiff_lorSq : ContDiff ℝ ⊤ lorSq :=
+  contDiff_lor.pow 2
+
+/-- Derivative of `lor`:  `lor'(s) = -2s · (lor s)²`.  This is the closed
+    form `(d/ds)[1/(1+s²)] = -2s/(1+s²)²` rewritten via `(lor s)² = 1/(1+s²)²`. -/
+private lemma hasDerivAt_lor (s : ℝ) :
+    HasDerivAt lor (-(2 * s) * (lor s) ^ 2) s := by
+  have h_denom_ne : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
+  have h_sq : HasDerivAt (fun x : ℝ => x ^ 2) (2 * s) s := by
+    have h := hasDerivAt_pow 2 s
+    simpa using h
+  have h_denom : HasDerivAt (fun x : ℝ => 1 + x ^ 2) (2 * s) s := by
+    have h := (hasDerivAt_const s (1 : ℝ)).add h_sq
+    convert h using 1
+    ring
+  have h_div := (hasDerivAt_const s (1 : ℝ)).div h_denom h_denom_ne
+  convert h_div using 1
+  unfold lor
+  field_simp
+  ring
+
+/-- **Base case for `lorMix_eq_iteratedDeriv_lorSq`:**  `lorMix 0 s = -2 · (lor s)²`.
+
+    Direct computation: `lorMix 0 s = -2·lor(s) - s·lor'(s) = -2·lor(s) + 2s²·(lor s)²
+    = -2·(lor s)²`, using `(1+s²)·(lor s) = 1` to cancel the cross terms. -/
+private lemma lorMix_zero (s : ℝ) : lorMix 0 s = -2 * lorSq s := by
+  have h_d : iteratedDeriv 1 lor s = -(2 * s) * (lor s) ^ 2 := by
+    rw [iteratedDeriv_one]
+    exact (hasDerivAt_lor s).deriv
+  have h_ne : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
+  unfold lorMix lorSq
+  rw [iteratedDeriv_zero, h_d]
+  unfold lor
+  push_cast
+  field_simp
+  ring
+
+/-- **Derivative recursion for `lorMix`:**  `(d/ds) (lorMix n) s = lorMix (n+1) s`.
+
+    Direct chain rule on the definition.  Differentiating
+        `lorMix n s = -(n+2) · lor⁽ⁿ⁾(s) - s · lor⁽ⁿ⁺¹⁾(s)`
+    in `s` produces
+        `-(n+2) · lor⁽ⁿ⁺¹⁾(s) - lor⁽ⁿ⁺¹⁾(s) - s · lor⁽ⁿ⁺²⁾(s)`
+      `= -(n+3) · lor⁽ⁿ⁺¹⁾(s) - s · lor⁽ⁿ⁺²⁾(s) = lorMix (n+1) s`. -/
+private lemma hasDerivAt_lorMix (n : ℕ) (s : ℝ) :
+    HasDerivAt (lorMix n) (lorMix (n + 1) s) s := by
+  have h_lor_n_diff : Differentiable ℝ (iteratedDeriv n lor) :=
+    (contDiff_lor.of_le le_top).differentiable_iteratedDeriv' n
+  have h_lor_n1_diff : Differentiable ℝ (iteratedDeriv (n + 1) lor) :=
+    (contDiff_lor.of_le le_top).differentiable_iteratedDeriv' (n + 1)
+  -- HasDerivAt for `iteratedDeriv n lor` and `iteratedDeriv (n+1) lor`.
+  have h_n : HasDerivAt (iteratedDeriv n lor) (iteratedDeriv (n + 1) lor s) s := by
+    have h := (h_lor_n_diff s).hasDerivAt
+    rwa [show deriv (iteratedDeriv n lor) s = iteratedDeriv (n + 1) lor s
+          from by rw [iteratedDeriv_succ]] at h
+  have h_n1 : HasDerivAt (iteratedDeriv (n + 1) lor) (iteratedDeriv (n + 2) lor s) s := by
+    have h := (h_lor_n1_diff s).hasDerivAt
+    rwa [show deriv (iteratedDeriv (n + 1) lor) s = iteratedDeriv (n + 2) lor s
+          from by rw [← iteratedDeriv_succ]] at h
+  have h_t1 := h_n.const_mul (-((n : ℝ) + 2))
+  have h_t2 := (hasDerivAt_id s).mul h_n1
+  have h_combined := h_t1.sub h_t2
+  convert h_combined using 1
+  unfold lorMix
+  push_cast
+  simp only [id_eq, one_mul]
+  ring
+
+/-- **Iterated-derivative identity:**  `lorMix n s = -2 · (d/ds)^n (lor²)(s)`.
+
+    Combine the base case `lorMix_zero` with the recursion `hasDerivAt_lorMix`
+    (using `HasDerivAt.unique` to lift the derivative equation pointwise). -/
+private lemma lorMix_eq_iteratedDeriv_lorSq (n : ℕ) (s : ℝ) :
+    lorMix n s = -2 * iteratedDeriv n lorSq s := by
+  induction n generalizing s with
+  | zero =>
+    rw [iteratedDeriv_zero]
+    exact lorMix_zero s
+  | succ k ih =>
+    have h_iter_diff : Differentiable ℝ (iteratedDeriv k lorSq) :=
+      (contDiff_lorSq.of_le le_top).differentiable_iteratedDeriv' k
+    have h_deriv_lorMix : HasDerivAt (lorMix k) (lorMix (k + 1) s) s :=
+      hasDerivAt_lorMix k s
+    have h_eq_fn : lorMix k = fun s' : ℝ => -2 * iteratedDeriv k lorSq s' := by
+      funext s'; exact ih s'
+    rw [h_eq_fn] at h_deriv_lorMix
+    have h_iter_at : HasDerivAt (iteratedDeriv k lorSq)
+                       (iteratedDeriv (k + 1) lorSq s) s := by
+      have := (h_iter_diff s).hasDerivAt
+      rwa [show deriv (iteratedDeriv k lorSq) s = iteratedDeriv (k + 1) lorSq s
+            from by rw [iteratedDeriv_succ]] at this
+    have h_neg2 : HasDerivAt (fun s' => -2 * iteratedDeriv k lorSq s')
+                    (-2 * iteratedDeriv (k + 1) lorSq s) s :=
+      h_iter_at.const_mul _
+    exact h_deriv_lorMix.unique h_neg2
+
+/-- **Asymptotic bound on the iterated derivative of `lor²`:**
+    `iteratedDeriv n lorSq s = O(s^{-(n+4)})` as `s → +∞`.
+
+    Strategy: by induction on `n`, prove that
+        `iteratedDeriv n lorSq s = R_n(s) / (1+s²)^(n+2)`
+    for a polynomial `R_n` of degree ≤ n.  At infinity, `|R_n(s)| ≲ |s|^n`
+    and `(1+s²)^(n+2) ≳ s^(2n+4)`, giving `O(s^{-(n+4)})`. -/
+private lemma iteratedDeriv_lorSq_isO (n : ℕ) :
+    IsO (iteratedDeriv n lorSq) (fun s : ℝ => s ^ (-(n : ℝ) - 4)) 𝓝∞ := by
+  sorry -- TODO (open): polynomial-over-(1+s²)^(n+2) representation + asymptotic bound.
+
+/-- Asymptotic cancellation:  `lorMix n s = O(s^{-(n+4)})` as `s → +∞`.
+
+    Follows from `lorMix_eq_iteratedDeriv_lorSq` (rewriting `lorMix n` as
+    `-2 · (d/ds)^n (lor²)`) and `iteratedDeriv_lorSq_isO` (the asymptotic on
+    the iterated derivative).  The constant factor `-2` is absorbed by
+    `IsBigO.const_mul_left`. -/
 private lemma lorMix_isO (n : ℕ) :
     IsO (lorMix n) (fun x : ℝ => x ^ (-(n : ℝ) - 4)) 𝓝∞ := by
-  sorry -- TODO (open): Taylor-expand `lor⁽ⁿ⁾` at infinity; cancel leading terms.
+  have h_eq : lorMix n = fun s : ℝ => -2 * iteratedDeriv n lorSq s := by
+    funext s; exact lorMix_eq_iteratedDeriv_lorSq n s
+  rw [h_eq]
+  exact (iteratedDeriv_lorSq_isO n).const_mul_left _
 
 /-- **σ-weighted integral asymptotic (lorMix form).**
 
