@@ -37,20 +37,27 @@
   proof.  Every axiom is tagged `-- ASSUMPTION` and carries a docstring.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
-  `jK_isO` (§6) is now decomposed into two open sub-lemmas; the top-level
-  proof of `jK_isO` itself is fully discharged from these two.
+  `jK_isO` (§6) is fully discharged from `jK_eq_sigma_integral` (proved)
+  and `sigma_mixedDerivExpr_isO`.  The latter is now decomposed into three
+  open sub-lemmas; the top-level proof of `sigma_mixedDerivExpr_isO` is
+  fully discharged from these three.
 
-  • `jK_eq_sigma_integral`         (§6) — IBP identity
-                                          `jK n t = -∫ σ(u)·mixedDerivExpr n u t du`.
-                                          Needs unit-interval IBP via
-                                          `intervalIntegral.integral_eq_sub_of_hasDerivAt`
-                                          plus countable splitting of `Ici 0`.
-  • `sigma_mixedDerivExpr_isO`     (§6) — asymptotic bound
-                                          `|∫ σ·mixedDerivExpr n du| = O(t^(-n-2))`.
-                                          Needs the change of variables
-                                          `x = t/(2(u+1/4))` and the `lorMix`
-                                          cancellation showing
-                                          `lorMix n x = O(1/x^(n+4))`.
+  • `mixedDerivExpr_eq_lorMix`     (§6) — pointwise rescaling
+                                          `mixedDerivExpr n u t
+                                            = (1/2)^n · (u+1/4)^{-(n+3)}
+                                              · lorMix n (t/(2(u+1/4)))`.
+                                          Definitional unfolding + algebra.
+  • `lorMix_isO`                   (§6) — asymptotic cancellation
+                                          `lorMix n x = O(x^{-(n+4)})`.
+                                          Needs the Taylor expansion of
+                                          `lor⁽ⁿ⁾` at infinity with the
+                                          leading `1/x^(n+2)` cancellation.
+  • `sigma_lorMix_integral_isO`    (§6) — change-of-variables aggregation
+                                          `∫ σ(u) · (u+1/4)^{-(n+3)}
+                                            · lorMix n (t/(2(u+1/4))) du
+                                            = O(t^{-(n+2)})`.
+                                          Substitute `x = t/(2(u+1/4))`,
+                                          bound by `|σ| ≤ 1/8` and `lorMix_isO`.
 
   ─── Closed under Strategy B ───────────────────────────────────────────
   • `contDiffAt_j`          (§2.5) — was an axiom; now a theorem derived
@@ -2282,30 +2289,121 @@ private lemma jK_eq_sigma_integral (n : ℕ) {t : ℝ} (_ht : 0 < t) :
     exact tsum_congr h_piece
   rw [h_tsum, ← hG_sum]
 
+/-! ### Sub-lemmas for `sigma_mixedDerivExpr_isO`
+
+The σ-integral bound decomposes into three pieces:
+
+* `mixedDerivExpr_eq_lorMix` — pointwise rescaling of the integrand:
+  `mixedDerivExpr n u t = (1/2)^n · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4)))`.
+  Purely algebraic (definitional unfolding + `field_simp`/`ring`).
+* `lorMix_isO` — asymptotic cancellation:  `lorMix n x = O(x^{-(n+4)})`.
+  The leading `1/x^(n+2)` parts of `-(n+2)·lor⁽ⁿ⁾(x)` and `x·lor⁽ⁿ⁺¹⁾(x)`
+  in `lorMix` cancel, leaving the `1/x^(n+4)` order.
+* `sigma_lorMix_integral_isO` — change-of-variables aggregation:
+  `∫₀^∞ σ(u) · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4))) du = O(t^{-(n+2)})`.
+  Substitute `x = t/(2(u+1/4))`, bound by `|σ| ≤ 1/8` and the previous
+  asymptotic, and finish on a finite residual integral. -/
+
+/-- **Rescaling identity for the mixed derivative.**
+
+    With `r = u + 1/4` and `c = 1/(2r)`, applying the chain rule to
+    `kernel u t = r^{-2} · lor(c·t)` differentiated in `u`, and then
+    bundling the resulting two-term expression through `lorMix`, gives
+        `mixedDerivExpr n u t = (1/2)^n · r^{-(n+3)} · lorMix n (c·t)`.
+    This factors all `u`-dependence into a single negative integer power
+    of `r`, while the `t`-dependence sits entirely inside the bounded
+    profile `lorMix n` evaluated at `c·t`. -/
+private lemma mixedDerivExpr_eq_lorMix (n : ℕ) {u : ℝ} (hu : 0 ≤ u) (t : ℝ) :
+    mixedDerivExpr n u t
+      = (1 / 2 : ℝ) ^ n * (u + 1 / 4) ^ (-((n : ℤ) + 3))
+          * lorMix n ((1 / (2 * (u + 1 / 4))) * t) := by
+  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have hr_ne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr_pos
+  have h2r_ne : (2 * (u + 1 / 4) : ℝ) ≠ 0 := by positivity
+  -- Convert the negative-integer exponent into a reciprocal of a natural power.
+  have h_zpow : (u + 1 / 4 : ℝ) ^ (-((n : ℤ) + 3))
+      = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+    have h_cast : (-((n : ℤ) + 3)) = -((n + 3 : ℕ) : ℤ) := by push_cast; ring
+    rw [h_cast, zpow_neg, zpow_natCast]
+  rw [h_zpow]
+  unfold mixedDerivExpr lorMix
+  field_simp
+  ring
+
+/-- **lorMix cancellation at infinity.**
+
+    The leading-order term of `-(n+2)·lor⁽ⁿ⁾(x)` is exactly cancelled by
+    the leading-order term of `x·lor⁽ⁿ⁺¹⁾(x)`, so
+        `lorMix n x = O(x^{-(n+4)})  as  x → +∞`.
+
+    Strategy: from the Taylor expansion of `lor⁽ⁿ⁾` at infinity,
+    `lor⁽ⁿ⁾(x) = (-1)ⁿ · n! · x^{-(n+1)} + (next-order corrections)`,
+    one computes
+        `-(n+2)·lor⁽ⁿ⁾(x) + x·lor⁽ⁿ⁺¹⁾(x)` has its `x^{-(n+2)}` terms
+    cancelling exactly (Karatsuba–Korolev cancellation). -/
+private lemma lorMix_isO (n : ℕ) :
+    IsO (lorMix n) (fun x : ℝ => x ^ (-(n : ℝ) - 4)) 𝓝∞ := by
+  sorry -- TODO (open): Taylor-expand `lor⁽ⁿ⁾` at infinity; cancel leading terms.
+
+/-- **σ-weighted integral asymptotic (lorMix form).**
+
+    The σ-weighted integral of the lorMix-rescaled mixed derivative,
+        `∫₀^∞ σ(u) · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4))) du`,
+    is `O(t^{-(n+2)})` as `t → +∞`.
+
+    Strategy: change of variable `x = t/(2(u+1/4))`, so `u + 1/4 = t/(2x)`
+    and `du = -t/(2x²) dx`.  This converts the integral into
+        `(C / t^(n+2)) · ∫₀^{2t} σ(t/(2x) − 1/4) · x^(n+1) · lorMix n x dx`.
+    Bounding `|σ| ≤ 1/8` and using `lorMix_isO` to dominate
+    `|lorMix n x| ≲ min(1, x^{-(n+4)})`, the residual
+    `∫₀^∞ x^(n+1) · min(1, x^{-(n+4)}) dx` is a finite `n`-dependent
+    constant.  Hence the displayed `O(t^{-(n+2)})`. -/
+private lemma sigma_lorMix_integral_isO (n : ℕ) :
+    IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
+                σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
+        (fun t => t ^ (-(n : ℝ) - 2))
+        𝓝∞ := by
+  sorry -- TODO (open): change of variables x = t/(2(u+1/4)) + lorMix_isO + |σ|≤1/8.
+
 /-- Asymptotic bound on the σ-weighted integral of `mixedDerivExpr n u t`:
     `|∫₀^∞ σ(u) · mixedDerivExpr n u t du| = O(t^(-n-2))` as `t → +∞`.
 
-    Strategy:  with `c = 1/(2(u+1/4))` and the rescaling
-    `mixedDerivExpr n u t = -2^{-n} · (u+1/4)^{-(n+3)} · lorMix n (c·t)`
-    (a direct consequence of `mixedDerivExpr`'s definition and the chain
-    rule on the rescaled kernel), the change of variable `x = c·t = t/(2(u+1/4))`
-    converts the integral into
-        `(C/t^(n+2)) · ∫₀^{2t} x^(n+1) · σ(t/(2x) − 1/4) · lorMix n x dx`.
-
-    Bounded by `|σ| ≤ 1/8` and `|lorMix n x| ≲ min(1, x^(-(n+4)))`.  The
-    upper-bound on `|lorMix n x|` at `|x| → ∞` is the cancellation lemma:
-    in the asymptotic expansion of `lor⁽ⁿ⁾(x) = (-1)ⁿ(n+1)!/x^(n+2)
-      − (-1)ⁿ(n+3)!/(6 x^(n+4)) + O(x^(-(n+6)))`,
-    the `1/x^(n+2)` terms in `-(n+2)·lor⁽ⁿ⁾` and `x·lor⁽ⁿ⁺¹⁾` are equal
-    and opposite, so they cancel and `lorMix n x = O(1/x^(n+4))`.
-
-    The residual `∫₀^∞ x^(n+1) · min(1, x^(-(n+4))) dx` is a finite
-    `n`-dependent constant, giving the displayed `O(t^(-n-2))`. -/
+    Combines the three sub-lemmas above: the pointwise rescaling
+    `mixedDerivExpr_eq_lorMix` rewrites the integrand into the lorMix form;
+    the constant `(1/2)^n` factors out of the integral; and the resulting
+    σ-weighted lorMix integral is bounded by `sigma_lorMix_integral_isO`. -/
 private lemma sigma_mixedDerivExpr_isO (n : ℕ) :
     IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t)
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  sorry -- TODO (open): change of variables + lorMix cancellation; see strategy above
+  -- Pointwise rewrite of the integrand via the rescaling identity.
+  have h_pt : ∀ t : ℝ, ∀ u ∈ Set.Ici (0 : ℝ),
+      σ u * mixedDerivExpr n u t
+        = (1 / 2 : ℝ) ^ n *
+            (σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                    * lorMix n ((1 / (2 * (u + 1 / 4))) * t))) := by
+    intro t u hu
+    have hu_nn : (0 : ℝ) ≤ u := hu
+    rw [mixedDerivExpr_eq_lorMix n hu_nn t]; ring
+  -- Lift the pointwise rewrite to an equality of functions of `t`.
+  have h_int :
+      (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t)
+        = fun t : ℝ => (1 / 2 : ℝ) ^ n *
+            (∫ u in Set.Ici (0 : ℝ),
+               σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                      * lorMix n ((1 / (2 * (u + 1 / 4))) * t))) := by
+    funext t
+    have h_eq :
+        ∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t
+          = ∫ u in Set.Ici (0 : ℝ),
+              (1 / 2 : ℝ) ^ n *
+                (σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                        * lorMix n ((1 / (2 * (u + 1 / 4))) * t))) :=
+      MeasureTheory.setIntegral_congr_fun measurableSet_Ici (fun u hu => h_pt t u hu)
+    rw [h_eq, MeasureTheory.integral_const_mul]
+  rw [h_int]
+  exact (sigma_lorMix_integral_isO n).const_mul_left _
 
 /-- Asymptotic bound on the formal `n`-th derivative integral `jK n`:
     `|jK n t| = O(t^(-n-2))` as `t → +∞`.
