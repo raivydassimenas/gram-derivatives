@@ -2731,7 +2731,69 @@ and `lorMix_isO` provides `|lorMix n y| ≤ C · y^{−(n+4)} ≤ 2C · (1 + y^(
 Take `K = 2 · max(M, C)`. -/
 private lemma lorMix_unified_decay_on_nonneg (n : ℕ) :
     ∃ K : ℝ, 0 ≤ K ∧ ∀ y : ℝ, 0 ≤ y → |lorMix n y| ≤ K / (1 + y ^ (n + 4)) := by
-  sorry -- TODO (open): combine `lorMix_bounded_on_nonneg` and `lorMix_isO`.
+  obtain ⟨M, hM_nn, hM⟩ := lorMix_bounded_on_nonneg n
+  obtain ⟨C, hC⟩ := (lorMix_isO n).bound
+  rw [Filter.eventually_atTop] at hC
+  obtain ⟨Y₀, hY₀⟩ := hC
+  -- `Y₁ = max(Y₀, 1)` ensures both the asymptotic bound (`y ≥ Y₀`) and `y ≥ 1`
+  -- apply on the tail.
+  set Y₁ : ℝ := max Y₀ 1 with hY₁_def
+  have hY₁_ge_Y₀ : Y₀ ≤ Y₁ := le_max_left _ _
+  have hY₁_ge_1 : (1 : ℝ) ≤ Y₁ := le_max_right _ _
+  -- `K = max(M · (1 + Y₁^(n+4)),  2 · max(C, 0))` covers both regimes.
+  -- The outer `max C 0` sidesteps a possibly-negative `C` from `IsBigO.bound`.
+  refine ⟨max (M * (1 + Y₁ ^ (n + 4))) (2 * max C 0), ?_, fun y hy => ?_⟩
+  · -- `0 ≤ K`.
+    have : 0 ≤ M * (1 + Y₁ ^ (n + 4)) := mul_nonneg hM_nn (by positivity)
+    exact le_max_of_le_left this
+  · -- The pointwise inequality.
+    have h_denom_pos : 0 < 1 + y ^ (n + 4) := by positivity
+    rw [le_div_iff₀ h_denom_pos]
+    by_cases h_split : y ≤ Y₁
+    · -- Compact regime `y ∈ [0, Y₁]`: dominate using `lorMix_bounded_on_nonneg`.
+      have h_y_bound : |lorMix n y| ≤ M := hM y hy
+      have h_y_pow_le : y ^ (n + 4) ≤ Y₁ ^ (n + 4) :=
+        pow_le_pow_left₀ hy h_split (n + 4)
+      calc |lorMix n y| * (1 + y ^ (n + 4))
+          ≤ M * (1 + Y₁ ^ (n + 4)) :=
+            mul_le_mul h_y_bound (by linarith) h_denom_pos.le hM_nn
+        _ ≤ max (M * (1 + Y₁ ^ (n + 4))) (2 * max C 0) := le_max_left _ _
+    · -- Tail regime `y > Y₁`: dominate using `lorMix_isO`.  Here `y ≥ Y₀, y ≥ 1`.
+      rw [not_le] at h_split
+      have h_y_ge_Y₀ : Y₀ ≤ y := hY₁_ge_Y₀.trans h_split.le
+      have h_y_ge_1 : (1 : ℝ) ≤ y := hY₁_ge_1.trans h_split.le
+      have h_y_pos : (0 : ℝ) < y := zero_lt_one.trans_le h_y_ge_1
+      have h_norm_bound : ‖lorMix n y‖ ≤ C * ‖y ^ (-(n : ℝ) - 4)‖ := hY₀ y h_y_ge_Y₀
+      -- Convert the rpow to a `1/y^(n+4)` form.
+      have h_rpow_eq : y ^ (-(n : ℝ) - 4) = 1 / y ^ (n + 4) := by
+        rw [show (-(n : ℝ) - 4) = -((n + 4 : ℕ) : ℝ) from by push_cast; ring,
+            Real.rpow_neg h_y_pos.le, Real.rpow_natCast, one_div]
+      have h_rpow_pos : 0 < y ^ (-(n : ℝ) - 4) := Real.rpow_pos_of_pos h_y_pos _
+      have h_norm_rpow : ‖y ^ (-(n : ℝ) - 4)‖ = 1 / y ^ (n + 4) := by
+        rw [Real.norm_eq_abs, abs_of_pos h_rpow_pos, h_rpow_eq]
+      have h_lorMix_le : |lorMix n y| ≤ C / y ^ (n + 4) := by
+        rw [← Real.norm_eq_abs]
+        rw [h_norm_rpow, mul_one_div] at h_norm_bound
+        exact h_norm_bound
+      -- `y^(n+4) ≥ 1` (since `y ≥ 1`), so `1 + y^(n+4) ≤ 2 · y^(n+4)`.
+      have h_y_pow_ge_one : (1 : ℝ) ≤ y ^ (n + 4) := one_le_pow₀ h_y_ge_1
+      have h_y_pow_pos : 0 < y ^ (n + 4) := zero_lt_one.trans_le h_y_pow_ge_one
+      -- `C ≥ 0`: the asymptotic bound at `y` would be contradicted otherwise.
+      have h_C_nonneg : 0 ≤ C := by
+        have h_norm_rpow_pos : 0 < ‖y ^ (-(n : ℝ) - 4)‖ := by
+          rw [h_norm_rpow]; positivity
+        by_contra h
+        rw [not_le] at h
+        have : C * ‖y ^ (-(n : ℝ) - 4)‖ < 0 := mul_neg_of_neg_of_pos h h_norm_rpow_pos
+        linarith [norm_nonneg (lorMix n y), h_norm_bound]
+      calc |lorMix n y| * (1 + y ^ (n + 4))
+          ≤ (C / y ^ (n + 4)) * (2 * y ^ (n + 4)) :=
+            mul_le_mul h_lorMix_le (by linarith) h_denom_pos.le
+              (div_nonneg h_C_nonneg h_y_pow_pos.le)
+        _ = 2 * C := by field_simp
+        _ ≤ 2 * max C 0 :=
+            mul_le_mul_of_nonneg_left (le_max_left _ _) (by norm_num)
+        _ ≤ max (M * (1 + Y₁ ^ (n + 4))) (2 * max C 0) := le_max_right _ _
 
 /-- **σ-weighted integral asymptotic (lorMix form).**
 
