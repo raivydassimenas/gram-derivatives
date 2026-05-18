@@ -2566,7 +2566,55 @@ private lemma iteratedDeriv_lorSq_eq (n : ℕ) (s : ℝ) :
     bound `(1+s²)^(n+2) ≥ s^(2n+4)` for `s ≥ 1`. -/
 private lemma iteratedDeriv_lorSq_isO (n : ℕ) :
     IsO (iteratedDeriv n lorSq) (fun s : ℝ => s ^ (-(n : ℝ) - 4)) 𝓝∞ := by
-  sorry -- TODO (open): combine rational form + polynomial asymptotic + denom bound.
+  -- Step 1: replace the iterated derivative by its rational form.
+  have h_fun_eq : iteratedDeriv n lorSq =
+      fun s => (lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2) := by
+    funext s; exact iteratedDeriv_lorSq_eq n s
+  rw [h_fun_eq]
+  -- Step 2: polynomial bound on the numerator.
+  have h_num : (fun s : ℝ => (lorSqNumer n).eval s) =O[atTop] (fun s : ℝ => s ^ n) := by
+    have h_deg : (lorSqNumer n).degree ≤ ((Polynomial.X : Polynomial ℝ) ^ n).degree := by
+      rw [Polynomial.degree_X_pow]
+      calc (lorSqNumer n).degree
+          ≤ ((lorSqNumer n).natDegree : WithBot ℕ) := Polynomial.degree_le_natDegree
+        _ ≤ (n : WithBot ℕ) := by exact_mod_cast lorSqNumer_natDegree_le n
+    have h := Polynomial.isBigO_atTop_of_degree_le _ _ h_deg
+    simpa using h
+  -- Step 3: denominator-inverse bound `1/(1+s²)^(n+2) ≤ 1/s^(2(n+2))` for `s ≥ 1`.
+  have h_inv : (fun s : ℝ => 1 / (1 + s ^ 2) ^ (n + 2))
+      =O[atTop] (fun s : ℝ => 1 / s ^ (2 * (n + 2))) := by
+    refine .of_bound 1 ?_
+    filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with s hs
+    have hs_pos : 0 < s := zero_lt_one.trans_le hs
+    have h_s2_le : s ^ 2 ≤ 1 + s ^ 2 := by linarith [sq_nonneg s]
+    have h_pow_le : s ^ (2 * (n + 2)) ≤ (1 + s ^ 2) ^ (n + 2) := by
+      calc s ^ (2 * (n + 2))
+          = (s ^ 2) ^ (n + 2) := by rw [← pow_mul]
+        _ ≤ (1 + s ^ 2) ^ (n + 2) := pow_le_pow_left₀ (sq_nonneg s) h_s2_le _
+    have h_pos1 : 0 < (1 + s ^ 2) ^ (n + 2) := by positivity
+    have h_pos2 : 0 < s ^ (2 * (n + 2)) := by positivity
+    rw [Real.norm_eq_abs, Real.norm_eq_abs, one_mul,
+        abs_of_pos (one_div_pos.mpr h_pos1), abs_of_pos (one_div_pos.mpr h_pos2)]
+    exact one_div_le_one_div_of_le h_pos2 h_pow_le
+  -- Step 4: combine via `IsBigO.mul`, after rewriting division as multiplication.
+  have h_split : (fun s : ℝ => (lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2)) =
+      (fun s : ℝ => (lorSqNumer n).eval s * (1 / (1 + s ^ 2) ^ (n + 2))) := by
+    funext s; rw [mul_one_div]
+  rw [h_split]
+  refine (h_num.mul h_inv).trans ?_
+  -- Step 5: show `s^n * (1/s^(2(n+2))) =O[atTop] s^(-(n:ℝ) - 4)`.
+  refine .of_bound 1 ?_
+  filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with s hs
+  have hs_ne : s ≠ 0 := ne_of_gt hs
+  rw [Real.norm_eq_abs, Real.norm_eq_abs, one_mul]
+  -- Both sides equal `1/s^(n+4)` for `s > 0`.
+  have h_lhs : s ^ n * (1 / s ^ (2 * (n + 2))) = 1 / s ^ (n + 4) := by
+    rw [mul_one_div, show 2 * (n + 2) = n + (n + 4) from by ring, pow_add,
+        div_mul_eq_div_div, div_self (pow_ne_zero _ hs_ne)]
+  have h_rhs : s ^ (-(n : ℝ) - 4) = 1 / s ^ (n + 4) := by
+    rw [show (-(n : ℝ) - 4) = -((n + 4 : ℕ) : ℝ) from by push_cast; ring,
+        Real.rpow_neg hs.le, Real.rpow_natCast, one_div]
+  rw [h_lhs, h_rhs]
 
 /-- Asymptotic cancellation:  `lorMix n s = O(s^{-(n+4)})` as `s → +∞`.
 
