@@ -2438,16 +2438,65 @@ private lemma lorMix_eq_iteratedDeriv_lorSq (n : ℕ) (s : ℝ) :
       h_iter_at.const_mul _
     exact h_deriv_lorMix.unique h_neg2
 
-/-- **Asymptotic bound on the iterated derivative of `lor²`:**
+/-! ### Polynomial-rational representation for `iteratedDeriv n lorSq`.
+
+Each derivative of `lorSq` has the closed form
+`(lorSqNumer n).eval s / (1+s²)^(n+2)` where `lorSqNumer n` is a real
+polynomial of degree at most `n`.  Combined with the polynomial bound
+`|R.eval s| ≲ (1+|s|)^R.natDegree` and `(1+s²)^(n+2) ≥ s^(2n+4)` for
+`s ≥ 1`, this gives the asymptotic `O(s^{-(n+4)})`. -/
+
+/-- Numerator polynomial in the rational representation
+    `iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1+s²)^(n+2)`.
+
+    Quotient-rule recursion: if `f(s) = R(s) / (1+s²)^(n+2)`, then
+        `f'(s) = [R'(s)·(1+s²) − 2(n+2)·s·R(s)] / (1+s²)^(n+3)`. -/
+private noncomputable def lorSqNumer : ℕ → Polynomial ℝ
+  | 0 => 1
+  | n + 1 => (lorSqNumer n).derivative * (Polynomial.X ^ 2 + 1)
+              - Polynomial.C (2 * ((n : ℝ) + 2)) * Polynomial.X * (lorSqNumer n)
+
+/-- Degree bound on the numerator polynomial:  `(lorSqNumer n).natDegree ≤ n`.
+
+    Induction on `n`.  Base: `lorSqNumer 0 = 1` has degree 0.
+    Step: from the recursion,
+      `((lorSqNumer k).derivative * (X² + 1)).natDegree ≤ k + 1`
+      `(C · X · (lorSqNumer k)).natDegree ≤ k + 1`
+    (using `natDegree_mul_le`, `natDegree_derivative_le`); their difference
+    inherits the bound via `natDegree_sub_le`. -/
+private lemma lorSqNumer_natDegree_le (n : ℕ) : (lorSqNumer n).natDegree ≤ n := by
+  sorry -- TODO (open): polynomial degree induction.
+
+/-- Rational-function representation:
+    `iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1 + s²)^(n + 2)`.
+
+    Induction on `n`.  Base: `lorSq s = 1/(1+s²)² = (lorSqNumer 0).eval s / (1+s²)^2`.
+    Step: `iteratedDeriv (k+1) lorSq s = (d/ds) (iteratedDeriv k lorSq) s`;
+    differentiate the IH via the quotient rule and match against the
+    `lorSqNumer (k+1)` recursion. -/
+private lemma iteratedDeriv_lorSq_eq (n : ℕ) (s : ℝ) :
+    iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2) := by
+  induction n generalizing s with
+  | zero =>
+    rw [iteratedDeriv_zero]
+    -- `lorSqNumer 0 = 1` and `(1 : Polynomial ℝ).eval s = 1`.
+    show lorSq s = (1 : Polynomial ℝ).eval s / (1 + s ^ 2) ^ (0 + 2)
+    rw [Polynomial.eval_one]
+    unfold lorSq lor
+    have h_ne : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
+    field_simp
+  | succ k ih =>
+    sorry -- TODO (open): succ case via quotient rule on the IH.
+
+/-- Asymptotic bound on the iterated derivative of `lor²`:
     `iteratedDeriv n lorSq s = O(s^{-(n+4)})` as `s → +∞`.
 
-    Strategy: by induction on `n`, prove that
-        `iteratedDeriv n lorSq s = R_n(s) / (1+s²)^(n+2)`
-    for a polynomial `R_n` of degree ≤ n.  At infinity, `|R_n(s)| ≲ |s|^n`
-    and `(1+s²)^(n+2) ≳ s^(2n+4)`, giving `O(s^{-(n+4)})`. -/
+    Combines the rational representation `iteratedDeriv_lorSq_eq` with the
+    polynomial bound (from `lorSqNumer_natDegree_le`) and the denominator
+    bound `(1+s²)^(n+2) ≥ s^(2n+4)` for `s ≥ 1`. -/
 private lemma iteratedDeriv_lorSq_isO (n : ℕ) :
     IsO (iteratedDeriv n lorSq) (fun s : ℝ => s ^ (-(n : ℝ) - 4)) 𝓝∞ := by
-  sorry -- TODO (open): polynomial-over-(1+s²)^(n+2) representation + asymptotic bound.
+  sorry -- TODO (open): combine rational form + polynomial asymptotic + denom bound.
 
 /-- Asymptotic cancellation:  `lorMix n s = O(s^{-(n+4)})` as `s → +∞`.
 
