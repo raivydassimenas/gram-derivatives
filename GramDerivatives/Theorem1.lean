@@ -38,43 +38,38 @@
 
   ─── Remaining gaps ────────────────────────────────────────────────────
   `jK_isO` (§6) is fully discharged from `jK_eq_sigma_integral` (proved)
-  and `sigma_mixedDerivExpr_isO`.  The latter is now decomposed into three
-  open sub-lemmas; the top-level proof of `sigma_mixedDerivExpr_isO` is
-  fully discharged from these three.
+  and `sigma_mixedDerivExpr_isO` (proved, modulo the single sub-lemma below).
 
-  • `mixedDerivExpr_eq_lorMix`     (§6) — pointwise rescaling
-                                          `mixedDerivExpr n u t
-                                            = (1/2)^n · (u+1/4)^{-(n+3)}
-                                              · lorMix n (t/(2(u+1/4)))`.
-                                          Definitional unfolding + algebra.
-  • `lorMix_isO`                   (§6) — asymptotic cancellation
-                                          `lorMix n x = O(x^{-(n+4)})`.
-                                          Needs the Taylor expansion of
-                                          `lor⁽ⁿ⁾` at infinity with the
-                                          leading `1/x^(n+2)` cancellation.
   • `sigma_lorMix_integral_isO`    (§6) — change-of-variables aggregation
                                           `∫ σ(u) · (u+1/4)^{-(n+3)}
                                             · lorMix n (t/(2(u+1/4))) du
                                             = O(t^{-(n+2)})`.
                                           Substitute `x = t/(2(u+1/4))`,
                                           bound by `|σ| ≤ 1/8` and `lorMix_isO`.
+                                          (Sole remaining `sorry` in the
+                                          `jK_isO` chain.)
 
   ─── Closed under Strategy B ───────────────────────────────────────────
-  • `contDiffAt_j`          (§2.5) — was an axiom; now a theorem derived
-                                     from `contDiffOn_jK` (a joint
-                                     induction in §2.5 that proves the
-                                     formula `iteratedDeriv n j = jK n` on
-                                     `(0, ∞)` and reads off smoothness).
-  • `iteratedDeriv_tj_isO`  (§6)  — fully proved via Leibniz on
-                                     `-(t/2)·j(t)` plus the derived
-                                     `contDiffAt_j` theorem.
-
-  ─── Closed under Strategy B ───────────────────────────────────────────
-  • `contDiffAt_j`          (§2.5) — was an axiom; now a theorem derived
-                                     from `contDiffOn_jK` (a joint
-                                     induction in §2.5 that proves the
-                                     formula `iteratedDeriv n j = jK n` on
-                                     `(0, ∞)` and reads off smoothness).
+  • `contDiffAt_j`                 (§2.5) — was an axiom; now a theorem derived
+                                            from `contDiffOn_jK` (a joint
+                                            induction in §2.5 that proves the
+                                            formula `iteratedDeriv n j = jK n`
+                                            on `(0, ∞)` and reads off
+                                            smoothness).
+  • `iteratedDeriv_tj_isO`         (§6)   — fully proved via Leibniz on
+                                            `-(t/2)·j(t)` plus the derived
+                                            `contDiffAt_j` theorem.
+  • `mixedDerivExpr_eq_lorMix`     (§6)   — pointwise rescaling, definitional
+                                            unfolding + algebra.
+  • `lorMix_isO`                   (§6)   — asymptotic cancellation,
+                                            `lorMix n x = O(x^{-(n+4)})`.
+                                            Proved via the polynomial-rational
+                                            representation `iteratedDeriv n lorSq
+                                            = lorSqNumer n / (1+s²)^(n+2)` plus
+                                            `lorMix n = -2 · iteratedDeriv n lorSq`.
+  • `lorSqNumer_natDegree_le`,            — supporting lemmas for `lorMix_isO`.
+    `iteratedDeriv_lorSq_eq`,
+    `iteratedDeriv_lorSq_isO`     (§6)
 -/
 
 import Mathlib
