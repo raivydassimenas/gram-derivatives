@@ -2465,7 +2465,42 @@ private noncomputable def lorSqNumer : ℕ → Polynomial ℝ
     (using `natDegree_mul_le`, `natDegree_derivative_le`); their difference
     inherits the bound via `natDegree_sub_le`. -/
 private lemma lorSqNumer_natDegree_le (n : ℕ) : (lorSqNumer n).natDegree ≤ n := by
-  sorry -- TODO (open): polynomial degree induction.
+  induction n with
+  | zero =>
+    -- `lorSqNumer 0 = 1`, and `(1 : Polynomial ℝ).natDegree = 0`.
+    change (1 : Polynomial ℝ).natDegree ≤ 0
+    simp
+  | succ k ih =>
+    -- Unfold the recursion: `lorSqNumer (k+1) = R.derivative * (X² + 1) − C(2(k+2)) · X · R`
+    -- where `R = lorSqNumer k`.
+    change ((lorSqNumer k).derivative * (Polynomial.X ^ 2 + 1)
+            - Polynomial.C (2 * ((k : ℝ) + 2)) * Polynomial.X * (lorSqNumer k)).natDegree
+          ≤ k + 1
+    refine (Polynomial.natDegree_sub_le _ _).trans ?_
+    refine max_le ?_ ?_
+    · -- First term:  `R.derivative * (X² + 1)`.
+      -- Case split: if `R` is constant, `R.derivative = 0` and the product is `0`.
+      rcases Nat.eq_zero_or_pos (lorSqNumer k).natDegree with hzero | hpos
+      · have h_const : lorSqNumer k = Polynomial.C ((lorSqNumer k).coeff 0) :=
+          Polynomial.eq_C_of_natDegree_le_zero hzero.le
+        rw [h_const, Polynomial.derivative_C, zero_mul, Polynomial.natDegree_zero]
+        exact Nat.zero_le _
+      · -- Non-constant case: `R.derivative.natDegree ≤ R.natDegree − 1`, and
+        -- `(X² + 1).natDegree = 2`, so the product has natDegree `≤ R.natDegree + 1 ≤ k + 1`.
+        refine Polynomial.natDegree_mul_le.trans ?_
+        have hX2 : (Polynomial.X ^ 2 + 1 : Polynomial ℝ).natDegree = 2 := by
+          compute_degree!
+        rw [hX2]
+        have hderiv : (lorSqNumer k).derivative.natDegree ≤ (lorSqNumer k).natDegree - 1 :=
+          Polynomial.natDegree_derivative_le _
+        omega
+    · -- Second term:  `C(2(k+2)) · X · R`.
+      -- `(C · X).natDegree ≤ 1`, and `R.natDegree ≤ k` by IH, so total `≤ k + 1`.
+      refine Polynomial.natDegree_mul_le.trans ?_
+      have hCX : (Polynomial.C (2 * ((k : ℝ) + 2)) * Polynomial.X).natDegree ≤ 1 := by
+        refine Polynomial.natDegree_mul_le.trans ?_
+        rw [Polynomial.natDegree_C, Polynomial.natDegree_X]
+      omega
 
 /-- Rational-function representation:
     `iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1 + s²)^(n + 2)`.
