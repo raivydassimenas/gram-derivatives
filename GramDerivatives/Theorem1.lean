@@ -2795,34 +2795,115 @@ private lemma lorMix_unified_decay_on_nonneg (n : ℕ) :
             mul_le_mul_of_nonneg_left (le_max_left _ _) (by norm_num)
         _ ≤ max (M * (1 + Y₁ ^ (n + 4))) (2 * max C 0) := le_max_right _ _
 
+/-- **Integrability of the σ-weighted lorMix integrand on `Ici 0`.**
+
+For each `t ≥ 0`, the integrand
+    `u ↦ σ u · (u+1/4)^{-(n+3)} · lorMix n ((1/(2(u+1/4))) · t)`
+is dominated on `[0, ∞)` by `(M/8) · ((u+1/4)^{n+3})⁻¹`, where `M` is the
+uniform bound from `lorMix_bounded_on_nonneg n`.  The dominator is integrable
+via `integrableOn_pow_inv_shift (n+1)`.  Measurability of the integrand is
+the product of three continuous factors. -/
+private lemma integrable_sigma_lorMix_integrand (n : ℕ) {t : ℝ} (ht : 0 ≤ t) :
+    IntegrableOn (fun u : ℝ => σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
+                 (Set.Ici (0 : ℝ)) := by
+  obtain ⟨M, hM_nn, hM⟩ := lorMix_bounded_on_nonneg n
+  -- Continuity of each factor on `Ici 0`, hence AEStronglyMeasurable.
+  have h_cont : ContinuousOn
+      (fun u : ℝ => σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                            * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
+      (Set.Ici (0 : ℝ)) := by
+    refine σ_continuous.continuousOn.mul (ContinuousOn.mul ?_ ?_)
+    · -- `(u + 1/4)^{-(n+3)}` continuous on `Ici 0` (since `u + 1/4 > 0`).
+      have : ContinuousOn (fun u : ℝ => u + 1 / 4) (Set.Ici (0 : ℝ)) :=
+        (continuous_id.add continuous_const).continuousOn
+      refine this.zpow₀ _ (fun u hu => ?_)
+      left; linarith [Set.mem_Ici.mp hu]
+    · -- `lorMix n ∘ (...)` continuous on `Ici 0`.
+      refine (lorMix_continuous n).continuousOn.comp ?_ (Set.mapsTo_univ _ _)
+      have h_denom_cont : ContinuousOn (fun u : ℝ => 2 * (u + 1 / 4)) (Set.Ici (0 : ℝ)) :=
+        (continuous_const.mul (continuous_id.add continuous_const)).continuousOn
+      have h_denom_ne : ∀ u ∈ Set.Ici (0 : ℝ), 2 * (u + 1 / 4) ≠ 0 := by
+        intro u hu; have := Set.mem_Ici.mp hu; positivity
+      exact ((continuousOn_const.div h_denom_cont h_denom_ne).mul continuousOn_const)
+  have h_meas : AEStronglyMeasurable (fun u : ℝ =>
+      σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+              * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
+      (volume.restrict (Set.Ici (0 : ℝ))) :=
+    h_cont.aestronglyMeasurable measurableSet_Ici
+  -- Dominator: `(M / 8) · ((u + 1/4)^(n+3))⁻¹`.
+  refine Integrable.mono'
+    ((integrableOn_pow_inv_shift (n + 1)).const_mul (M / 8))
+    h_meas ?_
+  refine (ae_restrict_iff' measurableSet_Ici).mpr ?_
+  refine Filter.Eventually.of_forall ?_
+  intro u hu
+  have hu_nn : (0 : ℝ) ≤ u := Set.mem_Ici.mp hu
+  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have hr_ne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr_pos
+  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
+  -- `lorMix` argument is `(1/(2(u+1/4))) * t ≥ 0` since both factors are nonneg.
+  have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
+    mul_nonneg (by positivity) ht
+  have h_lorMix_le : |lorMix n ((1 / (2 * (u + 1 / 4))) * t)| ≤ M := hM _ h_arg_nn
+  have h_σ_nn : 0 ≤ σ u := σ_nonneg u
+  have h_σ_le : σ u ≤ 1 / 8 := σ_le_eighth u
+  -- Show `|integrand| ≤ (M/8) · ((u+1/4)^(n+3))⁻¹`.
+  have h_zpow_eq : (u + 1 / 4) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+    rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
+        zpow_neg, zpow_natCast]
+  change ‖σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                  * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖
+          ≤ M / 8 * ((u + 1 / 4) ^ ((n + 1) + 2))⁻¹
+  rw [show (n + 1) + 2 = n + 3 from rfl, h_zpow_eq]
+  rw [Real.norm_eq_abs, abs_mul, abs_mul, abs_of_nonneg h_σ_nn,
+      abs_of_pos (inv_pos.mpr h_pow_pos)]
+  calc σ u * (((u + 1 / 4) ^ (n + 3))⁻¹ * |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|)
+      ≤ (1 / 8) * (((u + 1 / 4) ^ (n + 3))⁻¹ * M) := by gcongr
+    _ = M / 8 * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
+
+/-- **Asymptotic of the majorant integral.**
+
+The σ-free, lorMix-free dominator,
+    `K · ((u+1/4)^{n+3})⁻¹ · (1 + ((1/(2(u+1/4))) · t)^{n+4})⁻¹`,
+has integral (over `Ici 0`) of order `O(t^{-(n+2)})`.  This is the
+analytic core of `sigma_lorMix_integral_isO`.
+
+Sketch: substitute `v = u + 1/4` and split at `v = t/2`:
+- On `[1/4, t/2]`: dominator `≤ 2^{n+5} · K · v / t^{n+4}`; integrating
+  in `v` gives `O(t^{-(n+2)})`.
+- On `[t/2, ∞)`: dominator `≤ K · v^{-(n+3)}`; integrating gives
+  `≤ K · 2^{n+2} / ((n+2) · t^{n+2}) = O(t^{-(n+2)})`. -/
+private lemma sigma_lorMix_majorant_integral_isO (n : ℕ) (K : ℝ) (hK : 0 ≤ K) :
+    IsO (fun t : ℝ =>
+            ∫ u in Set.Ici (0 : ℝ),
+              K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                    (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
+        (fun t => t ^ (-(n : ℝ) - 2))
+        𝓝∞ := by
+  sorry -- TODO (open): split at `v = t/2` and bound each piece.
+
 /-- **σ-weighted integral asymptotic (lorMix form).**
 
 The σ-weighted integral of the lorMix-rescaled mixed derivative,
     `∫₀^∞ σ(u) · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4))) du`,
 is `O(t^{-(n+2)})` as `t → +∞`.
 
-Strategy via the unified decay bound (`lorMix_unified_decay_on_nonneg`):
-the integrand is dominated by
-    `(1/8) · (u+1/4)^{-(n+3)} · K · (1 + (t/(2(u+1/4)))^(n+4))⁻¹`,
-using `|σ u| ≤ 1/8` and the unified decay.  Substituting `v = u + 1/4`
-in the dominating integral and splitting at `v = t/2`:
-- On `v ∈ [1/4, t/2]` (i.e. `t/(2v) ≥ 1`): the inverse-denominator is
-  `≤ 2 · (2v)^(n+4) / t^(n+4)`, giving `2^{n+5} · v / t^(n+4)`.  Integrating
-  from `1/4` to `t/2` gives `≤ t² / 8`, so this piece is `O(t^{-(n+2)})`.
-- On `v ∈ [t/2, ∞)` (i.e. `t/(2v) ≤ 1`): the inverse-denominator is `≤ 1`,
-  giving `v^{-(n+3)}`.  Integrating from `t/2` to `∞` gives
-  `≤ (t/2)^{-(n+2)} / (n+2)`, also `O(t^{-(n+2)})`.
-
-Both contributions are `O(t^{-(n+2)})`; the sum is too. -/
+Bound `|σ u| ≤ 1/8` and `|lorMix n y| ≤ K · (1 + y^{n+4})⁻¹` (the unified
+decay).  Triangle inequality on the integral plus dominated comparison
+reduces to `sigma_lorMix_majorant_integral_isO`. -/
 private lemma sigma_lorMix_integral_isO (n : ℕ) :
     IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
                 σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
                        * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  -- Consume the unified decay bound; the rest is integration.
   obtain ⟨_K, _hK_nn, _h_decay⟩ := lorMix_unified_decay_on_nonneg n
-  sorry -- TODO (open): integrate the dominating function (split `v = u+1/4` at `t/2`).
+  -- Reduces to `sigma_lorMix_majorant_integral_isO` via triangle inequality on
+  -- the integral and the pointwise bound.
+  -- TODO (open): wire `integrable_sigma_lorMix_integrand` + decay bound +
+  -- `sigma_lorMix_majorant_integral_isO`.
+  sorry
 
 /-- Asymptotic bound on the σ-weighted integral of `mixedDerivExpr n u t`:
     `|∫₀^∞ σ(u) · mixedDerivExpr n u t du| = O(t^(-n-2))` as `t → +∞`.
