@@ -2521,7 +2521,42 @@ private lemma iteratedDeriv_lorSq_eq (n : ℕ) (s : ℝ) :
     have h_ne : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
     field_simp
   | succ k ih =>
-    sorry -- TODO (open): succ case via quotient rule on the IH.
+    -- The IH is pointwise; lift to a functional equality so we can rewrite under `deriv`.
+    have h_func : iteratedDeriv k lorSq =
+        fun x => (lorSqNumer k).eval x / (1 + x ^ 2) ^ (k + 2) := by
+      funext x; exact ih x
+    rw [iteratedDeriv_succ, h_func]
+    -- Build the `HasDerivAt` facts for numerator and denominator.
+    have h_num : HasDerivAt (fun x : ℝ => (lorSqNumer k).eval x)
+        ((lorSqNumer k).derivative.eval s) s :=
+      (lorSqNumer k).hasDerivAt s
+    have h_inner : HasDerivAt (fun x : ℝ => 1 + x ^ 2) (2 * s) s := by
+      have h2 : HasDerivAt (fun x : ℝ => x ^ 2) (2 * s) s := by
+        simpa using hasDerivAt_pow 2 s
+      exact h2.const_add 1
+    have h_den : HasDerivAt (fun x : ℝ => (1 + x ^ 2) ^ (k + 2))
+        (((k : ℝ) + 2) * (1 + s ^ 2) ^ (k + 1) * (2 * s)) s := by
+      have h := h_inner.pow (k + 2)
+      have h_sub : (k + 2) - 1 = k + 1 := by omega
+      rw [h_sub] at h
+      push_cast at h
+      exact h
+    have h_pos : (0 : ℝ) < (1 + s ^ 2) ^ (k + 2) := by positivity
+    have h_ne : ((1 + s ^ 2) ^ (k + 2) : ℝ) ≠ 0 := ne_of_gt h_pos
+    have h_div := h_num.fun_div h_den h_ne
+    rw [h_div.deriv]
+    -- Unfold `lorSqNumer (k+1)` and apply `Polynomial.eval` simp lemmas.
+    rw [show lorSqNumer (k + 1) =
+            (lorSqNumer k).derivative * (Polynomial.X ^ 2 + 1)
+              - Polynomial.C (2 * ((k : ℝ) + 2)) * Polynomial.X * (lorSqNumer k)
+          from rfl]
+    simp only [Polynomial.eval_sub, Polynomial.eval_mul, Polynomial.eval_add,
+               Polynomial.eval_pow, Polynomial.eval_X, Polynomial.eval_C,
+               Polynomial.eval_one]
+    -- Algebraic match: both sides reduce to the same rational expression.
+    have h_ne1 : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
+    field_simp
+    ring
 
 /-- Asymptotic bound on the iterated derivative of `lor²`:
     `iteratedDeriv n lorSq s = O(s^{-(n+4)})` as `s → +∞`.
