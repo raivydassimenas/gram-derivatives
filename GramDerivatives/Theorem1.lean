@@ -38,16 +38,22 @@
 
   ─── Remaining gaps ────────────────────────────────────────────────────
   `jK_isO` (§6) is fully discharged from `jK_eq_sigma_integral` (proved)
-  and `sigma_mixedDerivExpr_isO` (proved, modulo the single sub-lemma below).
+  and `sigma_mixedDerivExpr_isO`.  The latter reduces to the single
+  σ-weighted integral asymptotic `sigma_lorMix_integral_isO`, which in
+  turn has been decomposed into three sub-lemmas:
 
-  • `sigma_lorMix_integral_isO`    (§6) — change-of-variables aggregation
-                                          `∫ σ(u) · (u+1/4)^{-(n+3)}
-                                            · lorMix n (t/(2(u+1/4))) du
-                                            = O(t^{-(n+2)})`.
-                                          Substitute `x = t/(2(u+1/4))`,
-                                          bound by `|σ| ≤ 1/8` and `lorMix_isO`.
-                                          (Sole remaining `sorry` in the
-                                          `jK_isO` chain.)
+  • `lorMix_bounded_on_nonneg`      (§6) — `∃ M, ∀ y ≥ 0, |lorMix n y| ≤ M`.
+                                          Continuity (proved as
+                                          `lorMix_continuous`) on a compact
+                                          prefix + `lorMix_isO` on the tail.
+  • `lorMix_unified_decay_on_nonneg`(§6) — `∃ K, ∀ y ≥ 0,
+                                          |lorMix n y| ≤ K · (1 + y^(n+4))⁻¹`.
+                                          Combines `lorMix_bounded_on_nonneg`
+                                          (near 0) with `lorMix_isO` (large `y`).
+  • `sigma_lorMix_integral_isO`     (§6) — main result.  Dominate the integrand
+                                          via `lorMix_unified_decay_on_nonneg`
+                                          and `|σ u| ≤ 1/8`; integrate the
+                                          dominant by splitting at `v = t/2`.
 
   ─── Closed under Strategy B ───────────────────────────────────────────
   • `contDiffAt_j`                 (§2.5) — was an axiom; now a theorem derived
@@ -70,6 +76,8 @@
   • `lorSqNumer_natDegree_le`,            — supporting lemmas for `lorMix_isO`.
     `iteratedDeriv_lorSq_eq`,
     `iteratedDeriv_lorSq_isO`     (§6)
+  • `lorMix_continuous`            (§6)   — `Continuous (lorMix n)`, from the
+                                            rational representation.
 -/
 
 import Mathlib
@@ -2624,26 +2632,87 @@ private lemma lorMix_isO (n : ℕ) :
   rw [h_eq]
   exact (iteratedDeriv_lorSq_isO n).const_mul_left _
 
+/-! ### Sub-lemmas for `sigma_lorMix_integral_isO`.
+
+The σ-weighted integral asymptotic decomposes into:
+- `lorMix_continuous` (proved): direct from the rational representation.
+- `lorMix_bounded_on_nonneg`: continuity (compact prefix) + `lorMix_isO`
+  (tail) ⟹ uniform bound on `[0, ∞)`.
+- `lorMix_unified_decay_on_nonneg`: combines the two regimes into a single
+  pointwise bound `|lorMix n y| ≤ K · (1 + y^(n+4))⁻¹` for `y ≥ 0`.
+- `sigma_lorMix_integral_isO` (main): integrating the unified bound against
+  the σ-weighted kernel produces the displayed `O(t^{-(n+2)})`. -/
+
+/-- **`lorMix n` is continuous on `ℝ`.**
+
+Direct from the rational representation
+`iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1 + s²)^(n+2)`:
+the numerator is a polynomial (continuous), the denominator is the
+`(n+2)`-th power of `1 + s² ≥ 1 > 0`, and `lorMix n s = −2 · iteratedDeriv n lorSq s`. -/
+private lemma lorMix_continuous (n : ℕ) : Continuous (lorMix n) := by
+  have h_eq : lorMix n =
+      fun s : ℝ => -2 * ((lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2)) := by
+    funext s
+    rw [lorMix_eq_iteratedDeriv_lorSq, iteratedDeriv_lorSq_eq]
+  rw [h_eq]
+  refine ((lorSqNumer n).continuous.div ?_ (fun s => ?_)).const_mul (-2 : ℝ)
+  · exact (continuous_const.add (continuous_id.pow 2)).pow (n + 2)
+  · positivity
+
+/-- **`lorMix n` is uniformly bounded on `[0, ∞)`.**
+
+By `lorMix_continuous`, `|lorMix n|` is bounded on every compact interval
+`[0, Y]`.  By `lorMix_isO`, for `y ≥ Y₀` (some threshold) we have
+`|lorMix n y| ≤ C · y^{−(n+4)} ≤ C · Y₀^{−(n+4)}`.  Taking `Y = max(1, Y₀)`
+and combining the two bounds gives a global `M` for `y ∈ [0, ∞)`. -/
+private lemma lorMix_bounded_on_nonneg (n : ℕ) :
+    ∃ M : ℝ, 0 ≤ M ∧ ∀ y : ℝ, 0 ≤ y → |lorMix n y| ≤ M := by
+  sorry -- TODO (open): `lorMix_continuous` on `[0, Y]` + `lorMix_isO` on `[Y, ∞)`.
+
+/-- **Unified pointwise decay bound for `lorMix n` on `[0, ∞)`.**
+
+For some `K ≥ 0` and all `y ≥ 0`,
+        `|lorMix n y| ≤ K · (1 + y^(n+4))⁻¹`.
+
+For `y ∈ [0, 1]`: `1 + y^(n+4) ≤ 2`, so `(1 + y^(n+4))⁻¹ ≥ 1/2`, and
+`lorMix_bounded_on_nonneg` provides `|lorMix n y| ≤ M ≤ 2M · (1 + y^(n+4))⁻¹`.
+
+For `y ≥ 1`: `1 + y^(n+4) ≤ 2 · y^(n+4)`, so `(1 + y^(n+4))⁻¹ ≥ (2 y^(n+4))⁻¹`,
+and `lorMix_isO` provides `|lorMix n y| ≤ C · y^{−(n+4)} ≤ 2C · (1 + y^(n+4))⁻¹`.
+
+Take `K = 2 · max(M, C)`. -/
+private lemma lorMix_unified_decay_on_nonneg (n : ℕ) :
+    ∃ K : ℝ, 0 ≤ K ∧ ∀ y : ℝ, 0 ≤ y → |lorMix n y| ≤ K / (1 + y ^ (n + 4)) := by
+  sorry -- TODO (open): combine `lorMix_bounded_on_nonneg` and `lorMix_isO`.
+
 /-- **σ-weighted integral asymptotic (lorMix form).**
 
-    The σ-weighted integral of the lorMix-rescaled mixed derivative,
-        `∫₀^∞ σ(u) · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4))) du`,
-    is `O(t^{-(n+2)})` as `t → +∞`.
+The σ-weighted integral of the lorMix-rescaled mixed derivative,
+    `∫₀^∞ σ(u) · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4))) du`,
+is `O(t^{-(n+2)})` as `t → +∞`.
 
-    Strategy: change of variable `x = t/(2(u+1/4))`, so `u + 1/4 = t/(2x)`
-    and `du = -t/(2x²) dx`.  This converts the integral into
-        `(C / t^(n+2)) · ∫₀^{2t} σ(t/(2x) − 1/4) · x^(n+1) · lorMix n x dx`.
-    Bounding `|σ| ≤ 1/8` and using `lorMix_isO` to dominate
-    `|lorMix n x| ≲ min(1, x^{-(n+4)})`, the residual
-    `∫₀^∞ x^(n+1) · min(1, x^{-(n+4)}) dx` is a finite `n`-dependent
-    constant.  Hence the displayed `O(t^{-(n+2)})`. -/
+Strategy via the unified decay bound (`lorMix_unified_decay_on_nonneg`):
+the integrand is dominated by
+    `(1/8) · (u+1/4)^{-(n+3)} · K · (1 + (t/(2(u+1/4)))^(n+4))⁻¹`,
+using `|σ u| ≤ 1/8` and the unified decay.  Substituting `v = u + 1/4`
+in the dominating integral and splitting at `v = t/2`:
+- On `v ∈ [1/4, t/2]` (i.e. `t/(2v) ≥ 1`): the inverse-denominator is
+  `≤ 2 · (2v)^(n+4) / t^(n+4)`, giving `2^{n+5} · v / t^(n+4)`.  Integrating
+  from `1/4` to `t/2` gives `≤ t² / 8`, so this piece is `O(t^{-(n+2)})`.
+- On `v ∈ [t/2, ∞)` (i.e. `t/(2v) ≤ 1`): the inverse-denominator is `≤ 1`,
+  giving `v^{-(n+3)}`.  Integrating from `t/2` to `∞` gives
+  `≤ (t/2)^{-(n+2)} / (n+2)`, also `O(t^{-(n+2)})`.
+
+Both contributions are `O(t^{-(n+2)})`; the sum is too. -/
 private lemma sigma_lorMix_integral_isO (n : ℕ) :
     IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
                 σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
                        * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  sorry -- TODO (open): change of variables x = t/(2(u+1/4)) + lorMix_isO + |σ|≤1/8.
+  -- Consume the unified decay bound; the rest is integration.
+  obtain ⟨_K, _hK_nn, _h_decay⟩ := lorMix_unified_decay_on_nonneg n
+  sorry -- TODO (open): integrate the dominating function (split `v = u+1/4` at `t/2`).
 
 /-- Asymptotic bound on the σ-weighted integral of `mixedDerivExpr n u t`:
     `|∫₀^∞ σ(u) · mixedDerivExpr n u t du| = O(t^(-n-2))` as `t → +∞`.
