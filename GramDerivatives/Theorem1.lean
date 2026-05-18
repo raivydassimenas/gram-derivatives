@@ -2667,7 +2667,55 @@ By `lorMix_continuous`, `|lorMix n|` is bounded on every compact interval
 and combining the two bounds gives a global `M` for `y ∈ [0, ∞)`. -/
 private lemma lorMix_bounded_on_nonneg (n : ℕ) :
     ∃ M : ℝ, 0 ≤ M ∧ ∀ y : ℝ, 0 ≤ y → |lorMix n y| ≤ M := by
-  sorry -- TODO (open): `lorMix_continuous` on `[0, Y]` + `lorMix_isO` on `[Y, ∞)`.
+  -- Step 1: extract a tail bound `C` from `lorMix_isO`.
+  obtain ⟨C, hC⟩ := (lorMix_isO n).bound
+  rw [Filter.eventually_atTop] at hC
+  obtain ⟨Y₀, hY₀⟩ := hC
+  -- Threshold for which we also have `y ≥ 1` (so `y^{-(n:ℝ) - 4} ≤ 1`).
+  set Y₁ : ℝ := max Y₀ 1 with hY₁_def
+  have hY₁_ge_Y₀ : Y₀ ≤ Y₁ := le_max_left _ _
+  have hY₁_ge_1 : (1 : ℝ) ≤ Y₁ := le_max_right _ _
+  -- Step 2: continuity bound on the compact prefix `[0, Y₁]`.
+  have h_compact : IsCompact (Set.Icc (0 : ℝ) Y₁) := isCompact_Icc
+  have h_cont_abs : Continuous (fun y : ℝ => |lorMix n y|) := (lorMix_continuous n).abs
+  obtain ⟨M₁, hM₁⟩ := h_compact.bddAbove_image h_cont_abs.continuousOn
+  -- `hM₁ : M₁ ∈ upperBounds (|lorMix n ·| '' Icc 0 Y₁)`.
+  -- Step 3: combine the two bounds.  Take `max M₁ (max C 0)` for non-negativity.
+  refine ⟨max M₁ (max C 0), (le_max_right C 0).trans (le_max_right _ _), fun y hy => ?_⟩
+  by_cases h_split : y ≤ Y₁
+  · -- `y ∈ [0, Y₁]`: use the compact bound `M₁`.
+    have h_mem : (|lorMix n y| : ℝ) ∈ (fun y => |lorMix n y|) '' Set.Icc 0 Y₁ :=
+      ⟨y, ⟨hy, h_split⟩, rfl⟩
+    have h_le_M₁ : |lorMix n y| ≤ M₁ := hM₁ h_mem
+    exact h_le_M₁.trans (le_max_left _ _)
+  · -- `y > Y₁`: use the asymptotic bound.  Here `y ≥ Y₀` and `y ≥ 1`.
+    rw [not_le] at h_split
+    have h_y_ge_Y₀ : Y₀ ≤ y := hY₁_ge_Y₀.trans h_split.le
+    have h_y_ge_1 : (1 : ℝ) ≤ y := hY₁_ge_1.trans h_split.le
+    have h_y_pos : (0 : ℝ) < y := zero_lt_one.trans_le h_y_ge_1
+    have h_norm_bound : ‖lorMix n y‖ ≤ C * ‖y ^ (-(n : ℝ) - 4)‖ := hY₀ y h_y_ge_Y₀
+    -- `y^{-(n:ℝ) - 4} ≤ 1` since `y ≥ 1` and the exponent is `≤ 0`.
+    have h_rpow_pos : 0 < y ^ (-(n : ℝ) - 4) := Real.rpow_pos_of_pos h_y_pos _
+    have h_rpow_le_one : y ^ (-(n : ℝ) - 4) ≤ 1 :=
+      Real.rpow_le_one_of_one_le_of_nonpos h_y_ge_1
+        (by have : (0 : ℝ) ≤ n := Nat.cast_nonneg n; linarith)
+    have h_norm_rpow_le : ‖y ^ (-(n : ℝ) - 4)‖ ≤ 1 := by
+      rw [Real.norm_eq_abs, abs_of_pos h_rpow_pos]; exact h_rpow_le_one
+    -- `C ≥ 0`: otherwise `C * ‖y^…‖` would be negative, contradicting `0 ≤ ‖lorMix n y‖`.
+    have h_norm_rpow_pos : 0 < ‖y ^ (-(n : ℝ) - 4)‖ := by
+      rw [Real.norm_eq_abs]; exact abs_pos.mpr (ne_of_gt h_rpow_pos)
+    have h_C_nonneg : 0 ≤ C := by
+      by_contra h
+      rw [not_le] at h
+      have : C * ‖y ^ (-(n : ℝ) - 4)‖ < 0 := mul_neg_of_neg_of_pos h h_norm_rpow_pos
+      linarith [norm_nonneg (lorMix n y), h_norm_bound]
+    calc |lorMix n y|
+        = ‖lorMix n y‖ := (Real.norm_eq_abs _).symm
+      _ ≤ C * ‖y ^ (-(n : ℝ) - 4)‖ := h_norm_bound
+      _ ≤ C * 1 := mul_le_mul_of_nonneg_left h_norm_rpow_le h_C_nonneg
+      _ = C := mul_one _
+      _ ≤ max C 0 := le_max_left _ _
+      _ ≤ max M₁ (max C 0) := le_max_right _ _
 
 /-- **Unified pointwise decay bound for `lorMix n` on `[0, ∞)`.**
 
