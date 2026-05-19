@@ -2883,6 +2883,79 @@ private lemma sigma_lorMix_majorant_integral_isO (n : ℕ) (K : ℝ) (hK : 0 ≤
         𝓝∞ := by
   sorry -- TODO (open): split at `v = t/2` and bound each piece.
 
+/-- **Integrability of the lorMix majorant on `Ici 0`.**
+
+For `t ≥ 0` the dominator
+    `u ↦ K · ((u+1/4)^{n+3})⁻¹ / (1 + ((1/(2(u+1/4))) · t)^{n+4})`
+is bounded by `K · ((u+1/4)^{n+3})⁻¹` (the rational factor is ≤ 1 since the
+denominator is ≥ 1), which is integrable via `integrableOn_pow_inv_shift (n+1)`. -/
+private lemma integrable_lorMix_majorant (n : ℕ) (K : ℝ) (hK : 0 ≤ K)
+    {t : ℝ} (ht : 0 ≤ t) :
+    IntegrableOn
+      (fun u : ℝ => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                          (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
+      (Set.Ici (0 : ℝ)) := by
+  have hr_pos : ∀ u ∈ Set.Ici (0 : ℝ), (0 : ℝ) < u + 1 / 4 := by
+    intro u hu; linarith [Set.mem_Ici.mp hu]
+  have h2r_ne : ∀ u ∈ Set.Ici (0 : ℝ), 2 * (u + 1 / 4) ≠ 0 := by
+    intro u hu; have := hr_pos u hu; positivity
+  have h_denom_pos : ∀ u ∈ Set.Ici (0 : ℝ),
+      (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+    intro u hu
+    have hr := hr_pos u hu
+    have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
+      mul_nonneg (by positivity) ht
+    have := pow_nonneg h_arg_nn (n + 4)
+    linarith
+  -- Continuity → AEStronglyMeasurable.
+  have h_cont : ContinuousOn
+      (fun u : ℝ => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                          (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
+      (Set.Ici (0 : ℝ)) := by
+    have hr : ContinuousOn (fun u : ℝ => u + 1 / 4) (Set.Ici (0 : ℝ)) :=
+      (continuous_id.add continuous_const).continuousOn
+    have h_pow_inv : ContinuousOn (fun u : ℝ => ((u + 1 / 4) ^ (n + 3))⁻¹)
+        (Set.Ici (0 : ℝ)) :=
+      (hr.pow (n + 3)).inv₀ (fun u hu => ne_of_gt (pow_pos (hr_pos u hu) _))
+    have h2r : ContinuousOn (fun u : ℝ => 2 * (u + 1 / 4)) (Set.Ici (0 : ℝ)) :=
+      (continuous_const.mul (continuous_id.add continuous_const)).continuousOn
+    have h_inv1 : ContinuousOn (fun u : ℝ => 1 / (2 * (u + 1 / 4)))
+        (Set.Ici (0 : ℝ)) :=
+      continuousOn_const.div h2r h2r_ne
+    have h_denom : ContinuousOn
+        (fun u : ℝ => 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
+        (Set.Ici (0 : ℝ)) :=
+      continuousOn_const.add ((h_inv1.mul continuousOn_const).pow (n + 4))
+    exact continuousOn_const.mul
+      (h_pow_inv.div h_denom (fun u hu => ne_of_gt (h_denom_pos u hu)))
+  refine Integrable.mono'
+    ((integrableOn_pow_inv_shift (n + 1)).const_mul K)
+    (h_cont.aestronglyMeasurable measurableSet_Ici) ?_
+  refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
+  intro u hu
+  have hr := hr_pos u hu
+  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr _
+  have h_inv_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := (inv_pos.mpr h_pow_pos).le
+  have h_dpos := h_denom_pos u hu
+  change ‖K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))‖
+          ≤ K * ((u + 1 / 4) ^ ((n + 1) + 2))⁻¹
+  rw [show (n + 1) + 2 = n + 3 from rfl, Real.norm_eq_abs,
+      abs_of_nonneg (by positivity)]
+  have h_div_le : ((u + 1 / 4) ^ (n + 3))⁻¹ /
+                    (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
+                  ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ :=
+    div_le_self h_inv_nn (by
+      have : 0 ≤ ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+        have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
+          mul_nonneg (by positivity) ht
+        exact pow_nonneg h_arg_nn _
+      linarith)
+  calc K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))
+      ≤ K * ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+        exact mul_le_mul_of_nonneg_left h_div_le hK
+
 /-- **σ-weighted integral asymptotic (lorMix form).**
 
 The σ-weighted integral of the lorMix-rescaled mixed derivative,
@@ -2898,12 +2971,96 @@ private lemma sigma_lorMix_integral_isO (n : ℕ) :
                        * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  obtain ⟨_K, _hK_nn, _h_decay⟩ := lorMix_unified_decay_on_nonneg n
-  -- Reduces to `sigma_lorMix_majorant_integral_isO` via triangle inequality on
-  -- the integral and the pointwise bound.
-  -- TODO (open): wire `integrable_sigma_lorMix_integrand` + decay bound +
-  -- `sigma_lorMix_majorant_integral_isO`.
-  sorry
+  obtain ⟨K, hK_nn, h_decay⟩ := lorMix_unified_decay_on_nonneg n
+  -- Step 1: the σ-integral is `O` of the majorant integral (constant `1/8`).
+  have h_step :
+      IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
+                σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
+          (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
+                K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                      (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
+          𝓝∞ := by
+    refine Asymptotics.IsBigO.of_bound (1 / 8) ?_
+    filter_upwards [Filter.eventually_ge_atTop (0 : ℝ)] with t ht
+    have hf_int : IntegrableOn
+        (fun u : ℝ => σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
+        (Set.Ici (0 : ℝ)) := integrable_sigma_lorMix_integrand n ht
+    have hg_int : IntegrableOn
+        (fun u : ℝ => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                      (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
+        (Set.Ici (0 : ℝ)) := integrable_lorMix_majorant n K hK_nn ht
+    -- Pointwise bound on `Ici 0`.
+    have h_pt : ∀ u ∈ Set.Ici (0 : ℝ),
+        ‖σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖
+          ≤ (1 / 8) * (K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                  (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) := by
+      intro u hu
+      have hu_nn : (0 : ℝ) ≤ u := hu
+      have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+      have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
+      have h_zpow_eq : (u + 1 / 4) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+        rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
+            zpow_neg, zpow_natCast]
+      have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
+        mul_nonneg (by positivity) ht
+      have h_lor_le : |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|
+            ≤ K / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)) :=
+        h_decay _ h_arg_nn
+      have h_denom_pos : (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+        have := pow_nonneg h_arg_nn (n + 4); linarith
+      have h_σ_nn : 0 ≤ σ u := σ_nonneg u
+      have h_σ_le : σ u ≤ 1 / 8 := σ_le_eighth u
+      have h_K_div_nn : 0 ≤ K / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)) :=
+        div_nonneg hK_nn h_denom_pos.le
+      rw [Real.norm_eq_abs, h_zpow_eq, abs_mul, abs_mul,
+          abs_of_nonneg h_σ_nn, abs_of_pos (inv_pos.mpr h_pow_pos)]
+      calc σ u * (((u + 1 / 4) ^ (n + 3))⁻¹
+              * |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|)
+          ≤ (1 / 8) * (((u + 1 / 4) ^ (n + 3))⁻¹
+              * (K / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) := by
+            gcongr
+        _ = (1 / 8) * (K * (((u + 1 / 4) ^ (n + 3))⁻¹
+              / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) := by ring
+    -- Nonnegativity of the majorant integral (so its norm is itself).
+    have h_g_nn : 0 ≤ ∫ u in Set.Ici (0 : ℝ),
+        K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) := by
+      refine setIntegral_nonneg measurableSet_Ici (fun u hu => ?_)
+      have hu_nn : (0 : ℝ) ≤ u := hu
+      have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+      have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
+        mul_nonneg (by positivity) ht
+      have h_denom_pos : (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+        have := pow_nonneg h_arg_nn (n + 4); linarith
+      positivity
+    have hg_abs : ‖∫ u in Set.Ici (0 : ℝ),
+        K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))‖
+        = ∫ u in Set.Ici (0 : ℝ),
+        K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) := by
+      rw [Real.norm_eq_abs, abs_of_nonneg h_g_nn]
+    rw [hg_abs]
+    calc ‖∫ u in Set.Ici (0 : ℝ),
+            σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                   * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖
+        ≤ ∫ u in Set.Ici (0 : ℝ),
+            ‖σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
+                    * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖ :=
+          norm_integral_le_integral_norm _
+      _ ≤ ∫ u in Set.Ici (0 : ℝ),
+            (1 / 8) * (K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                  (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) :=
+          setIntegral_mono_on hf_int.norm (hg_int.const_mul (1 / 8))
+            measurableSet_Ici h_pt
+      _ = (1 / 8) * ∫ u in Set.Ici (0 : ℝ),
+            K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                  (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) :=
+          integral_const_mul _ _
+  exact h_step.trans (sigma_lorMix_majorant_integral_isO n K hK_nn)
 
 /-- Asymptotic bound on the σ-weighted integral of `mixedDerivExpr n u t`:
     `|∫₀^∞ σ(u) · mixedDerivExpr n u t du| = O(t^(-n-2))` as `t → +∞`.
