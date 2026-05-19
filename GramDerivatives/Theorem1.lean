@@ -2862,72 +2862,6 @@ private lemma integrable_sigma_lorMix_integrand (n : ℕ) {t : ℝ} (ht : 0 ≤ 
       ≤ (1 / 8) * (((u + 1 / 4) ^ (n + 3))⁻¹ * M) := by gcongr
     _ = M / 8 * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
 
-/-- **Tail integral of the shifted reciprocal power.**
-
-For `s > -1/4`,
-    `∫_{u ≥ s} ((u+1/4)^{n+3})⁻¹ du = (s+1/4)^{-(n+2)} / (n+2)`.
-
-Proved by the fundamental theorem of calculus on `(s, ∞)` with the explicit
-antiderivative `(u+1/4)^{a+1}/(a+1)` (`a = -(n+3)`), which tends to `0` at
-`+∞`; the integrand equals `(u+1/4)^a` since `u+1/4 > 0`. -/
-private lemma integral_Ioi_add_quarter_pow_inv (n : ℕ) {s : ℝ}
-    (hs : -(1 / 4 : ℝ) < s) :
-    ∫ u in Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹
-      = (s + 1 / 4) ^ (-((n : ℝ) + 2)) / ((n : ℝ) + 2) := by
-  set a : ℝ := -((n + 3 : ℕ) : ℝ) with ha_def
-  have hn_nn : (0 : ℝ) ≤ (n : ℝ) := Nat.cast_nonneg n
-  have ha : a < -1 := by rw [ha_def]; push_cast; linarith
-  have ha1_neg : a + 1 < 0 := by rw [ha_def]; push_cast; linarith
-  have ha1_ne : a + 1 ≠ 0 := ne_of_lt ha1_neg
-  -- The integrand equals `(u+1/4)^a` on `Ioi s`.
-  have hcongr : ∀ u ∈ Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹ = (u + 1 / 4) ^ a := by
-    intro u hu
-    have huq : (0 : ℝ) < u + 1 / 4 := by linarith [Set.mem_Ioi.mp hu]
-    rw [ha_def, Real.rpow_neg huq.le, Real.rpow_natCast]
-  rw [setIntegral_congr_fun measurableSet_Ioi hcongr]
-  -- Antiderivative and its derivative.
-  have hd : ∀ x ∈ Set.Ici s,
-      HasDerivAt (fun t : ℝ => (t + 1 / 4) ^ (a + 1) / (a + 1)) ((x + 1 / 4) ^ a) x := by
-    intro x hx
-    have hxq : (0 : ℝ) < x + 1 / 4 := by linarith [Set.mem_Ici.mp hx]
-    convert (((hasDerivAt_id _).add_const (1 / 4 : ℝ)).rpow_const _).div_const (a + 1)
-      using 1
-    · simp [ha1_ne]
-    · left; exact ne_of_gt hxq
-  -- Antiderivative tends to `0` at `+∞`.
-  have ht : Filter.Tendsto (fun t : ℝ => ((t + 1 / 4) ^ (a + 1)) / (a + 1))
-      Filter.atTop (nhds (0 / (a + 1))) := by
-    rw [← neg_neg (a + 1)]
-    exact (tendsto_rpow_neg_atTop (by linarith)).comp
-      (tendsto_atTop_add_const_right _ (1 / 4 : ℝ) tendsto_id) |>.div_const _
-  have hintegrable : IntegrableOn (fun x : ℝ => (x + 1 / 4) ^ a) (Set.Ioi s) :=
-    integrableOn_add_rpow_Ioi_of_lt ha (by linarith)
-  rw [integral_Ioi_of_hasDerivAt_of_tendsto' hd hintegrable ht]
-  -- `0/(a+1) - (s+1/4)^(a+1)/(a+1) = (s+1/4)^(-(n+2))/(n+2)`.
-  have ha1 : a + 1 = -((n : ℝ) + 2) := by rw [ha_def]; push_cast; ring
-  rw [ha1, zero_div, zero_sub, div_neg, neg_neg]
-
-/-- **Asymptotic of the majorant integral.**
-
-The σ-free, lorMix-free dominator,
-    `K · ((u+1/4)^{n+3})⁻¹ · (1 + ((1/(2(u+1/4))) · t)^{n+4})⁻¹`,
-has integral (over `Ici 0`) of order `O(t^{-(n+2)})`.  This is the
-analytic core of `sigma_lorMix_integral_isO`.
-
-Sketch: substitute `v = u + 1/4` and split at `v = t/2`:
-- On `[1/4, t/2]`: dominator `≤ 2^{n+5} · K · v / t^{n+4}`; integrating
-  in `v` gives `O(t^{-(n+2)})`.
-- On `[t/2, ∞)`: dominator `≤ K · v^{-(n+3)}`; integrating gives
-  `≤ K · 2^{n+2} / ((n+2) · t^{n+2}) = O(t^{-(n+2)})`. -/
-private lemma sigma_lorMix_majorant_integral_isO (n : ℕ) (K : ℝ) (hK : 0 ≤ K) :
-    IsO (fun t : ℝ =>
-            ∫ u in Set.Ici (0 : ℝ),
-              K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                    (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
-        (fun t => t ^ (-(n : ℝ) - 2))
-        𝓝∞ := by
-  sorry -- TODO (open): split at `v = t/2` and bound each piece.
-
 /-- **Integrability of the lorMix majorant on `Ici 0`.**
 
 For `t ≥ 0` the dominator
@@ -3000,6 +2934,242 @@ private lemma integrable_lorMix_majorant (n : ℕ) (K : ℝ) (hK : 0 ≤ K)
               (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))
       ≤ K * ((u + 1 / 4) ^ (n + 3))⁻¹ := by
         exact mul_le_mul_of_nonneg_left h_div_le hK
+
+/-- **Tail integral of the shifted reciprocal power.**
+
+For `s > -1/4`,
+    `∫_{u ≥ s} ((u+1/4)^{n+3})⁻¹ du = (s+1/4)^{-(n+2)} / (n+2)`.
+
+Proved by the fundamental theorem of calculus on `(s, ∞)` with the explicit
+antiderivative `(u+1/4)^{a+1}/(a+1)` (`a = -(n+3)`), which tends to `0` at
+`+∞`; the integrand equals `(u+1/4)^a` since `u+1/4 > 0`. -/
+private lemma integral_Ioi_add_quarter_pow_inv (n : ℕ) {s : ℝ}
+    (hs : -(1 / 4 : ℝ) < s) :
+    ∫ u in Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹
+      = (s + 1 / 4) ^ (-((n : ℝ) + 2)) / ((n : ℝ) + 2) := by
+  set a : ℝ := -((n + 3 : ℕ) : ℝ) with ha_def
+  have hn_nn : (0 : ℝ) ≤ (n : ℝ) := Nat.cast_nonneg n
+  have ha : a < -1 := by rw [ha_def]; push_cast; linarith
+  have ha1_neg : a + 1 < 0 := by rw [ha_def]; push_cast; linarith
+  have ha1_ne : a + 1 ≠ 0 := ne_of_lt ha1_neg
+  -- The integrand equals `(u+1/4)^a` on `Ioi s`.
+  have hcongr : ∀ u ∈ Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹ = (u + 1 / 4) ^ a := by
+    intro u hu
+    have huq : (0 : ℝ) < u + 1 / 4 := by linarith [Set.mem_Ioi.mp hu]
+    rw [ha_def, Real.rpow_neg huq.le, Real.rpow_natCast]
+  rw [setIntegral_congr_fun measurableSet_Ioi hcongr]
+  -- Antiderivative and its derivative.
+  have hd : ∀ x ∈ Set.Ici s,
+      HasDerivAt (fun t : ℝ => (t + 1 / 4) ^ (a + 1) / (a + 1)) ((x + 1 / 4) ^ a) x := by
+    intro x hx
+    have hxq : (0 : ℝ) < x + 1 / 4 := by linarith [Set.mem_Ici.mp hx]
+    convert (((hasDerivAt_id _).add_const (1 / 4 : ℝ)).rpow_const _).div_const (a + 1)
+      using 1
+    · simp [ha1_ne]
+    · left; exact ne_of_gt hxq
+  -- Antiderivative tends to `0` at `+∞`.
+  have ht : Filter.Tendsto (fun t : ℝ => ((t + 1 / 4) ^ (a + 1)) / (a + 1))
+      Filter.atTop (nhds (0 / (a + 1))) := by
+    rw [← neg_neg (a + 1)]
+    exact (tendsto_rpow_neg_atTop (by linarith)).comp
+      (tendsto_atTop_add_const_right _ (1 / 4 : ℝ) tendsto_id) |>.div_const _
+  have hintegrable : IntegrableOn (fun x : ℝ => (x + 1 / 4) ^ a) (Set.Ioi s) :=
+    integrableOn_add_rpow_Ioi_of_lt ha (by linarith)
+  rw [integral_Ioi_of_hasDerivAt_of_tendsto' hd hintegrable ht]
+  -- `0/(a+1) - (s+1/4)^(a+1)/(a+1) = (s+1/4)^(-(n+2))/(n+2)`.
+  have ha1 : a + 1 = -((n : ℝ) + 2) := by rw [ha_def]; push_cast; ring
+  rw [ha1, zero_div, zero_sub, div_neg, neg_neg]
+
+/-- **Asymptotic of the majorant integral.**
+
+The σ-free, lorMix-free dominator,
+    `K · ((u+1/4)^{n+3})⁻¹ · (1 + ((1/(2(u+1/4))) · t)^{n+4})⁻¹`,
+has integral (over `Ici 0`) of order `O(t^{-(n+2)})`.  This is the
+analytic core of `sigma_lorMix_integral_isO`.
+
+Sketch: substitute `v = u + 1/4` and split at `v = t/2`:
+- On `[1/4, t/2]`: dominator `≤ 2^{n+5} · K · v / t^{n+4}`; integrating
+  in `v` gives `O(t^{-(n+2)})`.
+- On `[t/2, ∞)`: dominator `≤ K · v^{-(n+3)}`; integrating gives
+  `≤ K · 2^{n+2} / ((n+2) · t^{n+2}) = O(t^{-(n+2)})`. -/
+private lemma sigma_lorMix_majorant_integral_isO (n : ℕ) (K : ℝ) (hK : 0 ≤ K) :
+    IsO (fun t : ℝ =>
+            ∫ u in Set.Ici (0 : ℝ),
+              K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+                    (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
+        (fun t => t ^ (-(n : ℝ) - 2))
+        𝓝∞ := by
+  refine Asymptotics.IsBigO.of_bound
+    (K * 2 ^ (n + 2) + K * 2 ^ (n + 2) / ((n : ℝ) + 2)) ?_
+  filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht1
+  have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le one_pos ht1
+  have ht_nn : (0 : ℝ) ≤ t := ht_pos.le
+  have ht_ne : (t : ℝ) ≠ 0 := ne_of_gt ht_pos
+  set s : ℝ := t / 2 - 1 / 4 with hs_def
+  have hs_pos : (0 : ℝ) < s := by rw [hs_def]; linarith
+  have hs_quarter : -(1 / 4 : ℝ) < s := by linarith
+  have hsq : s + 1 / 4 = t / 2 := by rw [hs_def]; ring
+  set M : ℝ → ℝ := fun u => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
+        (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) with hM
+  -- Integrability of `M` on the whole ray and its two pieces.
+  have hM_all : IntegrableOn M (Set.Ici (0 : ℝ)) :=
+    integrable_lorMix_majorant n K hK ht_nn
+  have hsub_near : Set.Ico (0 : ℝ) s ⊆ Set.Ici 0 :=
+    fun x hx => Set.mem_Ici.mpr (Set.mem_Ico.mp hx).1
+  have hsub_tail : Set.Ici s ⊆ Set.Ici (0 : ℝ) :=
+    fun x hx => Set.mem_Ici.mpr (le_trans hs_pos.le (Set.mem_Ici.mp hx))
+  have hM_near : IntegrableOn M (Set.Ico 0 s) := hM_all.mono_set hsub_near
+  have hM_tail : IntegrableOn M (Set.Ici s) := hM_all.mono_set hsub_tail
+  have hdisj : Disjoint (Set.Ico (0 : ℝ) s) (Set.Ici s) :=
+    Set.disjoint_left.mpr (fun x hx hx2 =>
+      lt_irrefl x (lt_of_lt_of_le (Set.mem_Ico.mp hx).2 (Set.mem_Ici.mp hx2)))
+  have hunion : ∫ u in Set.Ici (0 : ℝ), M u
+        = (∫ u in Set.Ico 0 s, M u) + ∫ u in Set.Ici s, M u := by
+    rw [← MeasureTheory.setIntegral_union hdisj measurableSet_Ici hM_near hM_tail,
+        Set.Ico_union_Ici_eq_Ici hs_pos.le]
+  -- Pointwise bound on the near piece: `M u ≤ (K·2^{n+4}/t^{n+4})·(u+1/4)`.
+  have hbound_near : ∀ u ∈ Set.Ico (0 : ℝ) s,
+      M u ≤ (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4) := by
+    intro u hu
+    have hu0 : (0 : ℝ) ≤ u := (Set.mem_Ico.mp hu).1
+    have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+    have hrne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr
+    have hwpow : (0 : ℝ) < ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by positivity
+    have hden : (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+      linarith
+    have hnum_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := by positivity
+    have hfrac_le :
+        ((u + 1 / 4) ^ (n + 3))⁻¹ / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
+          ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ / ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+      gcongr
+      linarith
+    have hid :
+        ((u + 1 / 4) ^ (n + 3))⁻¹ / ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)
+          = 2 ^ (n + 4) * (u + 1 / 4) / t ^ (n + 4) := by
+      rw [show (1 / (2 * (u + 1 / 4))) * t = t / (2 * (u + 1 / 4)) from by ring,
+          div_pow, mul_pow, div_div_eq_mul_div]
+      field_simp
+      ring
+    rw [hM]
+    calc K * (((u + 1 / 4) ^ (n + 3))⁻¹
+              / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))
+        ≤ K * (((u + 1 / 4) ^ (n + 3))⁻¹
+              / ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)) :=
+          mul_le_mul_of_nonneg_left hfrac_le hK
+      _ = K * (2 ^ (n + 4) * (u + 1 / 4) / t ^ (n + 4)) := by rw [hid]
+      _ = (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4) := by ring
+  -- Pointwise bound on the tail piece: `M u ≤ K·((u+1/4)^{n+3})⁻¹`.
+  have hbound_tail : ∀ u ∈ Set.Ici s,
+      M u ≤ K * ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+    intro u hu
+    have hus : s ≤ u := Set.mem_Ici.mp hu
+    have hr : (0 : ℝ) < u + 1 / 4 := by linarith [hs_pos]
+    have hwpow_nn : (0 : ℝ) ≤ ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+      positivity
+    have hden_ge1 : (1 : ℝ) ≤ 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
+      linarith
+    have hnum_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := by positivity
+    rw [hM]
+    have hfrac : ((u + 1 / 4) ^ (n + 3))⁻¹
+                  / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
+                ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := div_le_self hnum_nn hden_ge1
+    exact mul_le_mul_of_nonneg_left hfrac hK
+  -- Near integral bound.
+  have hAnn : (0 : ℝ) ≤ K * 2 ^ (n + 4) / t ^ (n + 4) := by positivity
+  have hlin_cont : Continuous
+      (fun u : ℝ => (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4)) :=
+    continuous_const.mul (continuous_id.add continuous_const)
+  have hlin_int : IntegrableOn
+      (fun u : ℝ => (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4))
+      (Set.Ico 0 s) :=
+    (hlin_cont.integrableOn_Icc (a := 0) (b := s)).mono_set Set.Ico_subset_Icc_self
+  have hconst_int : IntegrableOn
+      (fun _ : ℝ => (K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4))
+      (Set.Ico 0 s) :=
+    (continuous_const.integrableOn_Icc (a := 0) (b := s)).mono_set
+      Set.Ico_subset_Icc_self
+  have hnear1 : ∫ u in Set.Ico 0 s, M u
+        ≤ ∫ u in Set.Ico 0 s, (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4) :=
+    setIntegral_mono_on hM_near hlin_int measurableSet_Ico hbound_near
+  have hnear2 : ∫ u in Set.Ico 0 s,
+          (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4)
+        ≤ ∫ u in Set.Ico 0 s,
+          (K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4) := by
+    refine setIntegral_mono_on hlin_int hconst_int measurableSet_Ico ?_
+    intro u hu
+    have : u ≤ s := (Set.mem_Ico.mp hu).2.le
+    exact mul_le_mul_of_nonneg_left (by linarith) hAnn
+  have hvol : (volume.real (Set.Ico (0 : ℝ) s)) = s := by
+    rw [measureReal_def, Real.volume_Ico, sub_zero,
+        ENNReal.toReal_ofReal hs_pos.le]
+  have hnear3 : ∫ u in Set.Ico 0 s,
+          (K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4)
+        = s * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4)) := by
+    rw [setIntegral_const, hvol, smul_eq_mul]
+  have hnear_val :
+      s * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4))
+        ≤ K * 2 ^ (n + 2) * (t ^ (n + 2))⁻¹ := by
+    have hstep : s * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4))
+          ≤ (t / 2) * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (t / 2)) := by
+      rw [hsq]
+      have hcoef_nn : (0 : ℝ) ≤ (K * 2 ^ (n + 4) / t ^ (n + 4)) * (t / 2) := by
+        positivity
+      have hs_le : s ≤ t / 2 := by rw [hs_def]; linarith
+      exact mul_le_mul_of_nonneg_right hs_le hcoef_nn
+    refine hstep.trans (le_of_eq ?_)
+    field_simp
+    ring
+  have hnear : ∫ u in Set.Ico 0 s, M u ≤ K * 2 ^ (n + 2) * (t ^ (n + 2))⁻¹ :=
+    le_trans hnear1 (le_trans hnear2 (le_trans (le_of_eq hnear3) hnear_val))
+  -- Tail integral bound.
+  have hg_tail_int : IntegrableOn
+      (fun u : ℝ => K * ((u + 1 / 4) ^ (n + 3))⁻¹) (Set.Ici s) := by
+    have hioi : IntegrableOn
+        (fun u : ℝ => ((u + 1 / 4) ^ (n + 3))⁻¹) (Set.Ioi s) := by
+      refine (integrableOn_add_rpow_Ioi_of_lt (a := -((n + 3 : ℕ) : ℝ))
+        (m := 1 / 4) (c := s) (by push_cast; linarith) (by linarith)).congr_fun
+        ?_ measurableSet_Ioi
+      intro x hx
+      have hxq : (0 : ℝ) < x + 1 / 4 := by linarith [Set.mem_Ioi.mp hx]
+      change (x + 1 / 4) ^ (-((n + 3 : ℕ) : ℝ)) = ((x + 1 / 4) ^ (n + 3))⁻¹
+      rw [Real.rpow_neg hxq.le, Real.rpow_natCast]
+    exact (hioi.congr_set_ae Ioi_ae_eq_Ici.symm).const_mul K
+  have htail1 : ∫ u in Set.Ici s, M u
+        ≤ ∫ u in Set.Ici s, K * ((u + 1 / 4) ^ (n + 3))⁻¹ :=
+    setIntegral_mono_on hM_tail hg_tail_int measurableSet_Ici hbound_tail
+  have htail2 : ∫ u in Set.Ici s, K * ((u + 1 / 4) ^ (n + 3))⁻¹
+        = K * ((s + 1 / 4) ^ (-((n : ℝ) + 2)) / ((n : ℝ) + 2)) := by
+    rw [integral_const_mul, integral_Ici_eq_integral_Ioi,
+        integral_Ioi_add_quarter_pow_inv n hs_quarter]
+  have he1 : (s + 1 / 4) ^ (-((n : ℝ) + 2)) = 2 ^ (n + 2) * (t ^ (n + 2))⁻¹ := by
+    have hhalf_pos : (0 : ℝ) < t / 2 := by linarith
+    rw [hsq, show (-((n : ℝ) + 2)) = -(((n + 2 : ℕ) : ℝ)) from by push_cast; ring,
+        Real.rpow_neg hhalf_pos.le, Real.rpow_natCast, div_pow, inv_div]
+    ring
+  have htail : ∫ u in Set.Ici s, M u
+        ≤ K * 2 ^ (n + 2) / ((n : ℝ) + 2) * (t ^ (n + 2))⁻¹ := by
+    refine le_trans htail1 (le_of_eq ?_)
+    rw [htail2, he1]; ring
+  -- Combine the two pieces.
+  have hsum_le : ∫ u in Set.Ici (0 : ℝ), M u
+        ≤ (K * 2 ^ (n + 2) + K * 2 ^ (n + 2) / ((n : ℝ) + 2)) * (t ^ (n + 2))⁻¹ := by
+    rw [hunion]
+    have := add_le_add hnear htail
+    refine this.trans (le_of_eq ?_)
+    ring
+  have hM_nn_int : (0 : ℝ) ≤ ∫ u in Set.Ici (0 : ℝ), M u := by
+    refine setIntegral_nonneg measurableSet_Ici (fun u hu => ?_)
+    have hu0 : (0 : ℝ) ≤ u := hu
+    have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+    have : (0 : ℝ) ≤ ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by positivity
+    simp only [hM]
+    positivity
+  have hrpow : t ^ (-(n : ℝ) - 2) = (t ^ (n + 2))⁻¹ := by
+    rw [show (-(n : ℝ) - 2) = -(((n + 2 : ℕ) : ℝ)) from by push_cast; ring,
+        Real.rpow_neg ht_pos.le, Real.rpow_natCast]
+  rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_of_nonneg hM_nn_int, hrpow,
+      abs_of_nonneg (by positivity)]
+  exact hsum_le
 
 /-- **σ-weighted integral asymptotic (lorMix form).**
 
