@@ -37,25 +37,40 @@
   proof.  Every axiom is tagged `-- ASSUMPTION` and carries a docstring.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
-  `jK_isO` (§6) is fully discharged from `jK_eq_sigma_integral` (proved)
-  and `sigma_mixedDerivExpr_isO`.  The latter reduces to the single
-  σ-weighted integral asymptotic `sigma_lorMix_integral_isO`, which in
-  turn has been decomposed into three sub-lemmas:
+  None.  `Theorem1.lean` builds with zero `sorry`.  `jK_isO` (§6) is
+  fully discharged from `jK_eq_sigma_integral` (proved) and
+  `sigma_mixedDerivExpr_isO`, which reduces to the σ-weighted integral
+  asymptotic `sigma_lorMix_integral_isO`; the latter and its supporting
+  lemmas are now all proved (see "Closed" below).
 
+  ─── Closed under Strategy B ───────────────────────────────────────────
   • `lorMix_bounded_on_nonneg`      (§6) — `∃ M, ∀ y ≥ 0, |lorMix n y| ≤ M`.
-                                          Continuity (proved as
-                                          `lorMix_continuous`) on a compact
-                                          prefix + `lorMix_isO` on the tail.
+                                          Continuity (`lorMix_continuous`)
+                                          on a compact prefix + `lorMix_isO`
+                                          on the tail.
   • `lorMix_unified_decay_on_nonneg`(§6) — `∃ K, ∀ y ≥ 0,
                                           |lorMix n y| ≤ K · (1 + y^(n+4))⁻¹`.
                                           Combines `lorMix_bounded_on_nonneg`
                                           (near 0) with `lorMix_isO` (large `y`).
-  • `sigma_lorMix_integral_isO`     (§6) — main result.  Dominate the integrand
-                                          via `lorMix_unified_decay_on_nonneg`
-                                          and `|σ u| ≤ 1/8`; integrate the
-                                          dominant by splitting at `v = t/2`.
-
-  ─── Closed under Strategy B ───────────────────────────────────────────
+  • `sigma_lorMix_integral_isO`     (§6) — σ-weighted integral asymptotic.
+                                          Dominate the integrand via
+                                          `lorMix_unified_decay_on_nonneg`
+                                          and `|σ u| ≤ 1/8`
+                                          (`integrable_lorMix_majorant`
+                                          supplies the dominator's
+                                          integrability), then reduce to
+                                          `sigma_lorMix_majorant_integral_isO`
+                                          by `norm_integral_le` +
+                                          `setIntegral_mono`.
+  • `sigma_lorMix_majorant_integral_isO`  — the analytic core.  Split
+                                   (§6)     `Ici 0` at `s = t/2 − 1/4`;
+                                            the near piece is bounded by a
+                                            finite-interval integral and the
+                                            tail by
+                                            `integral_Ioi_add_quarter_pow_inv`
+                                            (FTC value of
+                                            `∫_{u>s} ((u+1/4)^{n+3})⁻¹`).
+                                            Both pieces are `O(t^{-(n+2)})`.
   • `contDiffAt_j`                 (§2.5) — was an axiom; now a theorem derived
                                             from `contDiffOn_jK` (a joint
                                             induction in §2.5 that proves the
