@@ -2862,6 +2862,51 @@ private lemma integrable_sigma_lorMix_integrand (n : ℕ) {t : ℝ} (ht : 0 ≤ 
       ≤ (1 / 8) * (((u + 1 / 4) ^ (n + 3))⁻¹ * M) := by gcongr
     _ = M / 8 * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
 
+/-- **Tail integral of the shifted reciprocal power.**
+
+For `s > -1/4`,
+    `∫_{u ≥ s} ((u+1/4)^{n+3})⁻¹ du = (s+1/4)^{-(n+2)} / (n+2)`.
+
+Proved by the fundamental theorem of calculus on `(s, ∞)` with the explicit
+antiderivative `(u+1/4)^{a+1}/(a+1)` (`a = -(n+3)`), which tends to `0` at
+`+∞`; the integrand equals `(u+1/4)^a` since `u+1/4 > 0`. -/
+private lemma integral_Ioi_add_quarter_pow_inv (n : ℕ) {s : ℝ}
+    (hs : -(1 / 4 : ℝ) < s) :
+    ∫ u in Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹
+      = (s + 1 / 4) ^ (-((n : ℝ) + 2)) / ((n : ℝ) + 2) := by
+  set a : ℝ := -((n + 3 : ℕ) : ℝ) with ha_def
+  have hn_nn : (0 : ℝ) ≤ (n : ℝ) := Nat.cast_nonneg n
+  have ha : a < -1 := by rw [ha_def]; push_cast; linarith
+  have ha1_neg : a + 1 < 0 := by rw [ha_def]; push_cast; linarith
+  have ha1_ne : a + 1 ≠ 0 := ne_of_lt ha1_neg
+  -- The integrand equals `(u+1/4)^a` on `Ioi s`.
+  have hcongr : ∀ u ∈ Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹ = (u + 1 / 4) ^ a := by
+    intro u hu
+    have huq : (0 : ℝ) < u + 1 / 4 := by linarith [Set.mem_Ioi.mp hu]
+    rw [ha_def, Real.rpow_neg huq.le, Real.rpow_natCast]
+  rw [setIntegral_congr_fun measurableSet_Ioi hcongr]
+  -- Antiderivative and its derivative.
+  have hd : ∀ x ∈ Set.Ici s,
+      HasDerivAt (fun t : ℝ => (t + 1 / 4) ^ (a + 1) / (a + 1)) ((x + 1 / 4) ^ a) x := by
+    intro x hx
+    have hxq : (0 : ℝ) < x + 1 / 4 := by linarith [Set.mem_Ici.mp hx]
+    convert (((hasDerivAt_id _).add_const (1 / 4 : ℝ)).rpow_const _).div_const (a + 1)
+      using 1
+    · simp [ha1_ne]
+    · left; exact ne_of_gt hxq
+  -- Antiderivative tends to `0` at `+∞`.
+  have ht : Filter.Tendsto (fun t : ℝ => ((t + 1 / 4) ^ (a + 1)) / (a + 1))
+      Filter.atTop (nhds (0 / (a + 1))) := by
+    rw [← neg_neg (a + 1)]
+    exact (tendsto_rpow_neg_atTop (by linarith)).comp
+      (tendsto_atTop_add_const_right _ (1 / 4 : ℝ) tendsto_id) |>.div_const _
+  have hintegrable : IntegrableOn (fun x : ℝ => (x + 1 / 4) ^ a) (Set.Ioi s) :=
+    integrableOn_add_rpow_Ioi_of_lt ha (by linarith)
+  rw [integral_Ioi_of_hasDerivAt_of_tendsto' hd hintegrable ht]
+  -- `0/(a+1) - (s+1/4)^(a+1)/(a+1) = (s+1/4)^(-(n+2))/(n+2)`.
+  have ha1 : a + 1 = -((n : ℝ) + 2) := by rw [ha_def]; push_cast; ring
+  rw [ha1, zero_div, zero_sub, div_neg, neg_neg]
+
 /-- **Asymptotic of the majorant integral.**
 
 The σ-free, lorMix-free dominator,
