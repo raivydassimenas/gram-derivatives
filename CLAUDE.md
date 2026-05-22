@@ -30,7 +30,7 @@ Note: the root `GramDerivatives.lean` does **not** re-export the proof modules �
 
 ### Proof strategy
 
-Deep analytic number theory unavailable in Mathlib (Riemann zeta, Riemann–Siegel theta, Karatsuba–Korolev formula, Kuipers–Niederreiter UD criteria) is introduced as `axiom` declarations, each marked `-- ASSUMPTION` in `Theorem1.lean`. This lets the *logical structure* of each proof compile while isolating the gaps. Lemmas that are provable in principle but require significant Mathlib bookkeeping use `sorry`; in `Theorem1.lean` the open gaps are tracked in a "ledger" comment in §0.5 (`iteratedDeriv_α_part_isO`, `iteratedDeriv_j_isO`, `iteratedDeriv_tj_isO`, `δ_eq`).
+Deep analytic number theory unavailable in Mathlib (Riemann zeta, Riemann–Siegel theta, Karatsuba–Korolev formula, Kuipers–Niederreiter UD criteria) is introduced as `axiom` declarations, each marked `-- ASSUMPTION` in `Theorem1.lean`. This lets the *logical structure* of each proof compile while isolating the gaps. `Theorem1.lean` itself builds with **zero `sorry`** — every lemma that is provable in principle (including `iteratedDeriv_α_part_isO`, `iteratedDeriv_j_isO`, `iteratedDeriv_tj_isO`, and `δ_eq`) is fully discharged; only the `-- ASSUMPTION` axioms remain.
 
 - **`GramDerOverview.lean`** — states all five results (`Theorem1`, `Corollary2`, `Theorem3`, `Theorem4`, `Corollary5`) inside `namespace GramPaper`; serves as the spec. UD/CUD are stubbed via lightweight `Prop` wrappers (`UDMod1`, `CUDMod1`) and the analytic input is bundled into one axiom `gramPow_good_for_UD`.
 - **`Theorem1.lean`** — implements the paper's decomposition for Theorem 1: splits `S(t)` into a smooth main term `φ(t)` and an error term `δ(t)`, then bounds the n-th derivative of each. The fully completed proof here is `iteratedDeriv_log` (iterated derivatives of `log` by induction); `iteratedDeriv_φ` builds on it. The final theorem is `theorem1` (§8).
@@ -68,7 +68,7 @@ is `C^∞` on `(0, ∞)`. Its n-th iterated derivative equals `(−1)^(n−1) ·
 ```
 δ(t) = t/4 · log(1 + 1/(4t²)) + 1/4 · arctan(1/(2t)) − t/2 · j(t)
 ```
-(where `j(t) = ∫₀^∞ ρ(u)/((u+1/4)²+(t/2)²) du` and `ρ(u) = 1/2 − {u}`) is `ContDiff ℝ ⊤` on `(0, ∞)`. Its n-th derivative satisfies `δ^(n)(t) = O(t^(−n−1))` for all `n ≥ 1`. Axiom name: `contDiffAt_δ`; the open gap `iteratedDeriv_δ_isO` may be filled using `iteratedDeriv_α_part_isO` + `iteratedDeriv_tj_isO`.
+(where `j(t) = ∫₀^∞ ρ(u)/((u+1/4)²+(t/2)²) du` and `ρ(u) = 1/2 − {u}`) is `ContDiff ℝ ⊤` on `(0, ∞)`. Its n-th derivative satisfies `δ^(n)(t) = O(t^(−n−1))` for all `n ≥ 1`. Axiom name: `contDiffAt_δ`; the bound `iteratedDeriv_δ_isO` is proved via `iteratedDeriv_α_part_isO` + `iteratedDeriv_tj_isO`.
 
 **Analytic properties of `N_step`** — `N_step : ℝ → ℝ` may be any piecewise-constant (locally constant) function on `(0, ∞)`; it need not be the ζ-zero-counting step function. Being locally constant, its n-th iterated derivative (`n ≥ 1`) vanishes. Axiom name: `N_step_iteratedDeriv_eq_zero` (already in `Theorem1.lean`).
 
