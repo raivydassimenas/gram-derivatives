@@ -574,37 +574,33 @@ private lemma aeStronglyMeasurable_jIntegrand (k : ℕ) (t : ℝ) :
   exact (hρ.aestronglyMeasurable.mono_measure
     (Measure.restrict_le_self)).mul hker
 
-/-- Integrability of `jIntegrand k t` on `Ici 0`. -/
-private lemma integrable_jIntegrand (k : ℕ) (t : ℝ) :
-    IntegrableOn (jIntegrand k t) (Set.Ici (0 : ℝ)) := by
-  -- Bound the integrand pointwise by `(C/2) · ((u+1/4)^(k+2))⁻¹`,
-  -- which is integrable on `Ici 0`.
-  obtain ⟨C, hC_nn, hC⟩ := exists_bound_iteratedDeriv_kernel k |t|
-  refine integrableOn_Ici_of_pow_inv_dominated k (C / 2)
-    (aeStronglyMeasurable_jIntegrand k t) ?_
-  -- Pointwise bound on `Ici 0`.
-  intro u hu
-  have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu
-  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
-  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (k + 2) := pow_pos hr_pos _
-  have h_inv_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (k + 2))⁻¹ :=
-    le_of_lt (inv_pos.mpr h_pow_pos)
-  have h_ker : |iteratedDeriv k (fun s => kernel u s) t|
-                ≤ C * ((u + 1 / 4) ^ (k + 2))⁻¹ :=
-    hC u hu_nn t (le_refl _)
-  have h_rho : |ρ u| ≤ 1 / 2 := by
-    unfold ρ
-    rw [abs_sub_comm, abs_le]
-    have h_fract_lt : Int.fract u < 1 := Int.fract_lt_one u
-    have h_fract_nn : 0 ≤ Int.fract u := Int.fract_nonneg u
-    constructor <;> linarith
+/-- Pointwise dominator bound on the integrand:  `‖jIntegrand K x u‖ ≤ (C/2)·(u+1/4)^{-(K+2)}`
+    whenever `|iteratedDeriv K (kernel u ·) x| ≤ C·(u+1/4)^{-(K+2)}`.
+
+    Combines the kernel bound with `abs_ρ_le_half` (the `1/2` factor in the
+    final dominator comes from `|ρ u| ≤ 1/2`). -/
+private lemma norm_jIntegrand_le {K : ℕ} {C u x : ℝ}
+    (h_ker : |iteratedDeriv K (fun s => kernel u s) x|
+              ≤ C * ((u + 1 / 4) ^ (K + 2))⁻¹) :
+    ‖jIntegrand K x u‖ ≤ C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹ := by
   rw [Real.norm_eq_abs]
   unfold jIntegrand
   rw [abs_mul]
-  calc |ρ u| * |iteratedDeriv k (fun s => kernel u s) t|
-      ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (k + 2))⁻¹) := by
-        gcongr
-    _ = C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹ := by ring
+  calc |ρ u| * |iteratedDeriv K (fun s => kernel u s) x|
+      ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (K + 2))⁻¹) := by
+        gcongr; exact abs_ρ_le_half u
+    _ = C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹ := by ring
+
+/-- Integrability of `jIntegrand k t` on `Ici 0`. -/
+private lemma integrable_jIntegrand (k : ℕ) (t : ℝ) :
+    IntegrableOn (jIntegrand k t) (Set.Ici (0 : ℝ)) := by
+  -- Bound the integrand pointwise via `norm_jIntegrand_le`, then dominate by
+  -- the integrable `(C/2) · ((u+1/4)^(k+2))⁻¹`.
+  obtain ⟨C, _, hC⟩ := exists_bound_iteratedDeriv_kernel k |t|
+  refine integrableOn_Ici_of_pow_inv_dominated k (C / 2)
+    (aeStronglyMeasurable_jIntegrand k t) ?_
+  intro u hu
+  exact norm_jIntegrand_le (hC u (Set.mem_Ici.mp hu) t (le_refl _))
 
 /-- Family of kernel-integrals:  `jK k` equals `j` at `k = 0` and gives the
     formal `k`-th derivative of `j` for higher `k` (after the differentiation
@@ -633,22 +629,22 @@ private lemma abs_le_of_mem_ball_half_pos {t : ℝ} (ht : 0 < t) :
   have h_x_pos : 0 < x := by linarith
   rw [abs_of_pos h_x_pos]; linarith
 
-/-- Pointwise dominator bound on the integrand:  `‖jIntegrand K x u‖ ≤ (C/2)·(u+1/4)^{-(K+2)}`
-    whenever `|iteratedDeriv K (kernel u ·) x| ≤ C·(u+1/4)^{-(K+2)}`.
-
-    Combines the kernel bound with `abs_ρ_le_half` (the `1/2` factor in the
-    final dominator comes from `|ρ u| ≤ 1/2`). -/
-private lemma norm_jIntegrand_le {K : ℕ} {C u x : ℝ}
-    (h_ker : |iteratedDeriv K (fun s => kernel u s) x|
-              ≤ C * ((u + 1 / 4) ^ (K + 2))⁻¹) :
-    ‖jIntegrand K x u‖ ≤ C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹ := by
-  rw [Real.norm_eq_abs]
-  unfold jIntegrand
-  rw [abs_mul]
-  calc |ρ u| * |iteratedDeriv K (fun s => kernel u s) x|
-      ≤ (1 / 2) * (C * ((u + 1 / 4) ^ (K + 2))⁻¹) := by
-        gcongr; exact abs_ρ_le_half u
-    _ = C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹ := by ring
+/-- Shared neighbourhood + dominator data for the `jK` differentiation and
+    continuity lemmas.  For `t > 0` and kernel-order `K`, produces a constant
+    `C` for which `ball t (t/2)` is a neighbourhood of `t` and every `K`-th
+    kernel derivative is dominated — pointwise in `u ≥ 0`, uniformly in
+    `x ∈ ball t (t/2)` — by the integrable majorant `(C/2)·((u+1/4)^(K+2))⁻¹`. -/
+private lemma jK_loc_data (K : ℕ) {t : ℝ} (ht : 0 < t) :
+    ∃ C : ℝ, Metric.ball t (t / 2) ∈ nhds t ∧
+      (∀ u, 0 ≤ u → ∀ x ∈ Metric.ball t (t / 2),
+        ‖jIntegrand K x u‖ ≤ C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹) ∧
+      Integrable (fun u => C / 2 * ((u + 1 / 4) ^ (K + 2))⁻¹)
+        (volume.restrict (Set.Ici (0 : ℝ))) := by
+  obtain ⟨C, _, hC⟩ := exists_bound_iteratedDeriv_kernel K (3 * t / 2)
+  exact ⟨C, Metric.isOpen_ball.mem_nhds (Metric.mem_ball_self (half_pos ht)),
+    fun u hu_nn x hx =>
+      norm_jIntegrand_le (hC u hu_nn x (abs_le_of_mem_ball_half_pos ht x hx)),
+    (integrableOn_pow_inv_shift K).const_mul (C / 2)⟩
 
 /-- One-step differentiation under the integral:
     `(d/dt) jK k t = jK (k+1) t`.
@@ -658,30 +654,22 @@ private lemma norm_jIntegrand_le {K : ℕ} {C u x : ℝ}
     `(C/2)·(u+1/4)^{-((k+1)+2)}` uniformly on the ball `ball t (t/2) ⊂ (0, ∞)`. -/
 private lemma hasDerivAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
     HasDerivAt (jK k) (jK (k+1) t) t := by
-  set nbhd : Set ℝ := Metric.ball t (t / 2)
-  have h_nbhd_mem : nbhd ∈ nhds t :=
-    Metric.isOpen_ball.mem_nhds (Metric.mem_ball_self (half_pos ht))
-  have h_nbhd_bound : ∀ x ∈ nbhd, |x| ≤ 3 * t / 2 :=
-    abs_le_of_mem_ball_half_pos ht
-  obtain ⟨C, _, hC⟩ := exists_bound_iteratedDeriv_kernel (k + 1) (3 * t / 2)
-  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ ((k + 1) + 2))⁻¹
-  have h_bound_int : Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) :=
-    (integrableOn_pow_inv_shift (k + 1)).const_mul (C / 2)
-  -- Apply differentiation-under-the-integral with uniform-`x` dominator on `nbhd`.
+  obtain ⟨C, h_nbhd_mem, h_dom, h_bound_int⟩ := jK_loc_data (k + 1) ht
+  -- Apply differentiation-under-the-integral with uniform-`x` dominator on `ball t (t/2)`.
   have h_app := hasDerivAt_integral_of_dominated_loc_of_deriv_le
     (μ := volume.restrict (Set.Ici (0 : ℝ)))
     (F := fun x : ℝ => jIntegrand k x) (F' := fun x : ℝ => jIntegrand (k + 1) x)
-    (x₀ := t) (s := nbhd) (bound := bound)
+    (x₀ := t) (s := Metric.ball t (t / 2))
+    (bound := fun u => C / 2 * ((u + 1 / 4) ^ ((k + 1) + 2))⁻¹)
     h_nbhd_mem
     (Filter.Eventually.of_forall (fun x => aeStronglyMeasurable_jIntegrand k x))
     (integrable_jIntegrand k t)
     (aeStronglyMeasurable_jIntegrand (k + 1) t)
-    -- h_bound: pointwise dominator on F' for x in nbhd.
+    -- h_bound: pointwise dominator on F' for x in the ball.
     (by
       refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
       intro u hu_mem x hx
-      have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
-      exact norm_jIntegrand_le (hC u hu_nn x (h_nbhd_bound x hx)))
+      exact h_dom u (Set.mem_Ici.mp hu_mem) x hx)
     h_bound_int
     -- h_diff: pointwise HasDerivAt of the integrand in `x` for ae `u`.
     (by
@@ -705,25 +693,16 @@ private lemma hasDerivAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
     `contDiff_kernel`. -/
 private lemma continuousAt_jK (k : ℕ) {t : ℝ} (ht : 0 < t) :
     ContinuousAt (jK k) t := by
-  set nbhd : Set ℝ := Metric.ball t (t / 2)
-  have h_nbhd_mem : nbhd ∈ nhds t :=
-    Metric.isOpen_ball.mem_nhds (Metric.mem_ball_self (half_pos ht))
-  have h_nbhd_bound : ∀ x ∈ nbhd, |x| ≤ 3 * t / 2 :=
-    abs_le_of_mem_ball_half_pos ht
-  obtain ⟨C, _, hC⟩ := exists_bound_iteratedDeriv_kernel k (3 * t / 2)
-  set bound : ℝ → ℝ := fun u => C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹
-  have h_bound_int : Integrable bound (volume.restrict (Set.Ici (0 : ℝ))) :=
-    (integrableOn_pow_inv_shift k).const_mul (C / 2)
+  obtain ⟨C, h_nbhd_mem, h_dom, h_bound_int⟩ := jK_loc_data k ht
   have h_app := continuousAt_of_dominated
     (μ := volume.restrict (Set.Ici (0 : ℝ)))
     (F := fun x : ℝ => jIntegrand k x)
-    (x₀ := t) (bound := bound)
+    (x₀ := t) (bound := fun u => C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹)
     (Filter.Eventually.of_forall (fun x => aeStronglyMeasurable_jIntegrand k x))
     (Filter.eventually_of_mem h_nbhd_mem (fun x hx => by
       refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
       intro u hu_mem
-      have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu_mem
-      exact norm_jIntegrand_le (hC u hu_nn x (h_nbhd_bound x hx))))
+      exact h_dom u (Set.mem_Ici.mp hu_mem) x hx))
     h_bound_int
     (by
       refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
@@ -1164,7 +1143,11 @@ private lemma abs_log_one_add_sub_self_le {u : ℝ} (hu : 0 ≤ u) (hu_lt : u < 
 
 /-- Laurent expansion of α_part: it equals 3/(16t) + O(t^(-3)).
     This is derived by Taylor-expanding log(1+x) and arctan(x) at x=0
-    with x = 1/(4t²) and x = 1/(2t) respectively. -/
+    with x = 1/(4t²) and x = 1/(2t) respectively.
+
+    Standalone witness for equation (11) of the paper; **not used** by
+    Theorem 1's proof, which bounds the error term via `iteratedDeriv_α_part_isO`
+    instead. -/
 lemma α_part_expansion (t : ℝ) (_ : 0 < t) :
     ∃ (r : ℝ → ℝ),
       IsO r (fun t => t ^ (-(3 : ℝ))) 𝓝∞ ∧
@@ -1174,7 +1157,7 @@ lemma α_part_expansion (t : ℝ) (_ : 0 < t) :
   refine ⟨fun s => α_part s - 3 / (16 * s), ?_, by ring⟩
   -- Show the witness is `O[atTop]` of `s ↦ s^(-3 : ℝ)`.
   -- We supply explicit constant `1` and verify the bound for all `s ≥ 1`.
-  refine Asymptotics.IsBigO.of_bound 1 ?_
+  refine IsBigO.of_bound 1 ?_
   filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with s hs
   have hs_pos : (0 : ℝ) < s := lt_of_lt_of_le zero_lt_one hs
   have hs_ne : s ≠ 0 := ne_of_gt hs_pos
@@ -1287,6 +1270,13 @@ lemma α_part_expansion (t : ℝ) (_ : 0 < t) :
 private noncomputable def α_part_deriv2 (t : ℝ) : ℝ :=
   -1 / (2 * t * (4 * t ^ 2 + 1)) + 8 * t / (4 * t ^ 2 + 1) ^ 2
 
+/-- `s ↦ 4·s²` has derivative `8·t` at `t`.  Recurring building block of the
+    `α_part` derivative computations. -/
+private lemma hasDerivAt_four_sq (t : ℝ) :
+    HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
+  convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
+  push_cast; ring
+
 /-- Derivative of the inner log of `α_part`:
     `(d/dt) log(1 + 1/(4 t²)) = -2 / (t · (4 t² + 1))` for `t > 0`.
 
@@ -1299,9 +1289,7 @@ private lemma hasDerivAt_log_one_plus_inv_4sq {t : ℝ} (ht : 0 < t) :
   have h4t2_ne : (4 * t ^ 2 : ℝ) ≠ 0 := by positivity
   have h_inner_ne : (1 + 1 / (4 * t ^ 2) : ℝ) ≠ 0 :=
     ne_of_gt (by positivity)
-  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
-    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
-    push_cast; ring
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := hasDerivAt_four_sq t
   have h_inv_4t2 :
       HasDerivAt (fun s : ℝ => 1 / (4 * s ^ 2)) (-1 / (2 * t ^ 3)) t := by
     convert (hasDerivAt_const t (1 : ℝ)).div h_4t2 h4t2_ne using 1
@@ -1383,9 +1371,7 @@ private lemma hasDerivAt_α_part_form {t : ℝ} (ht : 0 < t) :
     convert h_log.const_mul (1 / 4 : ℝ) using 1
     field_simp; ring
   -- Second piece: 1 / (4 s² + 1).
-  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
-    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
-    push_cast; ring
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := hasDerivAt_four_sq t
   have h_4t2_p1 : HasDerivAt (fun s : ℝ => 4 * s ^ 2 + 1) (8 * t) t := by
     convert h_4t2.add_const (1 : ℝ) using 1
   have h_inv_4t2_p1 :
@@ -1466,9 +1452,7 @@ private lemma RatTerm.hasDerivAt_eval (p : RatTerm) {t : ℝ} (ht : 0 < t) :
   -- Build numerator and denominator differentiabilities.
   have h_num : HasDerivAt (fun s : ℝ => c * s ^ a) (c * ((a : ℝ) * t ^ (a - 1))) t :=
     (hasDerivAt_zpow a t (Or.inl ht_ne)).const_mul c
-  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := by
-    convert (hasDerivAt_pow 2 t).const_mul (4 : ℝ) using 1
-    push_cast; ring
+  have h_4t2 : HasDerivAt (fun s : ℝ => 4 * s ^ 2) (8 * t) t := hasDerivAt_four_sq t
   have h_qb :
       HasDerivAt (fun s : ℝ => (4 * s ^ 2 + 1) ^ b)
         ((b : ℝ) * (4 * t ^ 2 + 1) ^ (b - 1) * (8 * t)) t :=
@@ -1667,7 +1651,7 @@ lemma iteratedDeriv_α_part_deriv2_isO (k : ℕ) :
         𝓝∞ := by
   obtain ⟨C, _, hC⟩ :=
     RatExpr.exists_bound_of_Bounded (RatExpr.bounded_l₀.iterate_formalDeriv k)
-  refine Asymptotics.IsBigO.of_bound C ?_
+  refine IsBigO.of_bound C ?_
   filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht
   have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le zero_lt_one ht
   -- Step 1: rewrite `iteratedDeriv k α_part_deriv2 t` as `eval (formalDeriv^[k] l₀) t`.
@@ -1694,7 +1678,7 @@ lemma iteratedDeriv_α_part_isO (n : ℕ) (hn : 1 ≤ n) :
   · -- Case n = 1: bound `α_part'` directly using log(1+x) ≤ x and 1/(4t²+1) ≤ 1/(4t²).
     have hn_eq : n = 1 := by omega
     subst hn_eq
-    refine Asymptotics.IsBigO.of_bound (5 / 16) ?_
+    refine IsBigO.of_bound (5 / 16) ?_
     filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht
     have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le zero_lt_one ht
     have ht2_pos : (0 : ℝ) < t ^ 2 := by positivity
@@ -2634,7 +2618,7 @@ private lemma iteratedDeriv_lorSq_isO (n : ℕ) :
   -- Step 3: denominator-inverse bound `1/(1+s²)^(n+2) ≤ 1/s^(2(n+2))` for `s ≥ 1`.
   have h_inv : (fun s : ℝ => 1 / (1 + s ^ 2) ^ (n + 2))
       =O[atTop] (fun s : ℝ => 1 / s ^ (2 * (n + 2))) := by
-    refine .of_bound 1 ?_
+    refine IsBigO.of_bound 1 ?_
     filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with s hs
     have hs_pos : 0 < s := zero_lt_one.trans_le hs
     have h_s2_le : s ^ 2 ≤ 1 + s ^ 2 := by linarith [sq_nonneg s]
@@ -2654,7 +2638,7 @@ private lemma iteratedDeriv_lorSq_isO (n : ℕ) :
   rw [h_split]
   refine (h_num.mul h_inv).trans ?_
   -- Step 5: show `s^n * (1/s^(2(n+2))) =O[atTop] s^(-(n:ℝ) - 4)`.
-  refine .of_bound 1 ?_
+  refine IsBigO.of_bound 1 ?_
   filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with s hs
   have hs_ne : s ≠ 0 := ne_of_gt hs
   rw [Real.norm_eq_abs, Real.norm_eq_abs, one_mul]
@@ -3041,7 +3025,7 @@ private lemma sigma_lorMix_majorant_integral_isO (n : ℕ) (K : ℝ) (hK : 0 ≤
                     (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  refine Asymptotics.IsBigO.of_bound
+  refine IsBigO.of_bound
     (K * 2 ^ (n + 2) + K * 2 ^ (n + 2) / ((n : ℝ) + 2)) ?_
   filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht1
   have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le one_pos ht1
@@ -3238,7 +3222,7 @@ private lemma sigma_lorMix_integral_isO (n : ℕ) :
                 K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
                       (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
           𝓝∞ := by
-    refine Asymptotics.IsBigO.of_bound (1 / 8) ?_
+    refine IsBigO.of_bound (1 / 8) ?_
     filter_upwards [Filter.eventually_ge_atTop (0 : ℝ)] with t ht
     have hf_int : IntegrableOn
         (fun u : ℝ => σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
