@@ -114,6 +114,20 @@ open scoped ContDiff Function
 notation "𝓝∞" => Filter.atTop (α := ℝ)
 abbrev IsO (f g : ℝ → ℝ) (l : Filter ℝ) : Prop := Asymptotics.IsBigO l f g
 
+/-- Canonical `rpow`→reciprocal bridge:  `t ^ (-(m:ℕ):ℝ) = (t ^ m)⁻¹` for
+    `t > 0`.  Centralises the recurring `Real.rpow_neg` + `Real.rpow_natCast`
+    pairing; callers first normalise their exponent to `-(m:ℝ)`. -/
+private lemma rpow_neg_nat_eq_inv {t : ℝ} (ht : 0 < t) (m : ℕ) :
+    t ^ (-(m : ℝ)) = (t ^ m)⁻¹ := by
+  rw [Real.rpow_neg ht.le, Real.rpow_natCast]
+
+/-- Canonical `zpow`→reciprocal bridge:  `t ^ (-(m:ℕ):ℤ) = (t ^ m)⁻¹`.
+    Centralises the recurring `zpow_neg` + `zpow_natCast` pairing; callers
+    first normalise their integer exponent to `-(m:ℤ)`. -/
+private lemma zpow_neg_nat_eq_inv (t : ℝ) (m : ℕ) :
+    t ^ (-(m : ℤ)) = (t ^ m)⁻¹ := by
+  rw [zpow_neg, zpow_natCast]
+
 /-!
   ## §1  Definitions
 
@@ -482,9 +496,24 @@ private lemma integrableOn_pow_inv_shift (k : ℕ) :
     intro u hu
     have hu_pos : (0 : ℝ) < u + 1 / 4 := by linarith [Set.mem_Ioi.mp hu]
     change (u + 1 / 4) ^ (-((k + 2 : ℕ) : ℝ)) = ((u + 1 / 4) ^ (k + 2))⁻¹
-    rw [Real.rpow_neg hu_pos.le, Real.rpow_natCast]
+    exact rpow_neg_nat_eq_inv hu_pos (k + 2)
   -- Transfer from `Ioi 0` to `Ici 0` (they differ by the measure-zero `{0}`).
   exact h_ioi.congr_set_ae Ioi_ae_eq_Ici.symm
+
+/-- Integrability on `Ici 0` from a pointwise dominator `C·((u+1/4)^(k+2))⁻¹`.
+
+    Packages the recurring `Integrable.mono'` + `ae_restrict` scaffold shared by
+    the parametric-integral integrability lemmas (`integrable_jIntegrand`,
+    `integrable_sigma_mixedDerivExpr`, `integrable_sigma_lorMix_integrand`,
+    `integrable_lorMix_majorant`):  given AE-strong-measurability and a
+    pointwise bound by the integrable dominator `integrableOn_pow_inv_shift k`,
+    the function is integrable on `Ici 0`. -/
+private lemma integrableOn_Ici_of_pow_inv_dominated {f : ℝ → ℝ} (k : ℕ) (C : ℝ)
+    (h_meas : AEStronglyMeasurable f (volume.restrict (Set.Ici (0 : ℝ))))
+    (h_bd : ∀ u ∈ Set.Ici (0 : ℝ), ‖f u‖ ≤ C * ((u + 1 / 4) ^ (k + 2))⁻¹) :
+    IntegrableOn f (Set.Ici (0 : ℝ)) :=
+  Integrable.mono' ((integrableOn_pow_inv_shift k).const_mul C) h_meas
+    ((ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall h_bd))
 
 /-- The integrand for `j` and its formal `t`-derivatives:
     `jIntegrand k t u = ρ u · iteratedDeriv k (kernel u ·) t`.  At `k = 0`
@@ -551,12 +580,9 @@ private lemma integrable_jIntegrand (k : ℕ) (t : ℝ) :
   -- Bound the integrand pointwise by `(C/2) · ((u+1/4)^(k+2))⁻¹`,
   -- which is integrable on `Ici 0`.
   obtain ⟨C, hC_nn, hC⟩ := exists_bound_iteratedDeriv_kernel k |t|
-  refine Integrable.mono'
-    ((integrableOn_pow_inv_shift k).const_mul (C / 2))
+  refine integrableOn_Ici_of_pow_inv_dominated k (C / 2)
     (aeStronglyMeasurable_jIntegrand k t) ?_
   -- Pointwise bound on `Ici 0`.
-  refine (ae_restrict_iff' measurableSet_Ici).mpr ?_
-  refine Filter.Eventually.of_forall ?_
   intro u hu
   have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu
   have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
@@ -572,7 +598,6 @@ private lemma integrable_jIntegrand (k : ℕ) (t : ℝ) :
     have h_fract_lt : Int.fract u < 1 := Int.fract_lt_one u
     have h_fract_nn : 0 ≤ Int.fract u := Int.fract_nonneg u
     constructor <;> linarith
-  change ‖jIntegrand k t u‖ ≤ C / 2 * ((u + 1 / 4) ^ (k + 2))⁻¹
   rw [Real.norm_eq_abs]
   unfold jIntegrand
   rw [abs_mul]
@@ -1158,7 +1183,7 @@ lemma α_part_expansion (t : ℝ) (_ : 0 < t) :
   -- Convert `s ^ (-(3 : ℝ))` to `1 / s^3`.
   have hrpow : s ^ (-(3 : ℝ)) = 1 / s ^ 3 := by
     rw [show (-(3 : ℝ)) = -((3 : ℕ) : ℝ) by norm_num,
-        Real.rpow_neg hs_pos.le, Real.rpow_natCast, one_div]
+        rpow_neg_nat_eq_inv hs_pos 3, one_div]
   -- Algebraic decomposition into the two bounded pieces.
   have decomp : α_part s - 3 / (16 * s) =
       (s / 4 * Real.log (1 + 1 / (4 * s ^ 2)) - 1 / (16 * s)) +
@@ -1710,8 +1735,8 @@ lemma iteratedDeriv_α_part_isO (n : ℕ) (hn : 1 ≤ n) :
       linarith
     -- Convert `t^(-(↑1 : ℝ) - 1)` to `1/t²`.
     have h_pow_simp : t ^ (-((1 : ℕ) : ℝ) - 1) = 1 / t ^ 2 := by
-      have hexp : (-((1 : ℕ) : ℝ) - 1) = -((2 : ℕ) : ℝ) := by push_cast; ring
-      rw [hexp, Real.rpow_neg ht_pos.le, Real.rpow_natCast, one_div]
+      rw [show (-((1 : ℕ) : ℝ) - 1) = -((2 : ℕ) : ℝ) from by push_cast; ring,
+          rpow_neg_nat_eq_inv ht_pos 2, one_div]
     rw [Real.norm_eq_abs, Real.norm_eq_abs, h_pow_simp,
         abs_of_pos (by positivity : (0 : ℝ) < 1 / t ^ 2)]
     refine h_abs.trans (le_of_eq ?_)
@@ -2114,11 +2139,7 @@ private lemma integrable_sigma_mixedDerivExpr (n : ℕ) (t : ℝ) :
         (volume.restrict (Set.Ici (0 : ℝ))) :=
       (continuousOn_mixedDerivExpr n t).aestronglyMeasurable measurableSet_Ici
     exact h_σ.mul h_med
-  refine Integrable.mono'
-    ((integrableOn_pow_inv_shift (n + 1)).const_mul (C / 8))
-    h_meas ?_
-  refine (ae_restrict_iff' measurableSet_Ici).mpr ?_
-  refine Filter.Eventually.of_forall ?_
+  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) (C / 8) h_meas ?_
   intro u hu
   have hu_nn : 0 ≤ u := Set.mem_Ici.mp hu
   have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
@@ -2353,8 +2374,8 @@ private lemma mixedDerivExpr_eq_lorMix (n : ℕ) {u : ℝ} (hu : 0 ≤ u) (t : �
   -- Convert the negative-integer exponent into a reciprocal of a natural power.
   have h_zpow : (u + 1 / 4 : ℝ) ^ (-((n : ℤ) + 3))
       = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
-    have h_cast : (-((n : ℤ) + 3)) = -((n + 3 : ℕ) : ℤ) := by push_cast; ring
-    rw [h_cast, zpow_neg, zpow_natCast]
+    rw [show (-((n : ℤ) + 3)) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
+        zpow_neg_nat_eq_inv]
   rw [h_zpow]
   unfold mixedDerivExpr lorMix
   field_simp
@@ -2643,7 +2664,7 @@ private lemma iteratedDeriv_lorSq_isO (n : ℕ) :
         div_mul_eq_div_div, div_self (pow_ne_zero _ hs_ne)]
   have h_rhs : s ^ (-(n : ℝ) - 4) = 1 / s ^ (n + 4) := by
     rw [show (-(n : ℝ) - 4) = -((n + 4 : ℕ) : ℝ) from by push_cast; ring,
-        Real.rpow_neg hs.le, Real.rpow_natCast, one_div]
+        rpow_neg_nat_eq_inv hs (n + 4), one_div]
   rw [h_lhs, h_rhs]
 
 /-- Asymptotic cancellation:  `lorMix n s = O(s^{-(n+4)})` as `s → +∞`.
@@ -2794,7 +2815,7 @@ private lemma lorMix_unified_decay_on_nonneg (n : ℕ) :
       -- Convert the rpow to a `1/y^(n+4)` form.
       have h_rpow_eq : y ^ (-(n : ℝ) - 4) = 1 / y ^ (n + 4) := by
         rw [show (-(n : ℝ) - 4) = -((n + 4 : ℕ) : ℝ) from by push_cast; ring,
-            Real.rpow_neg h_y_pos.le, Real.rpow_natCast, one_div]
+            rpow_neg_nat_eq_inv h_y_pos (n + 4), one_div]
       have h_rpow_pos : 0 < y ^ (-(n : ℝ) - 4) := Real.rpow_pos_of_pos h_y_pos _
       have h_norm_rpow : ‖y ^ (-(n : ℝ) - 4)‖ = 1 / y ^ (n + 4) := by
         rw [Real.norm_eq_abs, abs_of_pos h_rpow_pos, h_rpow_eq]
@@ -2859,11 +2880,7 @@ private lemma integrable_sigma_lorMix_integrand (n : ℕ) {t : ℝ} (ht : 0 ≤ 
       (volume.restrict (Set.Ici (0 : ℝ))) :=
     h_cont.aestronglyMeasurable measurableSet_Ici
   -- Dominator: `(M / 8) · ((u + 1/4)^(n+3))⁻¹`.
-  refine Integrable.mono'
-    ((integrableOn_pow_inv_shift (n + 1)).const_mul (M / 8))
-    h_meas ?_
-  refine (ae_restrict_iff' measurableSet_Ici).mpr ?_
-  refine Filter.Eventually.of_forall ?_
+  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) (M / 8) h_meas ?_
   intro u hu
   have hu_nn : (0 : ℝ) ≤ u := Set.mem_Ici.mp hu
   have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
@@ -2878,7 +2895,7 @@ private lemma integrable_sigma_lorMix_integrand (n : ℕ) {t : ℝ} (ht : 0 ≤ 
   -- Show `|integrand| ≤ (M/8) · ((u+1/4)^(n+3))⁻¹`.
   have h_zpow_eq : (u + 1 / 4) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
     rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
-        zpow_neg, zpow_natCast]
+        zpow_neg_nat_eq_inv]
   change ‖σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
                   * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖
           ≤ M / 8 * ((u + 1 / 4) ^ ((n + 1) + 2))⁻¹
@@ -2934,10 +2951,8 @@ private lemma integrable_lorMix_majorant (n : ℕ) (K : ℝ) (hK : 0 ≤ K)
       continuousOn_const.add ((h_inv1.mul continuousOn_const).pow (n + 4))
     exact continuousOn_const.mul
       (h_pow_inv.div h_denom (fun u hu => ne_of_gt (h_denom_pos u hu)))
-  refine Integrable.mono'
-    ((integrableOn_pow_inv_shift (n + 1)).const_mul K)
+  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) K
     (h_cont.aestronglyMeasurable measurableSet_Ici) ?_
-  refine (ae_restrict_iff' measurableSet_Ici).mpr (Filter.Eventually.of_forall ?_)
   intro u hu
   have hr := hr_pos u hu
   have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr _
@@ -3192,8 +3207,8 @@ private lemma sigma_lorMix_majorant_integral_isO (n : ℕ) (K : ℝ) (hK : 0 ≤
     simp only [hM]
     positivity
   have hrpow : t ^ (-(n : ℝ) - 2) = (t ^ (n + 2))⁻¹ := by
-    rw [show (-(n : ℝ) - 2) = -(((n + 2 : ℕ) : ℝ)) from by push_cast; ring,
-        Real.rpow_neg ht_pos.le, Real.rpow_natCast]
+    rw [show (-(n : ℝ) - 2) = -((n + 2 : ℕ) : ℝ) from by push_cast; ring,
+        rpow_neg_nat_eq_inv ht_pos (n + 2)]
   rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_of_nonneg hM_nn_int, hrpow,
       abs_of_nonneg (by positivity)]
   exact hsum_le
@@ -3245,7 +3260,7 @@ private lemma sigma_lorMix_integral_isO (n : ℕ) :
       have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
       have h_zpow_eq : (u + 1 / 4) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
         rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
-            zpow_neg, zpow_natCast]
+            zpow_neg_nat_eq_inv]
       have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
         mul_nonneg (by positivity) ht
       have h_lor_le : |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|
