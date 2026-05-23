@@ -24,6 +24,7 @@ GramDerivatives/
   GramDerOverview.lean            # high-level statement of all 5 results (spec)
   Theorem1.lean                   # detailed proof of Theorem 1
   Corollary2.lean                 # detailed proof of Corollary 2 (θ^(n) asymptotic)
+  Theorem3.lean                   # planned — t_u^(n) asymptotic (depends on Corollary2)
   Corollary5.lean                 # Theorem 4 + Corollary 5 (uniform distribution)
 ```
 
@@ -36,6 +37,7 @@ Deep analytic number theory unavailable in Mathlib (Riemann zeta, Riemann–Sieg
 - **`GramDerOverview.lean`** — states all five results (`Theorem1`, `Corollary2`, `Theorem3`, `Theorem4`, `Corollary5`) inside `namespace GramPaper`; serves as the spec. UD/CUD are stubbed via lightweight `Prop` wrappers (`UDMod1`, `CUDMod1`) and the analytic input is bundled into one axiom `gramPow_good_for_UD`.
 - **`Theorem1.lean`** — implements the paper's decomposition for Theorem 1: splits `S(t)` into a smooth main term `φ(t)` and an error term `δ(t)`, then bounds the n-th derivative of each. The fully completed proof here is `iteratedDeriv_log` (iterated derivatives of `log` by induction); `iteratedDeriv_φ` builds on it. The final theorem is `theorem1` (§8).
 - **`Corollary2.lean`** — derives the asymptotic for the n-th derivative of the Riemann–Siegel theta function `θ` from `theorem1` in `Theorem1.lean`. Imports `GramDerivatives.Theorem1` and reuses the decomposition `S = φ − (1/π)·δ + N_step` together with the Riemann–von Mangoldt / Karatsuba–Korolev relation `N(t) = (1/π)·θ(t) + 1 + S(t)`. See "Working on `Corollary2.lean`" below.
+- **`Theorem3.lean`** — planned: derives the asymptotic for the n-th derivative of the Gram function `t_u` (the inverse of `θ` on `[θ(7), ∞)`) by induction, differentiating the implicit relation `θ(t_u) = (u−1)π` and substituting the `θ^(n)` asymptotics from `Corollary2.lean`. See "Working on `Theorem3.lean`" below.
 - **`Corollary5.lean`** — minimal-imports formalization (only `Mathlib.Data.Real.Basic`) inside `namespace Gram`. Uses opaque `Prop` wrappers `UDSeqModOne` / `UDContModOne`, takes Theorem 4 as an axiom, and derives `corollary5` via an abstract `continuous_ud_criterion` plus `UDSeqModOne_shift`. This is intentionally separate from the heavier `GramDerOverview.lean` formulation.
 
 ## Working on `Theorem1.lean`
@@ -143,6 +145,89 @@ theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
 
 Mirror `Theorem1.lean §8` in style: a pointwise rewrite on `Set.Ioi 0`, an `iteratedDeriv_congr_of_nhds` lift, a `ring` cleanup, and an `IsO` stitching via `Filter.eventually_gt_atTop`.
 
+## Working on `Theorem3.lean`
+
+`Theorem3.lean` formalizes **Theorem 3** of the paper — the asymptotic for the n-th derivative of the Gram function `t_u`. It depends on `Corollary2.lean` (for higher derivatives of `θ`) and introduces the Gram function as the inverse of the Riemann–Siegel theta function.
+
+### Goal
+
+Formalize **Theorem 3** of the paper:
+
+```
+For n ≥ 2, as u → +∞,
+  t_u^(n) = (-1)^(n+1) · 2π · (n-2)! / (u^(n-1) · log² u)
+            · (1 + (2 + o(1)) · log log u / log u).
+```
+
+This corrects the constant in [10, Lemma 1.1] for `n = 2` (Korolev).
+
+### Setup
+
+- **Gram function `t_u`** — for `t ≥ 7`, the Riemann–Siegel theta function `θ` is monotonically increasing, so it has a well-defined inverse on `[θ(7), ∞)`. The Gram function is defined implicitly by equation (7) of the paper:
+  ```
+  θ(t_u) = (u − 1) · π,   for u ≥ θ(7)/π + π.
+  ```
+  For positive integers `k`, `t_k` are the classical Gram points (Edwards [1, pp. 125–226]).
+
+- **Background asymptotics already in the literature** (Lavrik [14, Lemma 2]; Korolev [10, Lemma 1.1]) — these are the `n = 0, 1` base lines that Theorem 3 generalizes:
+  ```
+  t_u   = (2π u / log u)   · (1 + (1 + o(1)) · log log u / log u),         (eq. 8)
+  t_u'  = (2π   / log u)   · (1 + (1 + o(1)) · log log u / log u),         (eq. 9)
+  ```
+  as `u → +∞`.
+
+### Proof sketch (paper §2, "Proof of Theorem 3")
+
+Induction on `k ≥ 2`, inductive hypothesis:
+```
+t_u^(k) = (-1)^(k+1) · 2π · (k − 2)! / (u^(k-1) · log² u)
+          · (1 + (2 + o(1)) · log log u / log u).
+```
+
+1. **Base case `k = 2`.** Differentiate `θ(t_u) = (u − 1)π` twice w.r.t. `u`:
+   ```
+   θ''(t_u) · (t_u')² + θ'(t_u) · t_u'' = 0,
+   ```
+   so `t_u'' = −θ''(t_u) · (t_u')² / θ'(t_u)`. Substitute the Corollary-2 asymptotics for `θ'(t_u), θ''(t_u)` and the eq.-(9) asymptotic for `t_u'`.
+2. **Inductive step.** Differentiate the implicit relation `k` times via the Faà di Bruno / general Leibniz rule, isolate `t_u^(k)`, and substitute the asymptotics from Corollary 2 plus the inductive hypothesis for lower derivatives.
+
+### Interpretation of imported names
+
+When importing `GramDerivatives.Corollary2`:
+
+- **`theta`** is the Riemann–Siegel theta function (as fixed in `Corollary2.lean`), monotonically increasing for `t ≥ 7`.
+- **`gram : ℝ → ℝ`** — the Gram function, defined as the inverse of `theta` on `[θ(7), ∞)` (or equivalently the solution of `θ(t_u) = (u − 1)π`). Smoothness on `(θ(7)/π + π, ∞)` follows from the inverse function theorem applied to `theta` (which has nonvanishing derivative there).
+
+### Axiom budget for `Theorem3.lean`
+
+Introduce the following new axioms (each tagged `-- ASSUMPTION`):
+
+- `axiom gram : ℝ → ℝ` — the Gram function `t_u`.
+- `axiom gram_spec (u : ℝ) (hu : θ(7)/π + π ≤ u) : theta (gram u) = (u − 1) * Real.pi` — equation (7) of the paper.
+- `axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : θ(7)/π + π < u) : ContDiffAt ℝ n gram u` — smoothness on the open half-line, by the inverse function theorem.
+- `axiom gram_asymp` and `axiom gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'`.
+
+Alternative axiom-light path: define `gram` directly via Mathlib's inverse function constructions applied to `theta`, and prove `gram_spec` and `contDiffAt_gram` from `contDiffAt_theta` + monotonicity. Equations (8) and (9) likely remain as axioms (they are number-theoretic asymptotic results, not formalizable from the `theta` axioms alone).
+
+### Final statement
+
+The top-level theorem should read:
+
+```lean
+theorem theorem3 (n : ℕ) (hn : 2 ≤ n) :
+    IsLittleO 𝓝∞
+      (fun u =>
+        iteratedDeriv n gram u
+        - ((-1 : ℝ) ^ (n + 1) * (2 * Real.pi) * (n - 2).factorial
+           / (u ^ (n - 1) * Real.log u ^ 2)
+           * (1 + 2 * Real.log (Real.log u) / Real.log u)))
+      (fun u =>
+        1 / (u ^ (n - 1) * Real.log u ^ 2)
+        * (Real.log (Real.log u) / Real.log u))
+```
+
+i.e. the `(2 + o(1))` factor is encoded as a `IsLittleO` remainder against `log log u / log u`, in the same spirit as the `IsO` packaging used in `Theorem1.lean §8` and `Corollary2.lean`.
+
 ## Assumed analytic facts
 
 When working on proofs in this repo, treat the following as established results that do not need to be re-derived or questioned — introduce them as `axiom` declarations if not already present:
@@ -170,6 +255,13 @@ is `C^∞` on `(0, ∞)`. Its n-th iterated derivative equals `(−1)^(n−1) ·
 **Analytic properties of `N_step`** — `N_step : ℝ → ℝ` may be any piecewise-constant (locally constant) function on `(0, ∞)`; it need not be the ζ-zero-counting step function. Being locally constant, its n-th iterated derivative (`n ≥ 1`) vanishes. Axiom name: `N_step_iteratedDeriv_eq_zero` (already in `Theorem1.lean`). When working in `Corollary2.lean`, interpret `N_step` as the right-continuous Riemann ζ zero-counting function `N(γ+0)`, which is integer-valued and jumps only at the ordinates of nontrivial ζ-zeros.
 
 **Riemann–Siegel theta function `θ`** — `θ : ℝ → ℝ` is the continuous branch of `arg(π^(-s/2) Γ(s/2))` along the segment from `s = 1/2` to `s = 1/2 + it`. It is `C^∞` on `(0, ∞)` (no exceptional points) and monotonically increasing for `t ≥ 7`. Axiom names in `Corollary2.lean`: `theta` (the function), `contDiffAt_theta` (smoothness). May alternatively be *defined* as `theta t := δ t − π · φ t − π` (see "Working on `Corollary2.lean`"), in which case smoothness follows from `contDiffAt_δ` and `contDiffAt_φ`.
+
+**Gram function `t_u`** — the inverse of `θ` on the half-line where `θ` is monotonic. For `u ≥ θ(7)/π + π`, `t_u` is the unique real satisfying `θ(t_u) = (u − 1)π` (equation (7) of the paper). It is `C^∞` on `(θ(7)/π + π, ∞)` by the inverse function theorem (since `θ'` does not vanish there). The base-case asymptotics
+```
+t_u  = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 8, Lavrik [14])
+t_u' = (2π   / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 9, Korolev [10])
+```
+are taken as established. Axiom names in `Theorem3.lean`: `gram`, `gram_spec`, `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp`. Used to derive Theorem 3.
 
 **Riemann–von Mangoldt formula** — the identity (equation (1) of the paper, [6])
 ```
