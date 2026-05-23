@@ -46,7 +46,7 @@
 import GramDerivatives.Corollary2
 
 open Real Filter Asymptotics
-open scoped ContDiff
+open scoped ContDiff Topology
 
 /-!
   ## §0  Notation
@@ -183,23 +183,33 @@ private lemma iteratedDeriv_const_mul' (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s 
     rw [hEq, deriv_const_mul_field']
 
 /-!
-  ## §1.7  Asymptotic algebra package (in progress)
+  ## §1.7  Asymptotic algebra package
 
-  Lemmas needed for the asymptotic combinations in the proof of
-  Theorem 3.  Currently filled in:
+  Foundational asymptotic lemmas used throughout the proof of Theorem 3.
+
+  Building blocks for `log`/`log log`:
 
     • `loglog_isLittleO_log`          — `log log u = o(log u)`.
-    • `loglog_div_log_isLittleO_one` — `log log u / log u = o(1)`.
+    • `loglog_div_log_isLittleO_one`  — `log log u / log u = o(1)`.
+    • `log_pos_atTop`, `loglog_pos_atTop` — positivity for large `u`.
 
-  Planned additions (see `/Users/raivydassimenas/.claude/plans/`):
-    • `gram_tendsto_atTop`            — `gram u → +∞`, derived from
-                                        `gram_asymp` (no new axioms).
-    • `eventually_gram_pos`           — `∀ᶠ u, 0 < gram u`.
-    • Product/quotient asymptotic combiners for `Iso`/`IsO`.
+  Building blocks for the Lavrik shorthand `L(u) = 2π u / log u`:
 
-  These will let us write the main proof in terms of *eventual*
-  asymptotic identities, sidestepping the need for an explicit
-  positivity axiom on `gram`.
+    • `id_div_log_tendsto_atTop`       — `u / log u → +∞`.
+    • `linear_div_log_tendsto_atTop`   — `2π u / log u → +∞`.
+    • `gramL_mul_loglog_isLittleO_gramL` — `L · (log log / log) = o(L)`.
+
+  Consequences for the Gram function (derived from `gram_asymp`, **no
+  new axioms**):
+
+    • `gram_residual_isLittleO_gramL`  — `(gram − L − L · ll/l) = o(L)`.
+    • `gram_sub_gramL_isLittleO_gramL` — `(gram − L) = o(L)`.
+    • `gram_isEquivalent_gramL`        — `gram ~ L` at `+∞`.
+    • `gram_tendsto_atTop`             — `gram u → +∞`.
+    • `eventually_gram_pos`            — `∀ᶠ u, 0 < gram u`.
+
+  Together these provide the positivity and asymptotic-equivalence
+  toolkit that the base case and induction steps will need.
 -/
 
 /-- `log log u = o(log u)` as `u → +∞`. -/
@@ -212,6 +222,105 @@ private lemma loglog_div_log_isLittleO_one :
     Iso (fun u : ℝ => Real.log (Real.log u) / Real.log u)
         (fun _ : ℝ => (1 : ℝ)) 𝓝∞ :=
   (Asymptotics.isLittleO_one_iff ℝ).mpr loglog_isLittleO_log.tendsto_div_nhds_zero
+
+/-- `0 < log u` eventually as `u → +∞`. -/
+private lemma log_pos_atTop : ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < Real.log u :=
+  Real.tendsto_log_atTop.eventually_gt_atTop 0
+
+/-- `0 < log log u` eventually as `u → +∞`. -/
+private lemma loglog_pos_atTop :
+    ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < Real.log (Real.log u) := by
+  filter_upwards [(Real.tendsto_log_atTop.comp Real.tendsto_log_atTop).eventually_gt_atTop 0]
+    with u hu using hu
+
+/-- `u / log u → +∞` as `u → +∞`.  Standard consequence of
+    `Real.isLittleO_log_id_atTop`. -/
+private lemma id_div_log_tendsto_atTop :
+    Tendsto (fun u : ℝ => u / Real.log u) 𝓝∞ 𝓝∞ := by
+  -- Step 1.  `log u / u → 0`.
+  have h₀ : Tendsto (fun u : ℝ => Real.log u / u) 𝓝∞ (𝓝 0) :=
+    Real.isLittleO_log_id_atTop.tendsto_div_nhds_zero
+  -- Step 2.  Eventually `0 < log u / u`.
+  have h_pos : ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < Real.log u / u := by
+    filter_upwards [log_pos_atTop, Filter.eventually_gt_atTop (0 : ℝ)] with u hl hu
+    exact div_pos hl hu
+  -- Step 3.  Refine to `𝓝[>] 0`.
+  have h₁ : Tendsto (fun u : ℝ => Real.log u / u) 𝓝∞ (𝓝[>] (0 : ℝ)) :=
+    tendsto_nhdsWithin_iff.mpr ⟨h₀, h_pos⟩
+  -- Step 4.  Invert.
+  have h₂ : Tendsto (fun u : ℝ => (Real.log u / u)⁻¹) 𝓝∞ 𝓝∞ :=
+    h₁.inv_tendsto_nhdsGT_zero
+  -- Step 5.  `(log u / u)⁻¹ = u / log u` (eventually, when `log u ≠ 0`).
+  refine h₂.congr' ?_
+  filter_upwards [log_pos_atTop, Filter.eventually_gt_atTop (0 : ℝ)] with u hl hu
+  field_simp
+
+/-- `2π · u / log u → +∞` as `u → +∞`. -/
+private lemma linear_div_log_tendsto_atTop :
+    Tendsto (fun u : ℝ => 2 * Real.pi * u / Real.log u) 𝓝∞ 𝓝∞ := by
+  have h : Tendsto (fun u : ℝ => (2 * Real.pi) * (u / Real.log u)) 𝓝∞ 𝓝∞ :=
+    Filter.Tendsto.const_mul_atTop (by positivity : (0 : ℝ) < 2 * Real.pi)
+      id_div_log_tendsto_atTop
+  exact h.congr (fun u => by ring)
+
+/-- Shorthand for the Lavrik leading term `L(u) = 2π u / log u`. -/
+private noncomputable def gramL (u : ℝ) : ℝ := 2 * Real.pi * u / Real.log u
+
+/-- `L · (log log / log) =o[atTop] L`.  Since `log log u / log u → 0` and
+    `L =O[atTop] L`, the product is little-o of `L`. -/
+private lemma gramL_mul_loglog_isLittleO_gramL :
+    Iso (fun u : ℝ => gramL u * (Real.log (Real.log u) / Real.log u)) gramL 𝓝∞ := by
+  have h := (Asymptotics.isBigO_refl gramL 𝓝∞).mul_isLittleO loglog_div_log_isLittleO_one
+  simpa using h
+
+/-- `gram_asymp` rewritten as `(gram − L − L · (loglog/log)) =o[atTop] L`. -/
+private lemma gram_residual_isLittleO_gramL :
+    Iso
+      (fun u : ℝ =>
+        gram u - gramL u - gramL u * (Real.log (Real.log u) / Real.log u))
+      gramL 𝓝∞ := by
+  -- `gram_asymp` is `=o (L · ll/l)`, and we've shown `(L · ll/l) =o L`.
+  -- Therefore the residual is `o(L)` by transitivity.
+  have h0 : Iso
+      (fun u : ℝ =>
+        gram u - 2 * Real.pi * u / Real.log u
+        - 2 * Real.pi * u / Real.log u * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ =>
+        2 * Real.pi * u / Real.log u * (Real.log (Real.log u) / Real.log u))
+      𝓝∞ := gram_asymp
+  -- Rewrite `2π u / log u` as `gramL u`.
+  have h1 : Iso
+      (fun u : ℝ =>
+        gram u - gramL u - gramL u * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ => gramL u * (Real.log (Real.log u) / Real.log u)) 𝓝∞ := by
+    refine h0.congr (fun u => by simp [gramL]) (fun u => by simp [gramL])
+  exact h1.trans gramL_mul_loglog_isLittleO_gramL
+
+/-- `gram − L =o[atTop] L`. -/
+private lemma gram_sub_gramL_isLittleO_gramL :
+    Iso (fun u : ℝ => gram u - gramL u) gramL 𝓝∞ := by
+  -- `gram − L = (gram − L − L·(ll/l)) + L·(ll/l)`, each piece `o(L)`.
+  have h1 := gram_residual_isLittleO_gramL
+  have h2 := gramL_mul_loglog_isLittleO_gramL
+  have h := h1.add h2
+  refine h.congr_left ?_
+  intro u; ring
+
+/-- `gram ~ L` at `+∞`: the Gram function is asymptotically equivalent to
+    `2π u / log u`. -/
+private lemma gram_isEquivalent_gramL : IsEquivalent 𝓝∞ gram gramL :=
+  gram_sub_gramL_isLittleO_gramL
+
+/-- `gram u → +∞` as `u → +∞`.  Derived from `gram_asymp` together with
+    the elementary fact `2π u / log u → +∞`. -/
+private lemma gram_tendsto_atTop : Tendsto gram 𝓝∞ 𝓝∞ := by
+  refine gram_isEquivalent_gramL.symm.tendsto_atTop ?_
+  exact linear_div_log_tendsto_atTop.congr (fun u => by simp [gramL])
+
+/-- Eventually `0 < gram u` as `u → +∞`. -/
+private lemma eventually_gram_pos :
+    ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < gram u :=
+  gram_tendsto_atTop.eventually_gt_atTop 0
 
 /-!
   ## §2  Main theorem: Theorem 3
