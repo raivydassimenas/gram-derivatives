@@ -323,6 +323,152 @@ private lemma eventually_gram_pos :
   gram_tendsto_atTop.eventually_gt_atTop 0
 
 /-!
+  ## §1.8  Mirror chain for `deriv gram`
+
+  Exactly the same machinery as §1.7 applied to `gram_deriv_asymp` (the
+  Korolev base-case asymptotic for `t_u'`) gives an asymptotic equivalence
+  `deriv gram ~ 2π / log u` and eventual positivity of `deriv gram`.
+
+  We also derive the structural identity `θ'(gram u) · gram'(u) = π`
+  from `gram_spec` via the chain rule.  This is the trick (paper §2,
+  base case) that lets us avoid an explicit asymptotic for `θ'(t_u)` —
+  Corollary 2 doesn't cover `n = 1` directly, but the implicit relation
+  expresses `θ'(t_u)` algebraically in terms of `t_u'`.
+-/
+
+/-- Shorthand for the Korolev leading term `L'(u) = 2π / log u`. -/
+private noncomputable def gramLDeriv (u : ℝ) : ℝ := 2 * Real.pi / Real.log u
+
+/-- `L' · (log log / log) =o[atTop] L'`. -/
+private lemma gramLDeriv_mul_loglog_isLittleO_gramLDeriv :
+    Iso (fun u : ℝ => gramLDeriv u * (Real.log (Real.log u) / Real.log u))
+        gramLDeriv 𝓝∞ := by
+  have h := (Asymptotics.isBigO_refl gramLDeriv 𝓝∞).mul_isLittleO
+              loglog_div_log_isLittleO_one
+  simpa using h
+
+/-- `(deriv gram − L' − L' · ll/l) =o[atTop] L'`. -/
+private lemma gram_deriv_residual_isLittleO_gramLDeriv :
+    Iso
+      (fun u : ℝ =>
+        iteratedDeriv 1 gram u - gramLDeriv u
+        - gramLDeriv u * (Real.log (Real.log u) / Real.log u))
+      gramLDeriv 𝓝∞ := by
+  have h0 : Iso
+      (fun u : ℝ =>
+        iteratedDeriv 1 gram u - 2 * Real.pi / Real.log u
+        - 2 * Real.pi / Real.log u * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ =>
+        2 * Real.pi / Real.log u * (Real.log (Real.log u) / Real.log u))
+      𝓝∞ := gram_deriv_asymp
+  have h1 : Iso
+      (fun u : ℝ =>
+        iteratedDeriv 1 gram u - gramLDeriv u
+        - gramLDeriv u * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ => gramLDeriv u * (Real.log (Real.log u) / Real.log u)) 𝓝∞ := by
+    refine h0.congr (fun u => by simp [gramLDeriv]) (fun u => by simp [gramLDeriv])
+  exact h1.trans gramLDeriv_mul_loglog_isLittleO_gramLDeriv
+
+/-- `(deriv gram − L') =o[atTop] L'`. -/
+private lemma gram_deriv_sub_gramLDeriv_isLittleO_gramLDeriv :
+    Iso (fun u : ℝ => iteratedDeriv 1 gram u - gramLDeriv u) gramLDeriv 𝓝∞ := by
+  have h1 := gram_deriv_residual_isLittleO_gramLDeriv
+  have h2 := gramLDeriv_mul_loglog_isLittleO_gramLDeriv
+  have h := h1.add h2
+  refine h.congr_left ?_
+  intro u; ring
+
+/-- `deriv gram ~ L'` at `+∞`. -/
+private lemma gram_deriv_isEquivalent_gramLDeriv :
+    IsEquivalent 𝓝∞ (iteratedDeriv 1 gram) gramLDeriv :=
+  gram_deriv_sub_gramLDeriv_isLittleO_gramLDeriv
+
+/-- Eventually `0 < deriv gram u`.  Proved using the `IsEquivalent`
+    fact together with `L'(u) > 0` for `log u > 0`. -/
+private lemma eventually_deriv_gram_pos :
+    ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < deriv gram u := by
+  -- Convert `iteratedDeriv 1 gram = deriv gram`.
+  have h_eqv := gram_deriv_isEquivalent_gramLDeriv
+  -- Use `IsEquivalent.tendsto_nhdsWithin_iff`-style: write `deriv gram - L' = o(L')`
+  -- and bound `|deriv gram - L'| ≤ (1/2)|L'|` eventually, so `deriv gram ≥ L'/2 > 0`.
+  have h_half : ∀ᶠ u in (𝓝∞ : Filter ℝ),
+      |iteratedDeriv 1 gram u - gramLDeriv u| ≤ (1 / 2) * |gramLDeriv u| := by
+    have := gram_deriv_sub_gramLDeriv_isLittleO_gramLDeriv.def (c := 1/2) (by norm_num)
+    simpa [Real.norm_eq_abs] using this
+  -- `L'(u) > 0` whenever `log u > 0`.
+  have h_L'_pos : ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < gramLDeriv u := by
+    filter_upwards [log_pos_atTop] with u hu
+    have : 0 < 2 * Real.pi / Real.log u := by positivity
+    simpa [gramLDeriv]
+  filter_upwards [h_half, h_L'_pos] with u h_bd h_L'
+  have h_abs_L' : |gramLDeriv u| = gramLDeriv u := abs_of_pos h_L'
+  rw [h_abs_L'] at h_bd
+  have h_iter_eq : iteratedDeriv 1 gram u = deriv gram u := by
+    rw [iteratedDeriv_one]
+  rw [h_iter_eq] at h_bd
+  -- `|deriv gram - L'| ≤ L'/2` ⟹ `deriv gram ≥ L'/2 > 0`.
+  have h_lower : gramLDeriv u - 1/2 * gramLDeriv u ≤ deriv gram u := by
+    have := abs_sub_le_iff.mp h_bd
+    linarith [this.2]
+  linarith
+
+/-- **Chain rule for `gram_spec` (first derivative).**
+
+    Differentiating `θ(gram u) = (u − 1)π` once via the chain rule
+    gives `θ'(gram u) · gram'(u) = π`.  Asymptotic-free; holds
+    pointwise whenever `u > gramThreshold` and `gram u > 0`. -/
+private lemma deriv_theta_gram_mul_deriv_gram (u : ℝ)
+    (hu : gramThreshold < u) (hgram : 0 < gram u) :
+    deriv theta (gram u) * deriv gram u = Real.pi := by
+  -- (1) Differentiability of `theta` at `gram u` and `gram` at `u`.
+  have hθ_diff : DifferentiableAt ℝ theta (gram u) :=
+    (contDiffAt_theta 1 hgram).differentiableAt (by norm_num)
+  have hg_diff : DifferentiableAt ℝ gram u :=
+    (contDiffAt_gram 1 hu).differentiableAt (by norm_num)
+  -- (2) Chain rule: `HasDerivAt (theta ∘ gram) (θ'(gram u) · gram'(u)) u`.
+  have h_comp : HasDerivAt (theta ∘ gram)
+      (deriv theta (gram u) * deriv gram u) u :=
+    hθ_diff.hasDerivAt.comp u hg_diff.hasDerivAt
+  -- (3) On `Ioi gramThreshold`, `theta ∘ gram` equals `s ↦ (s − 1)π`.
+  have h_evEq : (theta ∘ gram) =ᶠ[𝓝 u] (fun s : ℝ => (s - 1) * Real.pi) := by
+    have hIoi : Set.Ioi gramThreshold ∈ (𝓝 u : Filter ℝ) :=
+      isOpen_Ioi.mem_nhds hu
+    filter_upwards [hIoi] with s hs
+    simp [Function.comp_apply, gram_spec s hs.le]
+  -- (4) Compare with `HasDerivAt (· - 1) * π = π · 1 = π`.
+  have h_lin : HasDerivAt (fun s : ℝ => (s - 1) * Real.pi) Real.pi u := by
+    have h1 : HasDerivAt (fun s : ℝ => s - 1) 1 u := (hasDerivAt_id u).sub_const 1
+    simpa using h1.mul_const Real.pi
+  -- (5) Two `HasDerivAt`s for the same function ⟹ same derivative.
+  have h_comp' : HasDerivAt (theta ∘ gram) Real.pi u :=
+    h_lin.congr_of_eventuallyEq h_evEq
+  exact h_comp.unique h_comp'
+
+/-!
+  ## §1.9  Transport of Corollary 2 along `gram → +∞`
+
+  Composing Corollary 2 (the `θ^(k)(t)` asymptotic for `t → +∞`, valid
+  for `k ≥ 2`) with `gram_tendsto_atTop` (`gram u → +∞`) gives the
+  corresponding asymptotic for `θ^(k)(gram u)` as `u → +∞`.
+-/
+
+/-- Transport of `corollary2 k` along `gram → +∞`:
+
+      iteratedDeriv k theta (gram u)
+        − ((-1)^k · (k − 2)! · (1/2) · (gram u)^(1 − k))
+      = O((gram u)^(−k − 1))    as u → +∞,
+
+    for `k ≥ 2`. -/
+private lemma iteratedDeriv_theta_at_gram_isO (k : ℕ) (hk : 2 ≤ k) :
+    IsO
+      (fun u : ℝ =>
+        iteratedDeriv k theta (gram u)
+        - ((-1 : ℝ) ^ k * (k - 2).factorial * (1 / 2) * (gram u) ^ (1 - (k : ℝ))))
+      (fun u : ℝ => (gram u) ^ (-(k : ℝ) - 1))
+      𝓝∞ :=
+  (corollary2 k hk).comp_tendsto gram_tendsto_atTop
+
+/-!
   ## §2  Main theorem: Theorem 3
 
   The `n`-th derivative of the Gram function inherits an asymptotic of
