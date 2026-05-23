@@ -128,6 +128,92 @@ axiom gram_deriv_asymp :
       𝓝∞ -- ASSUMPTION
 
 /-!
+  ## §1.5  Local `iteratedDeriv` helpers
+
+  These three helpers duplicate the corresponding `private` lemmas in
+  `Theorem1.lean` and `Corollary2.lean`.  Keeping a local copy avoids
+  exposing them in those files' public APIs.
+-/
+
+/-- The n-th iterated derivative of a constant function (`n ≥ 1`) is zero. -/
+private lemma iteratedDeriv_const_eq_zero {n : ℕ} (hn : 1 ≤ n)
+    (c : ℝ) (t : ℝ) : iteratedDeriv n (fun _ : ℝ => c) t = 0 := by
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+  rw [iteratedDeriv_succ']
+  have h_deriv : deriv (fun _ : ℝ => c) = fun _ : ℝ => 0 :=
+    funext fun x => deriv_const x c
+  rw [h_deriv]
+  clear hn
+  induction m generalizing t with
+  | zero => simp
+  | succ k ih =>
+    rw [iteratedDeriv_succ']
+    have h_deriv0 : deriv (fun _ : ℝ => (0 : ℝ)) = fun _ : ℝ => 0 :=
+      funext fun x => deriv_const x (0 : ℝ)
+    rw [h_deriv0]
+    exact ih t
+
+/-- If `f = g` on an open set `U`, all iterated derivatives agree on `U`. -/
+private lemma iteratedDeriv_congr_of_nhds
+    {f g : ℝ → ℝ} (k : ℕ) {U : Set ℝ} (hU : IsOpen U)
+    (hfg : ∀ s ∈ U, f s = g s) :
+    ∀ t ∈ U, iteratedDeriv k f t = iteratedDeriv k g t := by
+  induction k with
+  | zero =>
+    intro t ht
+    simp [iteratedDeriv_zero, hfg t ht]
+  | succ k ih =>
+    intro t ht
+    rw [iteratedDeriv_succ, iteratedDeriv_succ]
+    have h_nhds : U ∈ nhds t := hU.mem_nhds ht
+    have hEq : (iteratedDeriv k f) =ᶠ[nhds t] (iteratedDeriv k g) := by
+      filter_upwards [h_nhds] with s hs
+      exact ih s hs
+    exact hEq.deriv_eq
+
+/-- Iterated derivative commutes with a constant scalar factor. -/
+private lemma iteratedDeriv_const_mul' (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s : ℝ) :
+    iteratedDeriv k (fun x => c * g x) s = c * iteratedDeriv k g s := by
+  induction k generalizing s with
+  | zero => simp [iteratedDeriv_zero]
+  | succ k ih =>
+    rw [iteratedDeriv_succ, iteratedDeriv_succ]
+    have hEq : iteratedDeriv k (fun x => c * g x) = fun x => c * iteratedDeriv k g x :=
+      funext ih
+    rw [hEq, deriv_const_mul_field']
+
+/-!
+  ## §1.7  Asymptotic algebra package (in progress)
+
+  Lemmas needed for the asymptotic combinations in the proof of
+  Theorem 3.  Currently filled in:
+
+    • `loglog_isLittleO_log`          — `log log u = o(log u)`.
+    • `loglog_div_log_isLittleO_one` — `log log u / log u = o(1)`.
+
+  Planned additions (see `/Users/raivydassimenas/.claude/plans/`):
+    • `gram_tendsto_atTop`            — `gram u → +∞`, derived from
+                                        `gram_asymp` (no new axioms).
+    • `eventually_gram_pos`           — `∀ᶠ u, 0 < gram u`.
+    • Product/quotient asymptotic combiners for `Iso`/`IsO`.
+
+  These will let us write the main proof in terms of *eventual*
+  asymptotic identities, sidestepping the need for an explicit
+  positivity axiom on `gram`.
+-/
+
+/-- `log log u = o(log u)` as `u → +∞`. -/
+private lemma loglog_isLittleO_log :
+    Iso (fun u : ℝ => Real.log (Real.log u)) (fun u : ℝ => Real.log u) 𝓝∞ :=
+  Real.isLittleO_log_id_atTop.comp_tendsto Real.tendsto_log_atTop
+
+/-- `log log u / log u → 0` as `u → +∞`. -/
+private lemma loglog_div_log_isLittleO_one :
+    Iso (fun u : ℝ => Real.log (Real.log u) / Real.log u)
+        (fun _ : ℝ => (1 : ℝ)) 𝓝∞ :=
+  (Asymptotics.isLittleO_one_iff ℝ).mpr loglog_isLittleO_log.tendsto_div_nhds_zero
+
+/-!
   ## §2  Main theorem: Theorem 3
 
   The `n`-th derivative of the Gram function inherits an asymptotic of
