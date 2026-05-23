@@ -469,6 +469,121 @@ private lemma iteratedDeriv_theta_at_gram_isO (k : ℕ) (hk : 2 ≤ k) :
   (corollary2 k hk).comp_tendsto gram_tendsto_atTop
 
 /-!
+  ## §1.10  Structural identity at n = 2
+
+  Differentiating `θ(gram u) = (u − 1)π` twice via
+  `iteratedDeriv_comp_two` and using the first-derivative chain rule to
+  eliminate `θ'(gram u)` yields the **purely algebraic** identity
+
+      gram''(u) = −(1/π) · θ''(gram u) · (gram'(u))³
+
+  valid wherever `u > gramThreshold`, `gram u > 0`, and
+  `gram'(u) ≠ 0`.  This is the n = 2 case of the implicit
+  differentiation argument from the paper.
+-/
+
+/-- The function `u ↦ (u − 1) · π` has vanishing second iterated
+    derivative everywhere. -/
+private lemma iteratedDeriv_two_linear_eq_zero (u : ℝ) :
+    iteratedDeriv 2 (fun s : ℝ => (s - 1) * Real.pi) u = 0 := by
+  have hderiv : deriv (fun s : ℝ => (s - 1) * Real.pi) = fun _ : ℝ => Real.pi := by
+    funext x
+    have h1 : HasDerivAt (fun s : ℝ => s - 1) 1 x := (hasDerivAt_id x).sub_const 1
+    have h2 : HasDerivAt (fun s : ℝ => (s - 1) * Real.pi) Real.pi x := by
+      simpa using h1.mul_const Real.pi
+    exact h2.deriv
+  rw [show (2 : ℕ) = 1 + 1 from rfl, iteratedDeriv_succ', hderiv]
+  exact iteratedDeriv_const_eq_zero (by omega) Real.pi u
+
+/-- **n = 2 Faà di Bruno reduction.**  At every `u` with `u >
+    gramThreshold` and `gram u > 0`,
+
+        θ''(gram u) · (gram'(u))² + θ'(gram u) · gram''(u) = 0.
+
+    Asymptotic-free; follows from `iteratedDeriv_comp_two` applied to
+    `θ ∘ gram` whose value on `Ioi gramThreshold` is `(u − 1)π`. -/
+private lemma faadi_bruno_gram_two (u : ℝ)
+    (hu : gramThreshold < u) (hg : 0 < gram u) :
+    iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 2
+      + deriv theta (gram u) * iteratedDeriv 2 gram u = 0 := by
+  -- (1) On `Ioi gramThreshold`, `theta ∘ gram` agrees with `s ↦ (s − 1)π`.
+  have hθg_eq : ∀ s ∈ Set.Ioi gramThreshold,
+      (theta ∘ gram) s = (s - 1) * Real.pi := by
+    intro s hs
+    simp [Function.comp_apply, gram_spec s hs.le]
+  -- (2) Lift to second iterated derivative.
+  have h_iter_eq :
+      iteratedDeriv 2 (theta ∘ gram) u
+        = iteratedDeriv 2 (fun s : ℝ => (s - 1) * Real.pi) u :=
+    iteratedDeriv_congr_of_nhds 2 isOpen_Ioi hθg_eq u hu
+  -- (3) RHS evaluates to 0.
+  have h_rhs : iteratedDeriv 2 (fun s : ℝ => (s - 1) * Real.pi) u = 0 :=
+    iteratedDeriv_two_linear_eq_zero u
+  -- (4) LHS expanded via `iteratedDeriv_comp_two`.
+  have hθ : ContDiffAt ℝ 2 theta (gram u) := contDiffAt_theta 2 hg
+  have hg2 : ContDiffAt ℝ 2 gram u := contDiffAt_gram 2 hu
+  have h_comp :
+      iteratedDeriv 2 (theta ∘ gram) u
+        = iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 2
+          + deriv theta (gram u) * iteratedDeriv 2 gram u :=
+    iteratedDeriv_comp_two hθ hg2
+  -- (5) Combine.
+  linarith [h_iter_eq.trans h_rhs, h_comp]
+
+/-- **Solved form** of the n = 2 Faà di Bruno reduction.
+
+    Eliminating `θ'(gram u)` via the first-derivative chain rule
+    `θ'(gram u) · gram'(u) = π` (and assuming `gram'(u) > 0`),
+
+        gram''(u) = −(1/π) · θ''(gram u) · (gram'(u))³. -/
+private lemma iteratedDeriv_two_gram_eq (u : ℝ)
+    (hu : gramThreshold < u) (hg : 0 < gram u) (hg' : 0 < deriv gram u) :
+    iteratedDeriv 2 gram u
+      = -(1 / Real.pi) * iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3 := by
+  -- Step (A): the n = 2 Faà di Bruno reduction.
+  have h_fd := faadi_bruno_gram_two u hu hg
+  -- Step (B): the chain rule identity.
+  have h_chain := deriv_theta_gram_mul_deriv_gram u hu hg
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  have h_gd' : deriv gram u ≠ 0 := ne_of_gt hg'
+  -- Solve `h_fd` for `iteratedDeriv 2 gram u` and substitute the
+  -- chain-rule identity for `deriv theta (gram u)`.
+  -- From `h_chain`: `deriv theta (gram u) = π / deriv gram u`.
+  have h_θ' : deriv theta (gram u) = Real.pi / deriv gram u := by
+    field_simp at h_chain ⊢
+    linarith
+  -- Substitute into `h_fd`:
+  have h_iter : iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 2
+      + (Real.pi / deriv gram u) * iteratedDeriv 2 gram u = 0 := by
+    rw [← h_θ']; exact h_fd
+  -- Now isolate `iteratedDeriv 2 gram u`.
+  have h_iter' :
+      (Real.pi / deriv gram u) * iteratedDeriv 2 gram u
+        = - iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 2 := by
+    linarith
+  -- Multiply both sides by `deriv gram u / π`.
+  have key :
+      iteratedDeriv 2 gram u
+        = (deriv gram u / Real.pi)
+          * (- iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 2) := by
+    have h_pi_div : Real.pi / deriv gram u ≠ 0 := div_ne_zero hπ h_gd'
+    field_simp at h_iter' ⊢
+    linarith
+  rw [key]; ring
+
+/-- Eventually-true form of `iteratedDeriv_two_gram_eq`, packaged for
+    asymptotic work via `EventuallyEq.trans_isBigO`/`isLittleO`. -/
+private lemma iteratedDeriv_two_gram_eventually_eq :
+    (fun u : ℝ => iteratedDeriv 2 gram u)
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+    (fun u : ℝ =>
+      -(1 / Real.pi) * iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3) := by
+  filter_upwards [Filter.eventually_gt_atTop gramThreshold,
+                   eventually_gram_pos,
+                   eventually_deriv_gram_pos] with u hu hg hg'
+  exact iteratedDeriv_two_gram_eq u hu hg hg'
+
+/-!
   ## §2  Main theorem: Theorem 3
 
   The `n`-th derivative of the Gram function inherits an asymptotic of
