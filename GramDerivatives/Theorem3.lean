@@ -960,6 +960,264 @@ private lemma iteratedDeriv_two_theta_at_gram_isLittleO_refined :
   -- Compose with `((gram u)⁻¹)^3 = o((gramL u)⁻¹ · frac u)`.
   exact h_isO_clean.trans_isLittleO inv_gram_cube_isLittleO_inv_gramL_mul_frac
 
+/-!
+  ## §1.13  Cubic-over-linear asymptotic expansion
+
+  Abstract algebraic identity: if `δ, δ' = ε + o(ε)` and `ε → 0`, then
+
+      (1 + δ)⁻¹ · (1 + δ')³ - (1 + 2ε) = o(ε).
+
+  Applied to `δ := gram u / gramL u - 1` and
+  `δ' := deriv gram u / gramLDeriv u - 1`, this yields the refined
+  expansion of `(gram u)⁻¹ · (deriv gram u)³`:
+
+      (gram u)⁻¹·(gram'(u))³
+        = (gramL u)⁻¹·(gramLDeriv u)³·(1 + 2ε)
+          + o((gramL u)⁻¹·(gramLDeriv u)³·ε).
+-/
+
+/-- **Abstract cubic-over-linear asymptotic.**  If `δ, δ' = ε + o(ε)`
+    and `ε → 0`, then
+        `(1 + δ)⁻¹ · (1 + δ')³ - (1 + 2ε) = o(ε)`. -/
+private lemma prod_inv_cube_expansion_aux
+    {α : Type*} {l : Filter α} {δ δ' ε : α → ℝ}
+    (hδ : (fun u => δ u - ε u) =o[l] ε)
+    (hδ' : (fun u => δ' u - ε u) =o[l] ε)
+    (hε : Tendsto ε l (𝓝 0)) :
+    (fun u => (1 + δ u)⁻¹ * (1 + δ' u) ^ 3 - (1 + 2 * ε u)) =o[l] ε := by
+  -- (1) δ = O(ε), δ' = O(ε).
+  have hδ_O : (fun u => δ u) =O[l] ε := by
+    have h := hδ.isBigO.add (Asymptotics.isBigO_refl ε l)
+    refine h.congr_left ?_
+    intro u; ring
+  have hδ'_O : (fun u => δ' u) =O[l] ε := by
+    have h := hδ'.isBigO.add (Asymptotics.isBigO_refl ε l)
+    refine h.congr_left ?_
+    intro u; ring
+  -- (2) δ, δ' → 0.
+  have hδ_zero : Tendsto δ l (𝓝 0) := hδ_O.trans_tendsto hε
+  have hδ'_zero : Tendsto δ' l (𝓝 0) := hδ'_O.trans_tendsto hε
+  -- (3) δ = o(1), δ' = o(1).
+  have hδ_o : (fun u => δ u) =o[l] (fun _ : α => (1 : ℝ)) :=
+    (Asymptotics.isLittleO_one_iff ℝ).mpr hδ_zero
+  have hδ'_o : (fun u => δ' u) =o[l] (fun _ : α => (1 : ℝ)) :=
+    (Asymptotics.isLittleO_one_iff ℝ).mpr hδ'_zero
+  -- (4) `1 + δ → 1`.
+  have h_sum_tendsto : Tendsto (fun u => 1 + δ u) l (𝓝 1) := by
+    have := hδ_zero.const_add 1
+    simpa using this
+  -- (5) `(1 + δ)⁻¹ → 1`, hence `=O 1`.
+  have h_inv_tendsto : Tendsto (fun u => (1 + δ u)⁻¹) l (𝓝 1) := by
+    have h := h_sum_tendsto.inv₀ (by norm_num : (1 : ℝ) ≠ 0)
+    simpa using h
+  have h_inv_O : (fun u => (1 + δ u)⁻¹) =O[l] (fun _ : α => (1 : ℝ)) :=
+    h_inv_tendsto.isBigO_one ℝ
+  -- (6) Eventually `1 + δ u ≠ 0`.
+  have h_sum_ne : ∀ᶠ u in l, (1 + δ u) ≠ 0 :=
+    h_sum_tendsto.eventually_ne (by norm_num : (1 : ℝ) ≠ 0)
+  -- (7) Build the bound `N(u) := 3(δ' - ε) - (δ - ε) + 3δ'² + δ'³ - 2εδ`,
+  --     which equals the numerator `(1 + δ')³ - (1 + δ)(1 + 2ε)`.
+  -- Show `N = o(ε)`.
+  have h_term1 : (fun u => 3 * (δ' u - ε u)) =o[l] ε := hδ'.const_mul_left 3
+  have h_term2 : (fun u => -(δ u - ε u)) =o[l] ε := hδ.neg_left
+  have h_δ'_sq : (fun u => (δ' u) ^ 2) =o[l] ε := by
+    have h := hδ'_o.mul_isBigO hδ'_O  -- o(1) · O(ε) =o (1·ε) = o(ε)
+    refine h.congr ?_ ?_
+    · intro u; ring  -- δ' u * δ' u = (δ' u)^2
+    · intro u; ring  -- 1 * ε u = ε u
+  have h_term3 : (fun u => 3 * (δ' u) ^ 2) =o[l] ε := h_δ'_sq.const_mul_left 3
+  have h_δ'_cube : (fun u => (δ' u) ^ 3) =o[l] ε := by
+    have h := hδ'_o.mul h_δ'_sq  -- o(1) · o(ε) =o (1·ε) = o(ε)
+    refine h.congr ?_ ?_
+    · intro u; ring  -- δ' u * (δ' u)^2 = (δ' u)^3
+    · intro u; ring  -- 1 * ε u = ε u
+  have h_εδ : (fun u => ε u * δ u) =o[l] ε := by
+    have h := (Asymptotics.isBigO_refl ε l).mul_isLittleO hδ_o  -- O(ε) · o(1) =o (ε·1) = o(ε)
+    refine h.congr_right ?_
+    intro u; ring  -- ε u * 1 = ε u
+  have h_term5 : (fun u => -(2 * (ε u * δ u))) =o[l] ε :=
+    (h_εδ.const_mul_left 2).neg_left
+  -- N = term1 + term2 + term3 + δ'^3 + term5 (rewritten as a sum of o(ε)'s).
+  have h_N_o :
+      (fun u => 3 * (δ' u - ε u) + -(δ u - ε u) + 3 * (δ' u) ^ 2 + (δ' u) ^ 3
+                + -(2 * (ε u * δ u))) =o[l] ε :=
+    ((((h_term1.add h_term2).add h_term3).add h_δ'_cube).add h_term5)
+  -- Multiply by `(1 + δ)⁻¹ = O(1)`: still o(ε).
+  have h_prod : (fun u => (1 + δ u)⁻¹ *
+      (3 * (δ' u - ε u) + -(δ u - ε u) + 3 * (δ' u) ^ 2 + (δ' u) ^ 3
+       + -(2 * (ε u * δ u))))
+      =o[l] ε := by
+    have h := h_inv_O.mul_isLittleO h_N_o
+    refine h.congr_right ?_
+    intro u; ring
+  -- Final: rewrite to the target form using the algebraic identity.
+  refine h_prod.congr' ?_ Filter.EventuallyEq.rfl
+  filter_upwards [h_sum_ne] with u hne
+  show (1 + δ u)⁻¹ * (3 * (δ' u - ε u) + -(δ u - ε u) + 3 * (δ' u) ^ 2 + (δ' u) ^ 3
+         + -(2 * (ε u * δ u)))
+      = (1 + δ u)⁻¹ * (1 + δ' u) ^ 3 - (1 + 2 * ε u)
+  field_simp
+  ring
+
+/-!
+  ### §1.13.1  Cubic-over-linear expansion for the Gram function
+
+  Specializing the abstract lemma to
+    • `δ  := gram u / gramL u - 1`,
+    • `δ' := deriv gram u / gramLDeriv u - 1`,
+    • `ε  := log log u / log u`,
+  with `δ - ε`, `δ' - ε` both `o(ε)` from the Lavrik / Korolev residuals.
+-/
+
+/-- `gram_asymp` restated using the `gramL` shorthand:
+    `(gram − gramL − gramL · ε) =o (gramL · ε)`. -/
+private lemma gram_asymp_in_gramL :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ =>
+        gram u - gramL u - gramL u * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ => gramL u * (Real.log (Real.log u) / Real.log u)) := by
+  have h := gram_asymp
+  refine h.congr (fun u => by simp [gramL]) (fun u => by simp [gramL])
+
+/-- `gram_deriv_asymp` restated using `gramLDeriv`. -/
+private lemma gram_deriv_asymp_in_gramLDeriv :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ =>
+        iteratedDeriv 1 gram u - gramLDeriv u
+        - gramLDeriv u * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ => gramLDeriv u * (Real.log (Real.log u) / Real.log u)) := by
+  have h := gram_deriv_asymp
+  refine h.congr (fun u => by simp [gramLDeriv]) (fun u => by simp [gramLDeriv])
+
+/-- `gram u / gramL u - 1 - log log u / log u = o(log log u / log u)` as
+    `u → +∞`.  Direct consequence of `gram_asymp_in_gramL`. -/
+private lemma gram_quot_residual :
+    (fun u : ℝ => gram u / gramL u - 1 - (Real.log (Real.log u) / Real.log u))
+      =o[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => Real.log (Real.log u) / Real.log u) := by
+  have h := gram_asymp_in_gramL
+  -- Eventually gramL u ≠ 0.
+  have hL_tendsto : Tendsto gramL (𝓝∞ : Filter ℝ) 𝓝∞ :=
+    linear_div_log_tendsto_atTop.congr (fun u => by simp [gramL])
+  have hL_ne : ∀ᶠ u in (𝓝∞ : Filter ℝ), gramL u ≠ 0 := by
+    filter_upwards [hL_tendsto.eventually_gt_atTop (0 : ℝ)] with u hu
+    exact ne_of_gt hu
+  -- Multiply by (gramL u)⁻¹ on both sides.
+  have h_mul := h.mul_isBigO (Asymptotics.isBigO_refl (fun u : ℝ => (gramL u)⁻¹) _)
+  refine h_mul.congr' ?_ ?_
+  · filter_upwards [hL_ne] with u hLu
+    field_simp
+  · filter_upwards [hL_ne] with u hLu
+    field_simp
+
+/-- `deriv gram u / gramLDeriv u - 1 - log log u / log u
+      = o(log log u / log u)`. -/
+private lemma deriv_gram_quot_residual :
+    (fun u : ℝ =>
+      deriv gram u / gramLDeriv u - 1 - (Real.log (Real.log u) / Real.log u))
+      =o[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => Real.log (Real.log u) / Real.log u) := by
+  have h := gram_deriv_asymp_in_gramLDeriv
+  -- Eventually gramLDeriv u ≠ 0.
+  have hL'_ne : ∀ᶠ u in (𝓝∞ : Filter ℝ), gramLDeriv u ≠ 0 := by
+    filter_upwards [log_pos_atTop] with u hu
+    unfold gramLDeriv
+    have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hu
+    positivity
+  have h_mul := h.mul_isBigO (Asymptotics.isBigO_refl (fun u : ℝ => (gramLDeriv u)⁻¹) _)
+  refine h_mul.congr' ?_ ?_
+  · filter_upwards [hL'_ne] with u hL'u
+    rw [iteratedDeriv_one]
+    field_simp
+  · filter_upwards [hL'_ne] with u hL'u
+    field_simp
+
+/-- `frac u = log log u / log u → 0` as `u → +∞`. -/
+private lemma frac_tendsto_zero :
+    Tendsto (fun u : ℝ => Real.log (Real.log u) / Real.log u) (𝓝∞ : Filter ℝ) (𝓝 0) := by
+  have h := loglog_div_log_isLittleO_one
+  exact (Asymptotics.isLittleO_one_iff ℝ).mp h
+
+/-- **Cubic-over-linear expansion** for the Gram function:
+
+      (gram u)⁻¹ · (deriv gram u)^3
+        = (gramL u)⁻¹ · (gramLDeriv u)^3 · (1 + 2 · log log u / log u)
+          + o((gramL u)⁻¹ · (gramLDeriv u)^3 · log log u / log u). -/
+private lemma inv_gram_mul_deriv_gram_cube_expansion :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => (gram u)⁻¹ * (deriv gram u) ^ 3
+        - (gramL u)⁻¹ * (gramLDeriv u) ^ 3
+            * (1 + 2 * (Real.log (Real.log u) / Real.log u)))
+      (fun u : ℝ => (gramL u)⁻¹ * (gramLDeriv u) ^ 3
+        * (Real.log (Real.log u) / Real.log u)) := by
+  -- Set δ := gram u / gramL u - 1, δ' := deriv gram u / gramLDeriv u - 1.
+  -- Then (gram u)⁻¹ · (deriv gram u)^3 / ((gramL u)⁻¹ · (gramLDeriv u)^3)
+  --    = (1 + δ)⁻¹ · (1 + δ')^3 (when gramL u, gramLDeriv u ≠ 0 and 1+δ ≠ 0).
+  set δ : ℝ → ℝ := fun u => gram u / gramL u - 1 with hδ_def
+  set δ' : ℝ → ℝ := fun u => deriv gram u / gramLDeriv u - 1 with hδ'_def
+  set ε : ℝ → ℝ := fun u => Real.log (Real.log u) / Real.log u with hε_def
+  -- Hypotheses for the abstract lemma.
+  have hδ_resid : (fun u => δ u - ε u) =o[(𝓝∞ : Filter ℝ)] ε := by
+    have := gram_quot_residual
+    refine this.congr_left ?_
+    intro u
+    change gram u / gramL u - 1 - Real.log (Real.log u) / Real.log u
+        = (gram u / gramL u - 1) - Real.log (Real.log u) / Real.log u
+    ring
+  have hδ'_resid : (fun u => δ' u - ε u) =o[(𝓝∞ : Filter ℝ)] ε := by
+    have := deriv_gram_quot_residual
+    refine this.congr_left ?_
+    intro u
+    change deriv gram u / gramLDeriv u - 1 - Real.log (Real.log u) / Real.log u
+        = (deriv gram u / gramLDeriv u - 1) - Real.log (Real.log u) / Real.log u
+    ring
+  have hε_tendsto : Tendsto ε (𝓝∞ : Filter ℝ) (𝓝 0) := frac_tendsto_zero
+  -- Apply the abstract lemma.
+  have h_abstract := prod_inv_cube_expansion_aux hδ_resid hδ'_resid hε_tendsto
+  -- h_abstract : (fun u => (1 + δ u)⁻¹ * (1 + δ' u)^3 - (1 + 2 * ε u)) =o ε.
+  -- Multiply both sides by (gramL u)⁻¹ * (gramLDeriv u)^3 (=O of itself).
+  have h_factor :
+      Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+        (fun u : ℝ => (gramL u)⁻¹ * (gramLDeriv u) ^ 3)
+        (fun u : ℝ => (gramL u)⁻¹ * (gramLDeriv u) ^ 3) :=
+    Asymptotics.isBigO_refl _ _
+  have h_mul := h_factor.mul_isLittleO h_abstract
+  -- h_mul : (fun u => F · ((1+δ)⁻¹(1+δ')³ - (1+2ε))) =o (F · ε)
+  -- where F := (gramL u)⁻¹ * (gramLDeriv u)^3.
+  -- Rewrite both sides to match the target.
+  refine h_mul.congr' ?_ ?_
+  · -- LHS: F·((1+δ)⁻¹(1+δ')³ - (1+2ε))
+    --     = F·(1+δ)⁻¹(1+δ')³ - F·(1+2ε)
+    --     = (gram u)⁻¹·(deriv gram u)³ - (gramL u)⁻¹·(gramLDeriv u)³·(1+2ε)
+    --   (provided gramL u, gramLDeriv u ≠ 0)
+    have hL_ne : ∀ᶠ u in (𝓝∞ : Filter ℝ), gramL u ≠ 0 := by
+      have hL_tendsto : Tendsto gramL (𝓝∞ : Filter ℝ) 𝓝∞ :=
+        linear_div_log_tendsto_atTop.congr (fun u => by simp [gramL])
+      filter_upwards [hL_tendsto.eventually_gt_atTop (0 : ℝ)] with u hu
+      exact ne_of_gt hu
+    have hL'_ne : ∀ᶠ u in (𝓝∞ : Filter ℝ), gramLDeriv u ≠ 0 := by
+      filter_upwards [log_pos_atTop] with u hu
+      unfold gramLDeriv
+      have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+      have hlog_ne : Real.log u ≠ 0 := ne_of_gt hu
+      positivity
+    filter_upwards [hL_ne, hL'_ne] with u hLu hL'u
+    change (gramL u)⁻¹ * (gramLDeriv u) ^ 3
+          * ((1 + δ u)⁻¹ * (1 + δ' u) ^ 3 - (1 + 2 * ε u))
+        = (gram u)⁻¹ * (deriv gram u) ^ 3
+          - (gramL u)⁻¹ * (gramLDeriv u) ^ 3 * (1 + 2 * ε u)
+    have hδ_val : 1 + δ u = gram u / gramL u := by
+      change 1 + (gram u / gramL u - 1) = gram u / gramL u
+      ring
+    have hδ'_val : 1 + δ' u = deriv gram u / gramLDeriv u := by
+      change 1 + (deriv gram u / gramLDeriv u - 1) = deriv gram u / gramLDeriv u
+      ring
+    rw [hδ_val, hδ'_val]
+    field_simp
+  · -- RHS: F · ε = (gramL u)⁻¹ * (gramLDeriv u)^3 * ε. Same as goal RHS.
+    rfl
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
