@@ -601,6 +601,25 @@ private noncomputable def gramLeading (n : ℕ) (u : ℝ) : ℝ :=
   (-1 : ℝ) ^ (n + 1) * (2 * Real.pi) * (n - 2).factorial
     / (u ^ (n - 1) * Real.log u ^ 2)
 
+/-- Closed form for `gramLeading 2 u`: `-2π / (u · log² u)`. -/
+private lemma gramLeading_two (u : ℝ) :
+    gramLeading 2 u = -(2 * Real.pi) / (u * Real.log u ^ 2) := by
+  change ((-1 : ℝ) ^ (2 + 1) * (2 * Real.pi) * (Nat.factorial (2 - 2))
+        / (u ^ (2 - 1) * Real.log u ^ 2)) = _
+  norm_num
+
+/-- Algebraic factorisation: the leading order of
+    `-(1/(2π)) · (gramL u)⁻¹ · (gramLDeriv u)^3` is exactly
+    `gramLeading 2 u`.  Valid whenever `u ≠ 0` and `log u ≠ 0`. -/
+private lemma gramLeading_two_factorization {u : ℝ}
+    (hu : u ≠ 0) (hlog : Real.log u ≠ 0) :
+    -(1 / (2 * Real.pi)) * (gramL u)⁻¹ * (gramLDeriv u) ^ 3
+      = gramLeading 2 u := by
+  unfold gramL gramLDeriv
+  rw [gramLeading_two]
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  field_simp
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
