@@ -620,6 +620,195 @@ private lemma gramLeading_two_factorization {u : ℝ}
   have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
   field_simp
 
+/-!
+  ## §1.11  Leading-order asymptotic at n = 2
+
+  Combining
+    • the n = 2 solved form `iteratedDeriv_two_gram_eventually_eq`,
+    • the Corollary-2 transport `iteratedDeriv_theta_at_gram_isO`,
+    • the equivalences `gram ~ gramL`, `deriv gram ~ gramLDeriv`,
+    • the algebraic identity `gramLeading_two_factorization`,
+  we obtain
+
+      iteratedDeriv 2 gram ~[𝓝∞] gramLeading 2.
+
+  This is the *leading* asymptotic equivalence — the refined
+  `(1 + (2 + o(1)) · log log u / log u)` correction is a further step.
+-/
+
+/-- `(gram u)⁻¹ → 0` as `u → +∞`. -/
+private lemma gram_inv_tendsto_zero :
+    Tendsto (fun u : ℝ => (gram u)⁻¹) 𝓝∞ (𝓝 0) :=
+  gram_tendsto_atTop.inv_tendsto_atTop
+
+/-- `((gram u)⁻¹)^3 = o((gram u)⁻¹)` as `u → +∞`. -/
+private lemma inv_gram_pow_three_isLittleO_inv_gram :
+    Iso (fun u : ℝ => ((gram u)⁻¹) ^ 3) (fun u : ℝ => (gram u)⁻¹) 𝓝∞ := by
+  -- Factor `x⁻¹^3 = x⁻¹ · x⁻¹^2`, where `x⁻¹^2 = o(1)`.
+  have h_sq_tendsto : Tendsto (fun u : ℝ => ((gram u)⁻¹) ^ 2) 𝓝∞ (𝓝 0) := by
+    have := gram_inv_tendsto_zero.pow 2
+    simpa using this
+  have h_sq_o : Asymptotics.IsLittleO 𝓝∞
+      (fun u : ℝ => ((gram u)⁻¹) ^ 2) (fun _ : ℝ => (1 : ℝ)) :=
+    (Asymptotics.isLittleO_one_iff ℝ).mpr h_sq_tendsto
+  have h_refl : Asymptotics.IsBigO 𝓝∞ (fun u : ℝ => (gram u)⁻¹) (fun u : ℝ => (gram u)⁻¹) :=
+    Asymptotics.isBigO_refl _ _
+  have h_prod := h_refl.mul_isLittleO h_sq_o
+  refine h_prod.congr' ?_ ?_
+  · filter_upwards with u using by ring
+  · filter_upwards with u using by ring
+
+/-- The n = 2 instance of Corollary 2 transported along `gram → ∞`,
+    sharpened to an asymptotic equivalence:
+
+        iteratedDeriv 2 theta (gram u)  ~[𝓝∞]  (1/2) · (gram u)⁻¹. -/
+private lemma iteratedDeriv_two_theta_at_gram_isEquivalent :
+    IsEquivalent 𝓝∞
+      (fun u : ℝ => iteratedDeriv 2 theta (gram u))
+      (fun u : ℝ => (1 / 2 : ℝ) * (gram u)⁻¹) := by
+  -- Raw IsO statement from Corollary 2 transport.
+  have h_isO := iteratedDeriv_theta_at_gram_isO 2 (le_refl 2)
+  -- Eventually rewrite LHS: simplify constants and `(gram u)^(1-2:ℝ) = (gram u)⁻¹`.
+  have h_lhs :
+      (fun u : ℝ => iteratedDeriv 2 theta (gram u)
+        - ((-1 : ℝ) ^ (2 : ℕ) * ((Nat.factorial (2 - 2) : ℕ) : ℝ)
+            * (1 / 2) * (gram u) ^ (1 - (2 : ℝ))))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ =>
+        iteratedDeriv 2 theta (gram u) - (1 / 2 : ℝ) * (gram u)⁻¹) := by
+    filter_upwards with u
+    have h_exp : (1 - (2 : ℝ)) = (-1 : ℝ) := by ring
+    have h_rpow : (gram u) ^ (-1 : ℝ) = (gram u)⁻¹ := Real.rpow_neg_one _
+    rw [h_exp, h_rpow]
+    norm_num
+  -- Eventually rewrite RHS: `(gram u)^(-2-1:ℝ) = ((gram u)⁻¹)^3`.
+  have h_rhs :
+      (fun u : ℝ => (gram u) ^ (-(2 : ℝ) - 1))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => ((gram u)⁻¹) ^ 3) := by
+    filter_upwards with u
+    have h_exp : (-(2 : ℝ) - 1) = ((-3 : ℤ) : ℝ) := by push_cast; ring
+    rw [h_exp, Real.rpow_intCast]
+    change (gram u) ^ (-3 : ℤ) = ((gram u)⁻¹) ^ 3
+    rw [zpow_neg, show (3 : ℤ) = ((3 : ℕ) : ℤ) from rfl, zpow_natCast, inv_pow]
+  -- Cleaned-up IsO: `θ''(gram u) - (1/2)·(gram u)⁻¹ = O(((gram u)⁻¹)^3)`.
+  have h_isO_clean :
+      Asymptotics.IsBigO 𝓝∞
+        (fun u : ℝ =>
+          iteratedDeriv 2 theta (gram u) - (1 / 2 : ℝ) * (gram u)⁻¹)
+        (fun u : ℝ => ((gram u)⁻¹) ^ 3) :=
+    (h_isO.congr' h_lhs h_rhs : _)
+  -- Use `((gram u)⁻¹)^3 = o((1/2)·(gram u)⁻¹)`.
+  have h_o : Iso (fun u : ℝ => ((gram u)⁻¹) ^ 3)
+      (fun u : ℝ => (1 / 2 : ℝ) * (gram u)⁻¹) 𝓝∞ := by
+    have h := inv_gram_pow_three_isLittleO_inv_gram
+    have h' := h.const_mul_right (c := (1 / 2 : ℝ)) (by norm_num)
+    -- `h'` has the right shape already.
+    exact h'
+  -- The IsEquivalent says: residual = o(target).
+  exact h_isO_clean.trans_isLittleO h_o
+
+/-- `deriv gram ~[𝓝∞] gramLDeriv` (unpacking `iteratedDeriv 1 = deriv`). -/
+private lemma deriv_gram_isEquivalent_gramLDeriv :
+    IsEquivalent 𝓝∞ (deriv gram) gramLDeriv := by
+  have h := gram_deriv_isEquivalent_gramLDeriv
+  rwa [iteratedDeriv_one] at h
+
+/-- `(deriv gram)^3 ~[𝓝∞] gramLDeriv^3`. -/
+private lemma deriv_gram_pow_three_isEquivalent :
+    IsEquivalent 𝓝∞ (fun u : ℝ => (deriv gram u) ^ 3) (fun u : ℝ => (gramLDeriv u) ^ 3) :=
+  deriv_gram_isEquivalent_gramLDeriv.pow 3
+
+/-- `(gram u)⁻¹ ~[𝓝∞] (gramL u)⁻¹`. -/
+private lemma gram_inv_isEquivalent_gramL_inv :
+    IsEquivalent 𝓝∞ (fun u : ℝ => (gram u)⁻¹) (fun u : ℝ => (gramL u)⁻¹) :=
+  gram_isEquivalent_gramL.inv
+
+/-- **Leading-order asymptotic equivalence at n = 2.**
+
+        iteratedDeriv 2 gram  ~[𝓝∞]  gramLeading 2.
+
+    Combines `iteratedDeriv_two_gram_eventually_eq` (the solved form
+    `gram'' = −(1/π) · θ''(gram) · (gram')³`) with the asymptotic
+    equivalences `θ''(gram u) ~ (1/2)·(gram u)⁻¹`,
+    `(gram u)⁻¹ ~ (gramL u)⁻¹`, `(deriv gram u)³ ~ (gramLDeriv u)³`,
+    and the algebraic identity `gramLeading_two_factorization`. -/
+private lemma iteratedDeriv_two_gram_isEquivalent_gramLeading_two :
+    IsEquivalent 𝓝∞ (iteratedDeriv 2 gram) (gramLeading 2) := by
+  -- (A) Lift the solved form to an eventually-equality at `𝓝∞`.
+  have h_solved := iteratedDeriv_two_gram_eventually_eq
+  -- (B) IsEquivalent chain for the RHS of (A):
+  --     -(1/π) · θ''(gram u) · (deriv gram u)^3
+  --       ~ -(1/π) · ((1/2)·(gram u)⁻¹) · (gramLDeriv u)^3
+  --       ~ -(1/π) · ((1/2)·(gramL u)⁻¹) · (gramLDeriv u)^3
+  --     = -(1/(2π)) · (gramL u)⁻¹ · (gramLDeriv u)^3
+  --     = gramLeading 2 u  (eventually)
+  -- Step B1: θ''(gram u) · (deriv gram u)^3 ~ (1/2)·(gram u)⁻¹ · (gramLDeriv u)^3.
+  have h_step1 : IsEquivalent 𝓝∞
+      (fun u : ℝ => iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3)
+      (fun u : ℝ => (1 / 2 : ℝ) * (gram u)⁻¹ * (gramLDeriv u) ^ 3) :=
+    iteratedDeriv_two_theta_at_gram_isEquivalent.mul deriv_gram_pow_three_isEquivalent
+  -- Step B2: replace (gram u)⁻¹ with (gramL u)⁻¹ inside the product.
+  have h_const_eqv :
+      IsEquivalent 𝓝∞ (fun _ : ℝ => (1 / 2 : ℝ)) (fun _ : ℝ => (1 / 2 : ℝ)) :=
+    IsEquivalent.refl
+  have h_gd_eqv :
+      IsEquivalent 𝓝∞ (fun u : ℝ => (gramLDeriv u) ^ 3) (fun u : ℝ => (gramLDeriv u) ^ 3) :=
+    IsEquivalent.refl
+  have h_step2 : IsEquivalent 𝓝∞
+      (fun u : ℝ => (1 / 2 : ℝ) * (gram u)⁻¹ * (gramLDeriv u) ^ 3)
+      (fun u : ℝ => (1 / 2 : ℝ) * (gramL u)⁻¹ * (gramLDeriv u) ^ 3) :=
+    (h_const_eqv.mul gram_inv_isEquivalent_gramL_inv).mul h_gd_eqv
+  -- Combine B1 + B2.
+  have h_prod_eqv : IsEquivalent 𝓝∞
+      (fun u : ℝ => iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3)
+      (fun u : ℝ => (1 / 2 : ℝ) * (gramL u)⁻¹ * (gramLDeriv u) ^ 3) :=
+    h_step1.trans h_step2
+  -- Multiply by the constant `-(1/π)` (treat as IsEquivalent.mul with refl).
+  have h_constπ :
+      IsEquivalent 𝓝∞
+        (fun _ : ℝ => -(1 / Real.pi)) (fun _ : ℝ => -(1 / Real.pi)) :=
+    IsEquivalent.refl
+  have h_mul_const : IsEquivalent 𝓝∞
+      (fun u : ℝ =>
+        -(1 / Real.pi) * (iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3))
+      (fun u : ℝ =>
+        -(1 / Real.pi) * ((1 / 2 : ℝ) * (gramL u)⁻¹ * (gramLDeriv u) ^ 3)) :=
+    h_constπ.mul h_prod_eqv
+  -- Regroup `-(1/π) · ((1/2) · …) = -(1/(2π)) · …` and apply
+  -- `gramLeading_two_factorization` to land on `gramLeading 2 u`.
+  have h_target_eq :
+      (fun u : ℝ =>
+        -(1 / Real.pi) * ((1 / 2 : ℝ) * (gramL u)⁻¹ * (gramLDeriv u) ^ 3))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => gramLeading 2 u) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ), log_pos_atTop] with u hu hlog
+    have hu_ne : u ≠ 0 := ne_of_gt hu
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hlog
+    have h_factor := gramLeading_two_factorization hu_ne hlog_ne
+    -- `h_factor : -(1/(2π)) · (gramL u)⁻¹ · (gramLDeriv u)^3 = gramLeading 2 u`.
+    have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+    have h_regroup :
+        -(1 / Real.pi) * ((1 / 2 : ℝ) * (gramL u)⁻¹ * (gramLDeriv u) ^ 3)
+        = -(1 / (2 * Real.pi)) * (gramL u)⁻¹ * (gramLDeriv u) ^ 3 := by
+      field_simp
+    rw [h_regroup, h_factor]
+  -- Massage the LHS of `h_mul_const` to match the RHS of `h_solved`.
+  have h_lhs_eq :
+      (fun u : ℝ =>
+        -(1 / Real.pi) * (iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ =>
+        -(1 / Real.pi) * iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3) := by
+    filter_upwards with u using by ring
+  have h_eqv1 : IsEquivalent 𝓝∞
+      (fun u : ℝ =>
+        -(1 / Real.pi) * iteratedDeriv 2 theta (gram u) * (deriv gram u) ^ 3)
+      (fun u : ℝ => gramLeading 2 u) := by
+    refine (h_lhs_eq.symm.trans_isEquivalent h_mul_const).trans_eventuallyEq h_target_eq
+  -- Finally, stitch `h_solved` (eventually-equal) with `h_eqv1`.
+  exact h_solved.trans_isEquivalent h_eqv1
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
