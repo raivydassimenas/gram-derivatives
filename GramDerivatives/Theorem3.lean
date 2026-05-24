@@ -809,6 +809,157 @@ private lemma iteratedDeriv_two_gram_isEquivalent_gramLeading_two :
   -- Finally, stitch `h_solved` (eventually-equal) with `h_eqv1`.
   exact h_solved.trans_isEquivalent h_eqv1
 
+/-!
+  ## §1.12  Refined θ''(gram u) bound
+
+  Corollary 2 transported along `gram → ∞` gives
+      `θ''(gram u) − (1/2)·(gram u)⁻¹ = O((gram u)⁻³)`.
+  To refine the n = 2 case of Theorem 3 to the
+  `(1 + 2 · log log u / log u)` precision, we need to upgrade this
+  `O((gram u)⁻³)` bound to `o((gramL u)⁻¹ · log log u / log u)` — the
+  same scale as the secondary correction term we want to expose.
+
+  The argument hinges on `(gramL u)⁻² = o(log log u / log u)`, which
+  reduces to `log³ u / u² → 0`.
+-/
+
+/-- `log³ u / u² → 0` as `u → +∞`.  (Polynomial growth of `u²` dominates
+    any power of `log u`.) -/
+private lemma log_cube_div_u_sq_tendsto_zero :
+    Tendsto (fun u : ℝ => Real.log u ^ 3 / u ^ 2) 𝓝∞ (𝓝 0) := by
+  have h_log_cube : (fun u : ℝ => Real.log u ^ 3) =o[(𝓝∞ : Filter ℝ)] (fun u : ℝ => u) :=
+    Real.isLittleO_pow_log_id_atTop
+  have h_quot : Tendsto (fun u : ℝ => Real.log u ^ 3 / u) (𝓝∞ : Filter ℝ) (𝓝 0) :=
+    h_log_cube.tendsto_div_nhds_zero
+  have h_inv : Tendsto (fun u : ℝ => u⁻¹) (𝓝∞ : Filter ℝ) (𝓝 0) := tendsto_inv_atTop_zero
+  have h_prod : Tendsto (fun u : ℝ => (Real.log u ^ 3 / u) * u⁻¹) (𝓝∞ : Filter ℝ) (𝓝 (0 * 0)) :=
+    h_quot.mul h_inv
+  rw [mul_zero] at h_prod
+  refine h_prod.congr' ?_
+  filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with u hu
+  field_simp
+
+/-- `(gramL u)⁻² = o(log log u / log u)` as `u → +∞`.
+
+    Boils down to `log³ u / (4π² · u² · log log u) → 0`. -/
+private lemma inv_gramL_sq_isLittleO_frac :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gramL u)⁻¹) ^ 2)
+      (fun u : ℝ => Real.log (Real.log u) / Real.log u) := by
+  refine Asymptotics.isLittleO_of_tendsto' ?_ ?_
+  · -- `frac u = 0 ⟹ (gramL u)⁻² = 0` (vacuously, since frac u > 0 eventually).
+    filter_upwards [log_pos_atTop, loglog_pos_atTop] with u hu_log hu_loglog h_zero
+    exfalso
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hu_log
+    have h_loglog_zero : Real.log (Real.log u) = 0 := by
+      rcases div_eq_zero_iff.mp h_zero with h | h
+      · exact h
+      · exact absurd h hlog_ne
+    linarith
+  · -- `((gramL u)⁻²) / (log log u / log u) → 0`.
+    have h_log_cube := log_cube_div_u_sq_tendsto_zero
+    have h_loglog_inv :
+        Tendsto (fun u : ℝ => (Real.log (Real.log u))⁻¹) (𝓝∞ : Filter ℝ) (𝓝 0) := by
+      have h := (Real.tendsto_log_atTop.comp Real.tendsto_log_atTop)
+      exact h.inv_tendsto_atTop
+    have h_prod : Tendsto
+        (fun u : ℝ => (Real.log u ^ 3 / u ^ 2) * (4 * Real.pi ^ 2 : ℝ)⁻¹
+                      * (Real.log (Real.log u))⁻¹)
+        (𝓝∞ : Filter ℝ) (𝓝 (0 * (4 * Real.pi ^ 2 : ℝ)⁻¹ * 0)) := by
+      exact ((h_log_cube.mul_const _).mul h_loglog_inv)
+    have h_lim : (0 : ℝ) * (4 * Real.pi ^ 2 : ℝ)⁻¹ * 0 = 0 := by ring
+    rw [h_lim] at h_prod
+    refine h_prod.congr' ?_
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ), log_pos_atTop, loglog_pos_atTop]
+      with u hu_pos hu_log hu_loglog
+    have hu_ne : u ≠ 0 := ne_of_gt hu_pos
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hu_log
+    have hloglog_ne : Real.log (Real.log u) ≠ 0 := ne_of_gt hu_loglog
+    have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+    change (Real.log u ^ 3 / u ^ 2) * (4 * Real.pi ^ 2 : ℝ)⁻¹ * (Real.log (Real.log u))⁻¹
+      = ((gramL u)⁻¹) ^ 2 / (Real.log (Real.log u) / Real.log u)
+    unfold gramL
+    field_simp
+    ring
+
+/-- `(gram u)⁻¹ =O[𝓝∞] (gramL u)⁻¹`.  Follows from the equivalence
+    `gram ~ gramL` (positivity is automatic since both → +∞). -/
+private lemma inv_gram_isBigO_inv_gramL :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => (gram u)⁻¹) (fun u : ℝ => (gramL u)⁻¹) :=
+  gram_inv_isEquivalent_gramL_inv.isBigO
+
+/-- `(gram u)⁻² = o(log log u / log u)` as `u → +∞`.
+
+    Composition of `gram⁻¹ ~ gramL⁻¹` (so `(gram u)⁻² ~ (gramL u)⁻²`)
+    with `(gramL u)⁻² = o(frac u)`. -/
+private lemma inv_gram_sq_isLittleO_frac :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gram u)⁻¹) ^ 2)
+      (fun u : ℝ => Real.log (Real.log u) / Real.log u) := by
+  have h_eqv : IsEquivalent (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gram u)⁻¹) ^ 2) (fun u : ℝ => ((gramL u)⁻¹) ^ 2) :=
+    gram_inv_isEquivalent_gramL_inv.pow 2
+  exact h_eqv.trans_isLittleO inv_gramL_sq_isLittleO_frac
+
+/-- `(gram u)⁻³ = o((gramL u)⁻¹ · log log u / log u)`.
+
+    Factor `(gram u)⁻³ = (gram u)⁻¹ · (gram u)⁻²`, then apply
+    `O · o = o`. -/
+private lemma inv_gram_cube_isLittleO_inv_gramL_mul_frac :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gram u)⁻¹) ^ 3)
+      (fun u : ℝ => (gramL u)⁻¹ * (Real.log (Real.log u) / Real.log u)) := by
+  have h_prod := inv_gram_isBigO_inv_gramL.mul_isLittleO inv_gram_sq_isLittleO_frac
+  refine h_prod.congr_left ?_
+  intro u; ring
+
+/-- **Refined θ''(gram u) asymptotic.**
+
+        θ''(gram u) − (1/2) · (gram u)⁻¹
+          = o((gramL u)⁻¹ · log log u / log u)
+
+    as `u → +∞`.  This is the n = 2 transport of Corollary 2 with the
+    error term re-scaled to the precision used by Theorem 3. -/
+private lemma iteratedDeriv_two_theta_at_gram_isLittleO_refined :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => iteratedDeriv 2 theta (gram u) - (1 / 2 : ℝ) * (gram u)⁻¹)
+      (fun u : ℝ => (gramL u)⁻¹ * (Real.log (Real.log u) / Real.log u)) := by
+  -- Raw IsO from Corollary 2 transport.
+  have h_isO := iteratedDeriv_theta_at_gram_isO 2 (le_refl 2)
+  -- Rewrite LHS to `θ''(gram u) - (1/2)·(gram u)⁻¹`.
+  have h_lhs :
+      (fun u : ℝ => iteratedDeriv 2 theta (gram u)
+        - ((-1 : ℝ) ^ (2 : ℕ) * ((Nat.factorial (2 - 2) : ℕ) : ℝ)
+            * (1 / 2) * (gram u) ^ (1 - (2 : ℝ))))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ =>
+        iteratedDeriv 2 theta (gram u) - (1 / 2 : ℝ) * (gram u)⁻¹) := by
+    filter_upwards with u
+    have h_exp : (1 - (2 : ℝ)) = (-1 : ℝ) := by ring
+    have h_rpow : (gram u) ^ (-1 : ℝ) = (gram u)⁻¹ := Real.rpow_neg_one _
+    rw [h_exp, h_rpow]
+    norm_num
+  -- Rewrite RHS to `((gram u)⁻¹)^3`.
+  have h_rhs :
+      (fun u : ℝ => (gram u) ^ (-(2 : ℝ) - 1))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => ((gram u)⁻¹) ^ 3) := by
+    filter_upwards with u
+    have h_exp : (-(2 : ℝ) - 1) = ((-3 : ℤ) : ℝ) := by push_cast; ring
+    rw [h_exp, Real.rpow_intCast]
+    change (gram u) ^ (-3 : ℤ) = ((gram u)⁻¹) ^ 3
+    rw [zpow_neg, show (3 : ℤ) = ((3 : ℕ) : ℤ) from rfl, zpow_natCast, inv_pow]
+  -- IsO with `((gram u)⁻¹)^3` bound.
+  have h_isO_clean :
+      Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+        (fun u : ℝ =>
+          iteratedDeriv 2 theta (gram u) - (1 / 2 : ℝ) * (gram u)⁻¹)
+        (fun u : ℝ => ((gram u)⁻¹) ^ 3) :=
+    (h_isO.congr' h_lhs h_rhs : _)
+  -- Compose with `((gram u)⁻¹)^3 = o((gramL u)⁻¹ · frac u)`.
+  exact h_isO_clean.trans_isLittleO inv_gram_cube_isLittleO_inv_gramL_mul_frac
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
