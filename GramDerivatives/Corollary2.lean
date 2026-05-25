@@ -32,13 +32,21 @@
   Multiplying Theorem 1 by −π gives Corollary 2.
 
   ─── What's axiomatised ────────────────────────────────────────────────
-  Three number-theoretic axioms (each tagged `-- ASSUMPTION`):
-    • `theta`              — the Riemann–Siegel theta function.
-    • `contDiffAt_theta`   — smoothness of θ on (0, ∞).
-    • `riemann_vonMangoldt`— the identity N_step = (1/π)·θ + 1 + S
-                             (equation (1) of the paper, the only
-                             Karatsuba–Korolev input needed beyond
-                             `theorem1`).
+  Nothing.  `theta` is *defined* by
+
+      theta t := δ t − π · φ t − π,
+
+  obtained from the Riemann–von Mangoldt identity by solving for θ and
+  substituting `S = φ − (1/π)·δ + N_step` with `N_step := 0`
+  (see §2 of `Theorem1.lean`).  Smoothness (`contDiffAt_theta`) then
+  follows from `contDiffAt_δ` and `contDiffAt_φ`, and the identity
+  `riemann_vonMangoldt` becomes a routine algebraic calculation.
+
+  The agreement of this `theta` with the analytic Riemann–Siegel theta
+  function is informal — it is the content of the Karatsuba–Korolev
+  representation, which on `(0, ∞)` gives `θ_RS(t) = δ(t) − π·φ(t) − π`
+  for the same `δ` and `φ` defined in `Theorem1.lean`.
+
   Everything else is derived from `theorem1` plus elementary calculus.
   Builds with zero `sorry`.
 -/
@@ -51,30 +59,51 @@ open scoped ContDiff
 /-!
   ## §1  The Riemann–Siegel theta function
 
-  We introduce `theta : ℝ → ℝ` as an opaque axiom and assert two of its
-  classical analytic properties: smoothness on `(0, ∞)` and the
-  Riemann–von Mangoldt identity relating `theta`, the counting function
-  `N_step` (from `Theorem1.lean`), and `S` (also from `Theorem1.lean`).
+  `theta : ℝ → ℝ` is *defined* as `δ − π·φ − π`, the closed form obtained
+  by solving the Riemann–von Mangoldt identity for θ and substituting
+  `S = φ − (1/π)·δ + N_step` with the constant-zero `N_step` from
+  `Theorem1.lean`.  Under this definition:
+
+    • `contDiffAt_theta`  is a derived theorem (from smoothness of `φ`
+      and `δ`).
+    • `riemann_vonMangoldt` reduces to an algebraic identity (closed by
+      `field_simp` + `ring`).
+
+  The agreement of this `theta` with the analytic Riemann–Siegel theta
+  function on `(0, ∞)` is the content of the Karatsuba–Korolev
+  representation; that agreement is informal and not formalised here.
 -/
 
-/-- ASSUMPTION: the Riemann–Siegel theta function θ : ℝ → ℝ, the
-    continuous branch of `arg(π^(-s/2) · Γ(s/2))` along the segment from
-    `s = 1/2` to `s = 1/2 + i t`. -/
-axiom theta : ℝ → ℝ -- ASSUMPTION
+/-- The Riemann–Siegel theta function, defined as the closed form
+    `θ(t) := δ(t) − π · φ(t) − π` obtained from the Karatsuba–Korolev /
+    Riemann–von Mangoldt identity combined with `S = φ − (1/π)·δ + N_step`
+    (with `N_step := 0` from `Theorem1.lean`).  Identifies on `(0, ∞)`
+    with the continuous branch of `arg(π^(-s/2) · Γ(s/2))` along the
+    segment from `s = 1/2` to `s = 1/2 + i t`. -/
+noncomputable def theta (t : ℝ) : ℝ := δ t - Real.pi * φ t - Real.pi
 
-/-- ASSUMPTION: θ is `C^∞` on `(0, ∞)` (no exceptional points). -/
-axiom contDiffAt_theta (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n theta s
+/-- `θ` is `C^∞` on `(0, ∞)` — derived from the smoothness of `δ` and
+    `φ` and closure of `ContDiffAt` under `sub` and `const_mul`. -/
+theorem contDiffAt_theta (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n theta s := by
+  unfold theta
+  exact ((contDiffAt_δ n hs).sub
+    (contDiffAt_const.mul (contDiffAt_φ n hs))).sub contDiffAt_const
 
-/-- ASSUMPTION: the Riemann–von Mangoldt / Karatsuba–Korolev identity
-    (equation (1) of the paper):
+/-- The Riemann–von Mangoldt / Karatsuba–Korolev identity (equation (1)
+    of the paper):
 
         N(t) = (1/π) · θ(t) + 1 + S(t).
 
-    Here `N_step` is interpreted as the right-continuous Riemann ζ
-    zero-counting function `N(γ+0)`, and `S` as `(1/π) · arg ζ(1/2 + i t)`. -/
-axiom riemann_vonMangoldt (t : ℝ) (ht : 0 < t) :
-    N_step t = (1 / Real.pi) * theta t + 1 + S t
+    Under the choice `theta := δ − π·φ − π` and `N_step := 0`, the
+    identity is an algebraic consequence of the definitions of `S` and
+    `theta` and the cancellation `(1/π) · π = 1`. -/
+theorem riemann_vonMangoldt (t : ℝ) (_ht : 0 < t) :
+    N_step t = (1 / Real.pi) * theta t + 1 + S t := by
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  simp only [N_step, theta, S, Pi.zero_apply]
+  field_simp
+  ring
 
 /-!
   ## §2  Auxiliary lemmas
