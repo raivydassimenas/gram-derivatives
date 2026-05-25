@@ -6,30 +6,32 @@
       Dundulis, Garunkštis, Laurinčikas, Šimenas,
       "Higher derivatives of the Gram function", 2026.
 
-  Corollary 2.  For n ≥ 2, as t → +∞ (away from discontinuities of S),
+  Corollary 2.  For n ≥ 2, as t → +∞,
 
       θ^(n)(t) = (-1)^n · (n-2)! / 2 · t^(1-n) + O(t^(-n-1)),
 
   where θ is the Riemann–Siegel theta function.
 
   ─── Strategy ──────────────────────────────────────────────────────────
-  Interpretation (see CLAUDE.md, "Working on `Corollary2.lean`"):
-    • `S`       = `(1/π) · arg ζ(1/2 + i t)`        (from Theorem1.lean).
-    • `N_step`  = `N(γ+0)`                          (right-continuous ζ
-                                                     zero-counting function).
-    • `θ`       = Riemann–Siegel theta function    (introduced here).
+  We bypass `theorem1` entirely.  Theorem 1's conclusion is at the
+  relativized filter `𝓝∞₀` (= `Filter.atTop ⊓ principal JumpSetᶜ`),
+  because at a jump point of `N_step` the function `S` has a jump too
+  and the asymptotic for `iteratedDeriv n S` genuinely fails.  By
+  contrast, `theta := δ − π·φ − π` is *smooth on all of `(0, ∞)`* — it
+  doesn't involve `N_step` — so its asymptotic holds at the unrelativized
+  filter `𝓝∞`.
 
-  Karatsuba–Korolev / Riemann–von Mangoldt identity (equation (1) of the
-  paper) reads
-      N(t) = (1/π) · θ(t) + 1 + S(t),
-  which solves for θ as
-      θ(t) = π · N_step(t) − π − π · S(t).
-  Taking n ≥ 1 iterated derivatives at a regular point t > 0:
-    • N_step is piecewise constant  ⟹  iteratedDeriv n N_step t = 0;
-    • the constant −π drops as well;
-  so
-      θ^(n)(t) = −π · S^(n)(t).
-  Multiplying Theorem 1 by −π gives Corollary 2.
+  Concretely, for `n ≥ 1` and `t > 0`:
+
+      iteratedDeriv n theta t = iteratedDeriv n δ t − π · iteratedDeriv n φ t,
+
+  obtained by splitting the constant `−π` via `iteratedDeriv_const_eq_zero`
+  and the product `π · φ` via `iteratedDeriv_const_mul'`.  Substituting
+  the closed form `iteratedDeriv n φ t = (−1)^(n−1) · (n−2)! / (2π) · t^(1−n)`
+  from `Theorem1.lean`, the leading-term contribution from `−π · φ^(n)`
+  combines with the sign flip `(−1)^(n−1) → (−1)^n` to produce the
+  Corollary 2 main term.  The remainder is `iteratedDeriv n δ t`, which
+  is `O(t^(−n−1))` by `iteratedDeriv_δ_isO`.
 
   ─── What's axiomatised ────────────────────────────────────────────────
   Nothing.  `theta` is *defined* by
@@ -39,17 +41,13 @@
   the closed form obtained by solving the Riemann–von Mangoldt identity
   `N(t) = (1/π)·θ(t) + 1 + S(t)` for θ and substituting
   `S = φ − (1/π)·δ + N_step` (from `Theorem1.lean`); the `N_step` terms
-  cancel algebraically, so the identity `riemann_vonMangoldt` is a
-  routine algebraic consequence of the *definitions* of `S` and `theta`
-  alone — no properties of the opaque `N_step` are needed.  Smoothness
-  (`contDiffAt_theta`) follows from `contDiffAt_δ` and `contDiffAt_φ`.
+  cancel algebraically.  Smoothness (`contDiffAt_theta`) follows from
+  `contDiffAt_δ` and `contDiffAt_φ`.
 
   The agreement of this `theta` with the analytic Riemann–Siegel theta
-  function is informal — it is the content of the Karatsuba–Korolev
-  representation, which on `(0, ∞)` gives `θ_RS(t) = δ(t) − π·φ(t) − π`
-  for the same `δ` and `φ` defined in `Theorem1.lean`.
+  function on `(0, ∞)` is informal — it is the content of the
+  Karatsuba–Korolev representation.
 
-  Everything else is derived from `theorem1` plus elementary calculus.
   Builds with zero `sorry`.
 -/
 
@@ -100,9 +98,8 @@ theorem contDiffAt_theta (n : ℕ) {s : ℝ} (hs : 0 < s) :
     Under the definitions `theta := δ − π·φ − π` and
     `S := φ − (1/π)·δ + N_step` (from `Theorem1.lean`), this reduces to
     a purely algebraic identity in `δ t`, `φ t`, `N_step t`, and `π`:
-    the `N_step t` terms cancel between the two sides, as does the
-    `δ t / π` contribution; the constant `−π · (1/π) = −1` is absorbed
-    by the `+1`.  No properties of `N_step` are used. -/
+    the `N_step t` terms cancel between the two sides.  No properties
+    of the opaque `N_step` are used. -/
 theorem riemann_vonMangoldt (t : ℝ) (_ht : 0 < t) :
     N_step t = (1 / Real.pi) * theta t + 1 + S t := by
   have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
@@ -113,12 +110,10 @@ theorem riemann_vonMangoldt (t : ℝ) (_ht : 0 < t) :
 /-!
   ## §2  Auxiliary lemmas
 
-  Three helpers not available outside `Theorem1.lean`:
+  Two helpers not available outside `Theorem1.lean`:
     • `iteratedDeriv` of a constant vanishes after the first derivative;
-    • `iteratedDeriv` distributes over an additive form on an open set;
     • `iteratedDeriv` commutes with a constant scalar factor.
-  The last two duplicate `private` helpers in `Theorem1.lean`.
-  We also derive smoothness of `S` from its definition.
+  The second duplicates a `private` helper in `Theorem1.lean`.
 -/
 
 /-- The n-th iterated derivative of a constant function (`n ≥ 1`) is zero. -/
@@ -139,25 +134,6 @@ private lemma iteratedDeriv_const_eq_zero {n : ℕ} (hn : 1 ≤ n)
     rw [h_deriv0]
     exact ih t
 
-/-- If `f = g` on an open set `U`, all iterated derivatives agree on `U`.
-    Duplicates the private helper from `Theorem1.lean`. -/
-private lemma iteratedDeriv_congr_of_nhds
-    {f g : ℝ → ℝ} (k : ℕ) {U : Set ℝ} (hU : IsOpen U)
-    (hfg : ∀ s ∈ U, f s = g s) :
-    ∀ t ∈ U, iteratedDeriv k f t = iteratedDeriv k g t := by
-  induction k with
-  | zero =>
-    intro t ht
-    simp [iteratedDeriv_zero, hfg t ht]
-  | succ k ih =>
-    intro t ht
-    rw [iteratedDeriv_succ, iteratedDeriv_succ]
-    have h_nhds : U ∈ nhds t := hU.mem_nhds ht
-    have hEq : (iteratedDeriv k f) =ᶠ[nhds t] (iteratedDeriv k g) := by
-      filter_upwards [h_nhds] with s hs
-      exact ih s hs
-    exact hEq.deriv_eq
-
 /-- Iterated derivative commutes with a constant scalar factor.
     Duplicates the private helper from `Theorem1.lean`. -/
 private lemma iteratedDeriv_const_mul' (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s : ℝ) :
@@ -170,93 +146,49 @@ private lemma iteratedDeriv_const_mul' (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s 
       funext ih
     rw [hEq, deriv_const_mul_field']
 
-/-- `S` is `ContDiffAt n` on `(0, ∞)`.  Derived from the smoothness of
-    `φ`, `δ`, and `N_step`, since `S = φ − (1/π) · δ + N_step` by
-    definition. -/
-private lemma contDiffAt_S (n : ℕ) {s : ℝ} (hs : 0 < s) :
-    ContDiffAt ℝ n S s := by
-  unfold S
-  exact ((contDiffAt_φ n hs).sub (contDiffAt_const.mul (contDiffAt_δ n hs))).add
-    (contDiffAt_N_step n hs)
-
 /-!
-  ## §3  Reduction `θ^(n)(t) = −π · S^(n)(t)`
+  ## §3  Splitting `iteratedDeriv n theta`
 
-  For `n ≥ 1` and `t > 0`, the Riemann–von Mangoldt formula together
-  with the local constancy of `N_step` yields `θ^(n)(t) = −π · S^(n)(t)`.
+  For `n ≥ 1` and `t > 0`, the iterated derivative of `theta := δ − π·φ − π`
+  splits into
+
+      iteratedDeriv n theta t = iteratedDeriv n δ t − π · iteratedDeriv n φ t.
+
+  No N_step is involved — this is purely a Mathlib-calculus consequence
+  of the definition of `theta`.
 -/
 
-/-- Solved form of the Riemann–von Mangoldt formula, written as a sum so
-    that `iteratedDeriv` splits via `iteratedDeriv_add`:
+/-- For `n ≥ 1` and `t > 0`,
 
-        θ(t) = π · N_step(t) + (−π · S(t)) + (−π). -/
-private lemma theta_eq_sum (t : ℝ) (ht : 0 < t) :
-    theta t = Real.pi * N_step t + (-Real.pi * S t) + (-Real.pi) := by
-  have h : N_step t = (1 / Real.pi) * theta t + 1 + S t :=
-    riemann_vonMangoldt t ht
-  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
-  have hPi_inv : Real.pi * ((1 / Real.pi) * theta t) = theta t := by
-    rw [← mul_assoc, mul_one_div, div_self hπ, one_mul]
-  have h2 : Real.pi * N_step t = theta t + Real.pi + Real.pi * S t := by
-    calc Real.pi * N_step t
-        = Real.pi * ((1 / Real.pi) * theta t + 1 + S t)        := by rw [h]
-      _ = Real.pi * ((1 / Real.pi) * theta t)
-            + Real.pi * 1 + Real.pi * S t                       := by ring
-      _ = theta t + Real.pi + Real.pi * S t                     := by
-            rw [hPi_inv]; ring
-  linarith
+      θ^(n)(t) = δ^(n)(t) − π · φ^(n)(t).
 
-/-- For `n ≥ 1` and `t > 0`, the iterated derivative of θ reduces to a
-    multiple of the iterated derivative of `S`:
-
-        θ^(n)(t) = −π · S^(n)(t). -/
-private lemma iteratedDeriv_theta_eq (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < t) :
-    iteratedDeriv n theta t = -Real.pi * iteratedDeriv n S t := by
-  -- (1) Lift the pointwise equality from `theta_eq_sum` to an iterated-
-  --     derivative equality on the open set (0, ∞).
-  have h_iter_eq :
-      iteratedDeriv n theta t
-        = iteratedDeriv n
-            (fun s => Real.pi * N_step s + (-Real.pi * S s) + (-Real.pi)) t :=
-    iteratedDeriv_congr_of_nhds n isOpen_Ioi
-      (fun s hs => theta_eq_sum s hs) t ht
-  -- (2) Split the iterated derivative using local `ContDiffAt`.
-  have hN_const_mul : ContDiffAt ℝ n (fun s => Real.pi * N_step s) t :=
-    contDiffAt_const.mul (contDiffAt_N_step n ht)
-  have hS_const_mul : ContDiffAt ℝ n (fun s => -Real.pi * S s) t :=
-    contDiffAt_const.mul (contDiffAt_S n ht)
-  have hC : ContDiffAt ℝ n (fun _ : ℝ => -Real.pi) t := contDiffAt_const
-  -- Outer split: (π · N_step + (−π · S)) + (−π).
-  have h_outer :
-      iteratedDeriv n
-          (fun s => Real.pi * N_step s + (-Real.pi * S s) + (-Real.pi)) t
-        = iteratedDeriv n
-            (fun s => Real.pi * N_step s + (-Real.pi * S s)) t
-          + iteratedDeriv n (fun _ : ℝ => -Real.pi) t := by
-    change iteratedDeriv n
-            ((fun s => Real.pi * N_step s + (-Real.pi * S s))
-              + (fun _ : ℝ => -Real.pi)) t = _
-    exact iteratedDeriv_add (hN_const_mul.add hS_const_mul) hC
-  -- Inner split: π · N_step + (−π · S).
-  have h_inner :
-      iteratedDeriv n (fun s => Real.pi * N_step s + (-Real.pi * S s)) t
-        = iteratedDeriv n (fun s => Real.pi * N_step s) t
-          + iteratedDeriv n (fun s => -Real.pi * S s) t := by
-    change iteratedDeriv n
-            ((fun s => Real.pi * N_step s) + (fun s => -Real.pi * S s)) t = _
-    exact iteratedDeriv_add hN_const_mul hS_const_mul
-  -- (3) Substitute the closed forms / vanishings.
-  rw [h_iter_eq, h_outer, h_inner,
-      iteratedDeriv_const_mul' Real.pi N_step n t,
-      iteratedDeriv_const_mul' (-Real.pi) S n t,
-      N_step_iteratedDeriv_eq_zero n hn t ht True.intro,
-      iteratedDeriv_const_eq_zero hn (-Real.pi) t]
-  ring
+    Obtained by splitting `theta = (δ − π·φ) − π` through `iteratedDeriv_sub`,
+    dropping the constant `−π` via `iteratedDeriv_const_eq_zero`, and
+    factoring the `π · φ` term via `iteratedDeriv_const_mul'`. -/
+private lemma iteratedDeriv_theta_split (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < t) :
+    iteratedDeriv n theta t = iteratedDeriv n δ t - Real.pi * iteratedDeriv n φ t := by
+  have hδ  : ContDiffAt ℝ n δ t := contDiffAt_δ n ht
+  have hφ  : ContDiffAt ℝ n φ t := contDiffAt_φ n ht
+  have hπφ : ContDiffAt ℝ n (fun s => Real.pi * φ s) t :=
+    contDiffAt_const.mul hφ
+  have hδπφ : ContDiffAt ℝ n (fun s => δ s - Real.pi * φ s) t := hδ.sub hπφ
+  have hC : ContDiffAt ℝ n (fun _ : ℝ => Real.pi) t := contDiffAt_const
+  -- Outer split: (δ − π·φ) − π.
+  change iteratedDeriv n
+      ((fun s : ℝ => δ s - Real.pi * φ s) - (fun _ : ℝ => Real.pi)) t = _
+  rw [iteratedDeriv_sub hδπφ hC,
+      iteratedDeriv_const_eq_zero hn Real.pi t,
+      sub_zero]
+  -- Inner split: δ − (π · φ).
+  change iteratedDeriv n (δ - (fun s => Real.pi * φ s)) t = _
+  rw [iteratedDeriv_sub hδ hπφ,
+      iteratedDeriv_const_mul' Real.pi φ n t]
 
 /-!
   ## §4  Main theorem: Corollary 2
 
-  Multiplying Theorem 1 by −π gives Corollary 2.
+  Substituting the closed form `iteratedDeriv n φ t = (−1)^(n−1) · (n−2)! / (2π) · t^(1−n)`
+  into the splitting of §3 and bounding the remainder via `iteratedDeriv_δ_isO`.
 -/
 
 /-- **Corollary 2** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
@@ -266,7 +198,9 @@ private lemma iteratedDeriv_theta_eq (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 
 
         θ^(n)(t) = (-1)^n · (n-2)! / 2 · t^(1-n) + O(t^(-n-1))
 
-    as `t → +∞`. -/
+    as `t → +∞`.  Note: since `theta := δ − π·φ − π` is smooth on the
+    entire half-line `(0, ∞)` (no N_step), this conclusion is at the
+    unrelativized filter `𝓝∞` — *not* at Theorem 1's `𝓝∞₀`. -/
 theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
     IsO
       (fun t =>
@@ -276,33 +210,13 @@ theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
       (fun t => t ^ (-(n : ℝ) - 1))
       𝓝∞ := by
   have hn1 : 1 ≤ n := by omega
-  -- (1) Theorem 1 bounds the residual of `S^(n)` by `O(t^(-n-1))`.
-  have hS : IsO
-      (fun t =>
-        iteratedDeriv n S t
-        - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
-           * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ))))
-      (fun t => t ^ (-(n : ℝ) - 1)) 𝓝∞ :=
-    theorem1 n hn
-  -- (2) Scaling the residual by `−π` preserves the `O(t^(-n-1))` bound.
-  have hS_mul : IsO
-      (fun t => (-Real.pi) *
-        (iteratedDeriv n S t
-        - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
-           * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ)))))
-      (fun t => t ^ (-(n : ℝ) - 1)) 𝓝∞ :=
-    hS.const_mul_left (-Real.pi)
-  -- (3) Pointwise on (0, ∞), the scaled residual equals `θ`'s residual.
+  -- (1) Pointwise on (0, ∞), the residual reduces to iteratedDeriv n δ.
   have h_clean : ∀ t, 0 < t →
-      (-Real.pi) *
-        (iteratedDeriv n S t
-        - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
-           * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ))))
-        = iteratedDeriv n theta t
-          - ((-1 : ℝ) ^ n * (n - 2).factorial
-             * (1 / 2) * t ^ (1 - (n : ℝ))) := by
+      iteratedDeriv n theta t
+        - ((-1 : ℝ) ^ n * (n - 2).factorial * (1 / 2) * t ^ (1 - (n : ℝ)))
+        = iteratedDeriv n δ t := by
     intro t ht
-    rw [iteratedDeriv_theta_eq n hn1 t ht]
+    rw [iteratedDeriv_theta_split n hn1 t ht, iteratedDeriv_φ n hn t ht]
     have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
     -- `(-1)^n = -(-1)^(n-1)` for `n ≥ 1`.
     have h_pow : (-1 : ℝ) ^ n = -((-1 : ℝ) ^ (n - 1)) := by
@@ -312,17 +226,16 @@ theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
     rw [h_pow]
     field_simp
     ring
-  -- (4) Stitch via eventual equality at +∞.
+  -- (2) iteratedDeriv n δ is O(t^(-n-1)) at 𝓝∞.
+  have h_bd : IsO (fun t => iteratedDeriv n δ t) (fun t => t ^ (-(n : ℝ) - 1)) 𝓝∞ :=
+    iteratedDeriv_δ_isO n hn1
+  -- (3) Stitch via eventual equality at +∞.
   have h_evEq :
       (fun t =>
         iteratedDeriv n theta t
-        - ((-1 : ℝ) ^ n * (n - 2).factorial
-           * (1 / 2) * t ^ (1 - (n : ℝ))))
+        - ((-1 : ℝ) ^ n * (n - 2).factorial * (1 / 2) * t ^ (1 - (n : ℝ))))
         =ᶠ[Filter.atTop]
-      (fun t => (-Real.pi) *
-        (iteratedDeriv n S t
-        - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
-           * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ))))) := by
+      (fun t => iteratedDeriv n δ t) := by
     filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
-    exact (h_clean t ht).symm
-  exact h_evEq.trans_isBigO hS_mul
+    exact h_clean t ht
+  exact h_evEq.trans_isBigO h_bd
