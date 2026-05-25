@@ -36,11 +36,13 @@
 
       theta t := δ t − π · φ t − π,
 
-  obtained from the Riemann–von Mangoldt identity by solving for θ and
-  substituting `S = φ − (1/π)·δ + N_step` with `N_step := 0`
-  (see §2 of `Theorem1.lean`).  Smoothness (`contDiffAt_theta`) then
-  follows from `contDiffAt_δ` and `contDiffAt_φ`, and the identity
-  `riemann_vonMangoldt` becomes a routine algebraic calculation.
+  the closed form obtained by solving the Riemann–von Mangoldt identity
+  `N(t) = (1/π)·θ(t) + 1 + S(t)` for θ and substituting
+  `S = φ − (1/π)·δ + N_step` (from `Theorem1.lean`); the `N_step` terms
+  cancel algebraically, so the identity `riemann_vonMangoldt` is a
+  routine algebraic consequence of the *definitions* of `S` and `theta`
+  alone — no properties of the opaque `N_step` are needed.  Smoothness
+  (`contDiffAt_theta`) follows from `contDiffAt_δ` and `contDiffAt_φ`.
 
   The agreement of this `theta` with the analytic Riemann–Siegel theta
   function is informal — it is the content of the Karatsuba–Korolev
@@ -61,13 +63,13 @@ open scoped ContDiff
 
   `theta : ℝ → ℝ` is *defined* as `δ − π·φ − π`, the closed form obtained
   by solving the Riemann–von Mangoldt identity for θ and substituting
-  `S = φ − (1/π)·δ + N_step` with the constant-zero `N_step` from
-  `Theorem1.lean`.  Under this definition:
+  `S = φ − (1/π)·δ + N_step` from `Theorem1.lean`.  Under this definition:
 
     • `contDiffAt_theta`  is a derived theorem (from smoothness of `φ`
       and `δ`).
-    • `riemann_vonMangoldt` reduces to an algebraic identity (closed by
-      `field_simp` + `ring`).
+    • `riemann_vonMangoldt` reduces to an algebraic identity in which
+      the `N_step` terms cancel between the two sides; the identity
+      then closes by `field_simp` + `ring`.
 
   The agreement of this `theta` with the analytic Riemann–Siegel theta
   function on `(0, ∞)` is the content of the Karatsuba–Korolev
@@ -77,9 +79,9 @@ open scoped ContDiff
 /-- The Riemann–Siegel theta function, defined as the closed form
     `θ(t) := δ(t) − π · φ(t) − π` obtained from the Karatsuba–Korolev /
     Riemann–von Mangoldt identity combined with `S = φ − (1/π)·δ + N_step`
-    (with `N_step := 0` from `Theorem1.lean`).  Identifies on `(0, ∞)`
-    with the continuous branch of `arg(π^(-s/2) · Γ(s/2))` along the
-    segment from `s = 1/2` to `s = 1/2 + i t`. -/
+    (from `Theorem1.lean`).  Identifies on `(0, ∞)` with the continuous
+    branch of `arg(π^(-s/2) · Γ(s/2))` along the segment from `s = 1/2`
+    to `s = 1/2 + i t`. -/
 noncomputable def theta (t : ℝ) : ℝ := δ t - Real.pi * φ t - Real.pi
 
 /-- `θ` is `C^∞` on `(0, ∞)` — derived from the smoothness of `δ` and
@@ -95,13 +97,16 @@ theorem contDiffAt_theta (n : ℕ) {s : ℝ} (hs : 0 < s) :
 
         N(t) = (1/π) · θ(t) + 1 + S(t).
 
-    Under the choice `theta := δ − π·φ − π` and `N_step := 0`, the
-    identity is an algebraic consequence of the definitions of `S` and
-    `theta` and the cancellation `(1/π) · π = 1`. -/
+    Under the definitions `theta := δ − π·φ − π` and
+    `S := φ − (1/π)·δ + N_step` (from `Theorem1.lean`), this reduces to
+    a purely algebraic identity in `δ t`, `φ t`, `N_step t`, and `π`:
+    the `N_step t` terms cancel between the two sides, as does the
+    `δ t / π` contribution; the constant `−π · (1/π) = −1` is absorbed
+    by the `+1`.  No properties of `N_step` are used. -/
 theorem riemann_vonMangoldt (t : ℝ) (_ht : 0 < t) :
     N_step t = (1 / Real.pi) * theta t + 1 + S t := by
   have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
-  simp only [N_step, theta, S, Pi.zero_apply]
+  simp only [theta, S]
   field_simp
   ring
 

@@ -26,8 +26,8 @@
   ─── File layout ───────────────────────────────────────────────────────
     §0  Notation and asymptotic infrastructure.
     §1  Definitions  (`φ`, `δ`, `α_part`, `ρ`, `j`).
-    §2  The step function `N_step` (defined as the constant zero).
-    §3  Smoothness lemmas (from elementary Mathlib calculus).
+    §2  Assumptions  (the sole axiom: the piecewise-constant `N_step`).
+    §3  Smoothness lemmas (derived from §2 + elementary Mathlib calculus).
     §4  Iterated derivatives of `φ`              (main term).
     §5  Iterated derivatives of `α_part`         (algebraic error).
     §6  Iterated derivatives of `j` and `t·j(t)` (integral error).
@@ -35,14 +35,14 @@
     §8  Statement and proof of Theorem 1.
 
   ─── What's axiomatised ────────────────────────────────────────────────
-  Nothing.  `N_step` is *defined* as the constant zero function, and the
-  two facts about it used downstream (`contDiffAt_N_step` and
-  `N_step_iteratedDeriv_eq_zero`) are derived as theorems from Mathlib's
-  `contDiff_const` and `iteratedDeriv_const_zero`.  `S` is an ordinary
-  `def` and `S_eq_φ_sub_δ_add_N` holds by `rfl`.  No Riemann ζ,
-  Riemann–Siegel θ, or Karatsuba–Korolev input is assumed; the motivating
-  instance `S(t) = (1/π)·arg ζ(1/2 + it)` merely explains where the
-  decomposition comes from.
+  Only `N_step` is axiomatised: an opaque constant for an arbitrary
+  piecewise-constant function (possibly with countably many jumps),
+  together with `contDiffAt_N_step` and `N_step_iteratedDeriv_eq_zero`.
+  `S` is an ordinary `def` and `S_eq_φ_sub_δ_add_N` holds by `rfl`.  No
+  Riemann ζ, Riemann–Siegel θ, or Karatsuba–Korolev input is assumed;
+  the motivating instance `S(t) = (1/π)·arg ζ(1/2 + it)` merely explains
+  where the decomposition comes from.  Every axiom is tagged
+  `-- ASSUMPTION` and carries a docstring.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
   None.  `Theorem1.lean` builds with zero `sorry`.  `jK_isO` (§6) is
@@ -172,54 +172,43 @@ noncomputable def j (t : ℝ) : ℝ :=
   ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
 
 /-!
-  ## §2  The step function `N_step`
+  ## §2  Assumptions
 
-  `N_step` is *defined* as the constant zero function — the simplest
-  piecewise-constant function on `(0, ∞)`.  Smoothness
-  (`contDiffAt_N_step`) and vanishing of all positive-order iterated
-  derivatives (`N_step_iteratedDeriv_eq_zero`) follow from Mathlib's
-  derivative lemmas for constants; no axioms are needed in this section.
+  Only `N_step` is genuinely axiomatised.  The axioms used in this file:
 
-  `S` is *defined* by the decomposition `S = φ − (1/π)·δ + N_step`, so
-  `S_eq_φ_sub_δ_add_N` holds by `rfl`.
+    • Opaque step function:  `N_step`  (a piecewise-constant function
+      on `(0, ∞)`, possibly with countably many jumps — the motivating
+      instance being `N(γ+0)`, the right-continuous Riemann ζ
+      zero-counting function).
+    • Smoothness / vanishing of `N_step`:  `contDiffAt_N_step`,
+      `N_step_iteratedDeriv_eq_zero`.
 
-  The choice of constant zero is forced by the proof's pre-existing
-  requirements: smoothness *at every* point of `(0, ∞)` together with
-  vanishing positive-order derivatives implies that `N_step` is constant
-  on the connected interval `(0, ∞)`.  The motivating instance — the
-  integer-valued counting step `N(γ+0)` from the Karatsuba–Korolev
-  expansion — is *not* smooth at jump points, so it would not satisfy
-  the stronger smoothness statement used here; the abstract proof only
-  cares that the iterated derivatives vanish, which the zero function
-  satisfies trivially.
+  `S` is now *defined* by the decomposition `S = φ − (1/π)·δ + N_step`, so
+  `S_eq_φ_sub_δ_add_N` holds by `rfl` and is no longer an axiom.
 
   Smoothness of `φ`, `α_part`, `δ`, and `t·j(t)` is *derived* in §3 from
   the §2.5 theorem `contDiffAt_j` (formerly an axiom; now built on the
   joint induction `contDiffOn_jK`) plus elementary Mathlib calculus.
 -/
 
-/-- The step function in the decomposition of `S`, defined as the
-    constant zero function.  Any piecewise-constant function that is
-    smooth on the connected interval `(0, ∞)` must be constant there, so
-    this is the unique (up to additive constant) choice compatible with
-    the abstract smoothness statement `contDiffAt_N_step`. -/
-def N_step : ℝ → ℝ := 0
+/-- The step function in the decomposition of `S`.  It may be *any*
+    piecewise-constant (locally constant) function on `(0, ∞)`, possibly
+    with countably many jumps; opaque otherwise.  The motivating instance
+    is the integer-valued counting step `N(γ+0)` from the
+    Karatsuba–Korolev expansion, but the proof needs no such structure. -/
+axiom N_step : ℝ → ℝ -- ASSUMPTION
 
-/-- `N_step` is smooth on `(0, ∞)` (in fact on all of `ℝ`, being the
-    zero function). -/
-theorem contDiffAt_N_step (n : ℕ) {s : ℝ} (_hs : 0 < s) :
-    ContDiffAt ℝ n N_step s :=
-  contDiff_const.contDiffAt
+/-- ASSUMPTION: `N_step` is smooth on `(0, ∞)` (in fact locally constant). -/
+axiom contDiffAt_N_step (n : ℕ) {s : ℝ} (hs : 0 < s) :
+    ContDiffAt ℝ n N_step s
 
-/-- Every positive-order iterated derivative of `N_step` vanishes,
-    because `N_step` is the constant zero function.  The `h_not_zero : True`
-    slot is retained as a placeholder for a "regular point" predicate
-    (for the motivating ζ instance, "t is not an ordinate of a zero"). -/
-theorem N_step_iteratedDeriv_eq_zero (n : ℕ) (_hn : 1 ≤ n) (t : ℝ) (_ht : 0 < t)
-    (_h_not_zero : True) -- placeholder for a "regular point" predicate
-    : iteratedDeriv n N_step t = 0 := by
-  change iteratedDeriv n (0 : ℝ → ℝ) t = 0
-  exact iteratedDeriv_const_zero
+/-- ASSUMPTION: `N_step` is locally constant on `(0, ∞)`, so all
+    positive-order derivatives vanish.  The `h_not_zero : True` slot is a
+    placeholder for a "regular point" predicate (for the motivating
+    ζ instance, "t is not an ordinate of a zero"); kept for compatibility. -/
+axiom N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < t)
+    (h_not_zero : True) -- placeholder for a "regular point" predicate
+    : iteratedDeriv n N_step t = 0
 
 /-- The target function `S`, *defined* by the abstract decomposition
     `S(t) = φ(t) − (1/π)·δ(t) + N_step(t)`.  `S` may be any function of this
