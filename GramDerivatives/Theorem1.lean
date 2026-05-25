@@ -739,7 +739,7 @@ private theorem iteratedDeriv_j_eqOn_jK (n : ℕ) :
     uses `contDiffOn_succ_iff_deriv_of_isOpen` plus `(hasDerivAt_jK k).deriv`
     to identify `deriv (jK k) = jK (k+1)` on `Ioi 0`. -/
 private lemma contDiffOn_jK : ∀ (n k : ℕ),
-    ContDiffOn ℝ (n : ℕ∞ω) (jK k) (Set.Ioi (0 : ℝ)) := by
+    ContDiffOn ℝ (n : WithTop ℕ∞) (jK k) (Set.Ioi (0 : ℝ)) := by
   intro n
   induction n with
   | zero =>
@@ -749,7 +749,7 @@ private lemma contDiffOn_jK : ∀ (n k : ℕ),
       exact (continuousAt_jK k ht).continuousWithinAt
   | succ n ih =>
       intro k
-      rw [show ((n + 1 : ℕ) : ℕ∞ω) = (n : ℕ∞ω) + 1 by push_cast; ring,
+      rw [show ((n + 1 : ℕ) : WithTop ℕ∞) = (n : WithTop ℕ∞) + 1 by push_cast; ring,
           contDiffOn_succ_iff_deriv_of_isOpen isOpen_Ioi]
       refine ⟨?_, ?_, ?_⟩
       · intro t ht
@@ -767,7 +767,7 @@ end ParametricIntegralJ
     into `ContDiffAt`.  Replaces the former axiom of the same name. -/
 theorem contDiffAt_j (n : ℕ) {s : ℝ} (hs : 0 < s) :
     ContDiffAt ℝ n j s := by
-  have h : ContDiffOn ℝ (n : ℕ∞ω) (jK 0) (Set.Ioi (0 : ℝ)) := contDiffOn_jK n 0
+  have h : ContDiffOn ℝ (n : WithTop ℕ∞) (jK 0) (Set.Ioi (0 : ℝ)) := contDiffOn_jK n 0
   rw [jK_zero] at h
   exact h.contDiffAt (isOpen_Ioi.mem_nhds hs)
 
