@@ -1734,6 +1734,122 @@ private lemma partSize_lt_of_mem_cOther {n : ℕ} (hn : 2 ≤ n)
   · have h_ge_two : 2 ≤ c.length := by omega
     exact partSize_lt_of_length_ge_two c h_ge_two j
 
+/-!
+  ## §2.3  Solve for `iteratedDeriv n gram u`
+
+  The Faà di Bruno equation `0 = ∑ c, term c` splits into three pieces:
+    • the **target** at `c = cTarget`, contributing
+        `θ′(gram u) · iteratedDeriv n gram u`,
+    • the **atomic** at `c = atomic`, contributing
+        `θ^(n)(gram u) · (deriv gram u)^n`,
+    • the **rest** at `c ∈ cOther`.
+
+  Solving for `iteratedDeriv n gram u` and substituting the chain-rule
+  identity `θ′(gram u) · deriv gram u = π` gives the form used in §2.4–§2.6.
+-/
+
+/-- Pointwise solved form of the Faà di Bruno equation for `iteratedDeriv n gram`.
+
+    Eliminating `θ′(gram u)` via the chain rule and isolating
+    `iteratedDeriv n gram u`. -/
+private lemma iteratedDeriv_n_gram_solved (n : ℕ) (hn : 3 ≤ n) (u : ℝ)
+    (hu : gramThreshold < u) (hg : 0 < gram u) (hg' : 0 < deriv gram u) :
+    iteratedDeriv n gram u =
+      -(deriv gram u / Real.pi)
+        * (iteratedDeriv n theta (gram u) * (deriv gram u) ^ n
+           + ∑ c ∈ cOther n (by omega),
+               iteratedDeriv c.length theta (gram u)
+                 * ∏ j, iteratedDeriv (c.partSize j) gram u) := by
+  -- Shared positivity witness so `cTarget n hpos` reduces identically.
+  have hpos : 0 < n := by omega
+  set f : OrderedFinpartition n → ℝ := fun c =>
+    iteratedDeriv c.length theta (gram u)
+      * ∏ j, iteratedDeriv (c.partSize j) gram u with hf_def
+  -- (1) Faà di Bruno: 0 = ∑ c, f c.
+  have h_fb : (0 : ℝ) = ∑ c, f c := faadi_bruno_gram n (by omega) u hu hg
+  -- (2) Membership facts for the sum splitting.
+  have h_target_mem : cTarget n hpos ∈
+      (Finset.univ : Finset (OrderedFinpartition n)) := Finset.mem_univ _
+  have h_ne_atomic : cTarget n hpos ≠ OrderedFinpartition.atomic n :=
+    cTarget_ne_atomic n (by omega)
+  have h_atomic_in_erase :
+      OrderedFinpartition.atomic n ∈
+        (Finset.univ : Finset (OrderedFinpartition n)).erase (cTarget n hpos) := by
+    rw [Finset.mem_erase]
+    exact ⟨h_ne_atomic.symm, Finset.mem_univ _⟩
+  -- (3) Sum decompositions.
+  have h_decomp1 : f (cTarget n hpos) +
+      ∑ c ∈ (Finset.univ : Finset (OrderedFinpartition n)).erase (cTarget n hpos), f c
+      = ∑ c, f c :=
+    Finset.add_sum_erase _ f h_target_mem
+  have h_decomp2 : f (OrderedFinpartition.atomic n) +
+      ∑ c ∈ ((Finset.univ : Finset (OrderedFinpartition n)).erase
+              (cTarget n hpos)).erase (OrderedFinpartition.atomic n), f c
+      = ∑ c ∈ (Finset.univ : Finset (OrderedFinpartition n)).erase (cTarget n hpos), f c :=
+    Finset.add_sum_erase _ f h_atomic_in_erase
+  -- (3a) The "rest" sum (= cOther by definition).
+  have h_decomp2' : f (OrderedFinpartition.atomic n) +
+      ∑ c ∈ cOther n hpos, f c =
+      ∑ c ∈ (Finset.univ : Finset (OrderedFinpartition n)).erase (cTarget n hpos), f c :=
+    h_decomp2
+  -- (4) `f cTarget` evaluates to `θ′(gram u) * iteratedDeriv n gram u`.
+  have h_target_val : f (cTarget n hpos)
+      = iteratedDeriv 1 theta (gram u) * iteratedDeriv n gram u := by
+    change iteratedDeriv 1 theta (gram u) *
+           ∏ _j : Fin 1, iteratedDeriv n gram u =
+           iteratedDeriv 1 theta (gram u) * iteratedDeriv n gram u
+    rw [Fin.prod_univ_one]
+  -- (5) `f atomic` evaluates to `θ^(n)(gram u) * (deriv gram u)^n`.
+  have h_atomic_val : f (OrderedFinpartition.atomic n)
+      = iteratedDeriv n theta (gram u) * (deriv gram u) ^ n := by
+    change iteratedDeriv n theta (gram u) *
+           ∏ _j : Fin n, iteratedDeriv 1 gram u =
+           iteratedDeriv n theta (gram u) * (deriv gram u) ^ n
+    rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin, iteratedDeriv_one]
+  -- (6) Combine the decompositions to get the key algebraic identity:
+  --     0 = f cTarget + (f atomic + ∑ cOther, f c)
+  have h_key : (0 : ℝ) = f (cTarget n hpos) +
+      (f (OrderedFinpartition.atomic n) + ∑ c ∈ cOther n hpos, f c) := by
+    linarith [h_fb, h_decomp1, h_decomp2']
+  -- (7) Substitute the values for f cTarget and f atomic.
+  rw [h_target_val, h_atomic_val, iteratedDeriv_one] at h_key
+  -- h_key : 0 = θ'(gram u) * ID n + (θ^n(gram u) * (deriv gram u)^n + ∑)
+  -- (8) Apply the chain-rule identity θ′(gram u) · deriv gram u = π.
+  have h_chain := deriv_theta_gram_mul_deriv_gram u hu hg
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  have h_gd_ne : deriv gram u ≠ 0 := ne_of_gt hg'
+  have h_θ' : deriv theta (gram u) = Real.pi / deriv gram u := by
+    field_simp
+    linarith
+  rw [h_θ'] at h_key
+  -- (9) Solve for iteratedDeriv n gram u algebraically.
+  have h_solve : iteratedDeriv n gram u = (deriv gram u / Real.pi) *
+      ((Real.pi / deriv gram u) * iteratedDeriv n gram u) := by
+    field_simp
+  rw [h_solve]
+  have h_iter_subst :
+      (Real.pi / deriv gram u) * iteratedDeriv n gram u =
+        -(iteratedDeriv n theta (gram u) * (deriv gram u) ^ n
+           + ∑ c ∈ cOther n hpos, f c) := by
+    linarith
+  rw [h_iter_subst]
+  ring
+
+/-- Eventually-equality version of `iteratedDeriv_n_gram_solved`. -/
+private lemma iteratedDeriv_n_gram_solved_eventually (n : ℕ) (hn : 3 ≤ n) :
+    (fun u : ℝ => iteratedDeriv n gram u)
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+    (fun u : ℝ =>
+      -(deriv gram u / Real.pi)
+        * (iteratedDeriv n theta (gram u) * (deriv gram u) ^ n
+           + ∑ c ∈ cOther n (by omega),
+               iteratedDeriv c.length theta (gram u)
+                 * ∏ j, iteratedDeriv (c.partSize j) gram u)) := by
+  filter_upwards [Filter.eventually_gt_atTop gramThreshold,
+                  eventually_gram_pos, eventually_deriv_gram_pos]
+    with u hu hg hg'
+  exact iteratedDeriv_n_gram_solved n hn u hu hg hg'
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
