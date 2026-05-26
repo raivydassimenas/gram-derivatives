@@ -1444,6 +1444,85 @@ private lemma iteratedDeriv_isBigO_gramLeading
     Asymptotics.IsBigO 𝓝∞ (iteratedDeriv k gram) (gramLeading k) :=
   (iteratedDeriv_isEquivalent_gramLeading h).isBigO
 
+/-!
+  ## §2.1  Faà di Bruno expansion at `θ ∘ gram`
+
+  Generalises the `n = 2` setup `faadi_bruno_gram_two` (§1.10) to arbitrary
+  `n ≥ 2`.  Combines:
+    • `iteratedDeriv_comp_eq_sum_orderedFinpartition` from Mathlib's
+      Faà di Bruno API (works for any `n` via partitions of `Fin n`);
+    • the linearity of `θ ∘ gram` on `Ioi gramThreshold`, which forces every
+      iterated derivative `≥ 2` of `θ ∘ gram` to vanish.
+-/
+
+/-- For `n ≥ 2`, the `n`-th iterated derivative of the linear function
+    `s ↦ (s − 1) · π` vanishes everywhere. -/
+private lemma iteratedDeriv_linear_eq_zero (n : ℕ) (hn : 2 ≤ n) (u : ℝ) :
+    iteratedDeriv n (fun s : ℝ => (s - 1) * Real.pi) u = 0 := by
+  have hderiv : deriv (fun s : ℝ => (s - 1) * Real.pi) = fun _ : ℝ => Real.pi := by
+    funext x
+    have h1 : HasDerivAt (fun s : ℝ => s - 1) 1 x := (hasDerivAt_id x).sub_const 1
+    have h2 : HasDerivAt (fun s : ℝ => (s - 1) * Real.pi) Real.pi x := by
+      simpa using h1.mul_const Real.pi
+    exact h2.deriv
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+  rw [iteratedDeriv_succ', hderiv]
+  exact iteratedDeriv_const_eq_zero (by omega) Real.pi u
+
+/-- **Faà di Bruno applied to `θ ∘ gram`.**  For `n ≥ 2`, at every point
+    `u > gramThreshold` with `gram u > 0`:
+
+        0 = ∑ c : OrderedFinpartition n,
+              θ^(c.length)(gram u) · ∏ j, iteratedDeriv (c.partSize j) gram u.
+
+    The `0` on the LHS comes from `θ ∘ gram = (s ↦ (s − 1)π)` on
+    `Ioi gramThreshold` and the iterated derivative of a linear function
+    vanishing at order `≥ 2`.  The RHS is Mathlib's
+    `iteratedDeriv_comp_eq_sum_orderedFinpartition`. -/
+private lemma faadi_bruno_gram (n : ℕ) (hn : 2 ≤ n) (u : ℝ)
+    (hu : gramThreshold < u) (hg : 0 < gram u) :
+    (0 : ℝ) =
+      ∑ c : OrderedFinpartition n,
+        iteratedDeriv c.length theta (gram u)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u := by
+  -- (1) θ ∘ gram = (s ↦ (s − 1)π) on Ioi gramThreshold.
+  have hθg_eq : ∀ s ∈ Set.Ioi gramThreshold,
+      (theta ∘ gram) s = (s - 1) * Real.pi := by
+    intro s hs
+    simp [Function.comp_apply, gram_spec s hs.le]
+  -- (2) Lift the pointwise equality to iterated derivatives on the open set.
+  have h_iter_eq :
+      iteratedDeriv n (theta ∘ gram) u
+        = iteratedDeriv n (fun s : ℝ => (s - 1) * Real.pi) u :=
+    iteratedDeriv_congr_of_nhds n isOpen_Ioi hθg_eq u hu
+  -- (3) The RHS is 0.
+  have h_rhs : iteratedDeriv n (fun s : ℝ => (s - 1) * Real.pi) u = 0 :=
+    iteratedDeriv_linear_eq_zero n hn u
+  -- (4) Expand the LHS via Faà di Bruno.
+  have hθ : ContDiffAt ℝ n theta (gram u) := contDiffAt_theta n hg
+  have hg_smooth : ContDiffAt ℝ n gram u := contDiffAt_gram n hu
+  have h_comp :
+      iteratedDeriv n (theta ∘ gram) u
+        = ∑ c : OrderedFinpartition n,
+            iteratedDeriv c.length theta (gram u)
+              * ∏ j, iteratedDeriv (c.partSize j) gram u :=
+    iteratedDeriv_comp_eq_sum_orderedFinpartition hθ hg_smooth le_rfl
+  -- (5) Combine.
+  linarith [h_iter_eq.trans h_rhs, h_comp]
+
+/-- Eventually-equality version of `faadi_bruno_gram`, packaged for use
+    with `EventuallyEq.trans_isBigO` / `IsLittleO.congr`. -/
+private lemma faadi_bruno_gram_eventually (n : ℕ) (hn : 2 ≤ n) :
+    (fun _ : ℝ => (0 : ℝ))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+    (fun u : ℝ =>
+      ∑ c : OrderedFinpartition n,
+        iteratedDeriv c.length theta (gram u)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u) := by
+  filter_upwards [Filter.eventually_gt_atTop gramThreshold, eventually_gram_pos]
+    with u hu hg
+  exact faadi_bruno_gram n hn u hu hg
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
