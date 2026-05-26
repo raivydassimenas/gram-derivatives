@@ -1523,6 +1523,217 @@ private lemma faadi_bruno_gram_eventually (n : ℕ) (hn : 2 ≤ n) :
     with u hu hg
   exact faadi_bruno_gram n hn u hu hg
 
+/-!
+  ## §2.2  Partition classification
+
+  Two distinguished partitions of `Fin n` (for `n ≥ 1`) drive the analysis:
+
+    • `cTarget n hn` — length 1, single part of size `n`.  Its Faà di Bruno
+      contribution is `θ′(gram u) · iteratedDeriv n gram u`, the term we
+      solve for.
+    • `OrderedFinpartition.atomic n` — length `n`, all parts of size 1.
+      Its contribution is `θ^(n)(gram u) · (deriv gram u)^n`, the dominant
+      non-target term.
+
+  All other partitions form the finset `cOther n hn`; for these we will
+  show every part has size `< n` (needed to invoke the inductive hypothesis).
+-/
+
+/-- The unique length-1 ordered finpartition of `Fin n`: a single part of
+    size `n`, embedded as the identity `Fin n → Fin n`. -/
+private def cTarget (n : ℕ) (hn : 0 < n) : OrderedFinpartition n where
+  length := 1
+  partSize := fun _ => n
+  partSize_pos := fun _ => hn
+  emb := fun _ j => j
+  emb_strictMono := fun _ => strictMono_id
+  parts_strictMono := Subsingleton.strictMono _
+  disjoint := by
+    intro a _ b _ h
+    exact absurd (Subsingleton.elim a b) h
+  cover j := ⟨⟨0, Nat.one_pos⟩, j, rfl⟩
+
+@[simp] private lemma cTarget_length (n : ℕ) (hn : 0 < n) :
+    (cTarget n hn).length = 1 := rfl
+
+@[simp] private lemma cTarget_partSize (n : ℕ) (hn : 0 < n)
+    (i : Fin (cTarget n hn).length) :
+    (cTarget n hn).partSize i = n := rfl
+
+/-- Sum of part sizes equals `n`.  This is the cardinality of `Fin n` viewed
+    as the disjoint union (via `equivSigma`) of the parts. -/
+private lemma sum_partSize_eq {n : ℕ} (c : OrderedFinpartition n) :
+    ∑ i, c.partSize i = n := by
+  classical
+  calc ∑ i, c.partSize i
+      = ∑ i, Fintype.card (Fin (c.partSize i)) := by
+        simp [Fintype.card_fin]
+    _ = Fintype.card (Σ i, Fin (c.partSize i)) := by rw [Fintype.card_sigma]
+    _ = Fintype.card (Fin n) := Fintype.card_congr c.equivSigma
+    _ = n := Fintype.card_fin _
+
+/-- For a strictly-monotone surjection `f : Fin n → Fin n`, `f = id`.
+
+    Standard inductive argument: `f 0 = 0` by surjectivity together with
+    `0` being the minimum, and then for each `k`, `f (k+1) = k+1` by
+    bounding `j` (the unique preimage of `k+1`) between `k+1` and `k+1`. -/
+private lemma fin_strictMono_surj_eq_id {n : ℕ} {f : Fin n → Fin n}
+    (h_mono : StrictMono f) (h_surj : Function.Surjective f) :
+    ∀ i : Fin n, f i = i := by
+  suffices key : ∀ k : ℕ, ∀ hk : k < n, f ⟨k, hk⟩ = ⟨k, hk⟩ by
+    intro i
+    have := key i.val i.isLt
+    simpa [Fin.eta] using this
+  intro k
+  induction k with
+  | zero =>
+    intro hk
+    obtain ⟨j, hj⟩ := h_surj ⟨0, hk⟩
+    have h_le : f ⟨0, hk⟩ ≤ f j := h_mono.monotone (by
+      rw [Fin.le_iff_val_le_val]; exact Nat.zero_le _)
+    rw [hj] at h_le
+    have h_zero : (f ⟨0, hk⟩).val ≤ 0 := h_le
+    exact Fin.eq_of_val_eq (Nat.le_zero.mp h_zero)
+  | succ k ih =>
+    intro hk
+    have hk' : k < n := by omega
+    have h_prev := ih hk'
+    obtain ⟨j, hj⟩ := h_surj ⟨k+1, hk⟩
+    -- Pre-compute lower bound on (f ⟨k+1, hk⟩).val from IH + strict mono.
+    have h_lower : k < (f ⟨k+1, hk⟩).val := by
+      have h_lt : (⟨k, hk'⟩ : Fin n) < ⟨k+1, hk⟩ := by
+        exact Fin.mk_lt_mk.mpr (by omega)
+      have h_mono_lt := h_mono h_lt
+      rw [h_prev] at h_mono_lt
+      exact h_mono_lt
+    have h_j_le : j.val ≤ k + 1 := by
+      by_contra h_gt
+      push_neg at h_gt
+      have h_jlt : (⟨k+1, hk⟩ : Fin n) < j := by
+        exact Fin.mk_lt_mk.mpr (by omega)
+      have h_strict := h_mono h_jlt
+      rw [hj] at h_strict
+      -- h_strict : f ⟨k+1, hk⟩ < ⟨k+1, hk⟩, so (f ⟨k+1, hk⟩).val < k+1.
+      have h_upper : (f ⟨k+1, hk⟩).val < k + 1 := h_strict
+      omega  -- combined with h_lower: k < ... < k+1, contradiction.
+    have h_j_ge : k + 1 ≤ j.val := by
+      by_contra h_lt
+      push_neg at h_lt
+      have h_j_le_k : j.val ≤ k := Nat.lt_succ_iff.mp h_lt
+      have h_jle : j ≤ (⟨k, hk'⟩ : Fin n) := by
+        rw [Fin.le_iff_val_le_val]; exact h_j_le_k
+      have h_fj_le : f j ≤ f ⟨k, hk'⟩ := h_mono.monotone h_jle
+      rw [h_prev, hj] at h_fj_le
+      have : k + 1 ≤ k := h_fj_le
+      omega
+    have h_j_val : j.val = k + 1 := le_antisymm h_j_le h_j_ge
+    have h_j_eq : j = ⟨k+1, hk⟩ := Fin.eq_of_val_eq h_j_val
+    rw [h_j_eq] at hj
+    exact hj
+
+/-- **Uniqueness of the length-1 partition**: any `c : OrderedFinpartition n`
+    with `c.length = 1` is `cTarget n hn`. -/
+private lemma eq_cTarget_of_length_one {n : ℕ} (hn : 0 < n)
+    (c : OrderedFinpartition n) (h_len : c.length = 1) :
+    c = cTarget n hn := by
+  -- Use the abstract `sum_partSize_eq` BEFORE destructuring (avoids
+  -- reconstructing the equivSigma inside a destructured shape).
+  have h_sum_abs := sum_partSize_eq c
+  rcases c with ⟨length, partSize, partSize_pos, emb, emb_strictMono,
+                  parts_strictMono, disjoint, cover⟩
+  simp only at h_len
+  subst h_len
+  -- Now `length = 1` everywhere.
+  -- Step 1: partSize 0 = n via the (already-proved) sum identity.
+  have h_ps_zero : partSize 0 = n := by
+    have := h_sum_abs
+    rw [Fin.sum_univ_one] at this
+    exact this
+  -- Step 2: partSize is constant n.
+  have h_partSize_eq : partSize = (fun _ : Fin 1 => n) := by
+    funext i
+    have : i = 0 := Subsingleton.elim _ _
+    rw [this]; exact h_ps_zero
+  subst h_partSize_eq
+  -- Step 3: emb is the identity (after partSize substitution, emb 0 : Fin n → Fin n).
+  have h_emb_id : ∀ j, emb 0 j = j := by
+    apply fin_strictMono_surj_eq_id (emb_strictMono 0)
+    intro j
+    obtain ⟨m, r, hr⟩ := cover j
+    refine ⟨r, ?_⟩
+    have hm : m = 0 := Subsingleton.elim _ _
+    rw [← hm]; exact hr
+  have h_emb_eq : emb = (fun _ j => j) := by
+    funext m j
+    have : m = 0 := Subsingleton.elim _ _
+    rw [this]; exact h_emb_id j
+  subst h_emb_eq
+  rfl
+
+/-- For `c : OrderedFinpartition n` with `c.length ≥ 2`, every part has
+    size `< n`.  By the sum identity, `partSize j + (length − 1) ≤ n`. -/
+private lemma partSize_lt_of_length_ge_two {n : ℕ}
+    (c : OrderedFinpartition n) (h_len : 2 ≤ c.length)
+    (j : Fin c.length) : c.partSize j < n := by
+  have h_sum := sum_partSize_eq c
+  have h_pos : 0 < c.length := by omega
+  -- Pull out partSize j and bound the rest.
+  have h_split :
+      c.partSize j + ∑ i ∈ Finset.univ.erase j, c.partSize i = n := by
+    have h_erase := Finset.add_sum_erase (Finset.univ : Finset (Fin c.length))
+                                          c.partSize (Finset.mem_univ j)
+    rw [h_erase]; exact h_sum
+  have h_rest_ge :
+      (c.length - 1 : ℕ) ≤ ∑ i ∈ Finset.univ.erase j, c.partSize i := by
+    have h_card : (Finset.univ.erase j : Finset (Fin c.length)).card
+                    = c.length - 1 := by
+      rw [Finset.card_erase_of_mem (Finset.mem_univ j),
+          Finset.card_univ, Fintype.card_fin]
+    rw [← h_card]
+    calc ((Finset.univ.erase j : Finset (Fin c.length)).card : ℕ)
+        = ∑ _i ∈ Finset.univ.erase j, 1 := by simp
+      _ ≤ ∑ i ∈ Finset.univ.erase j, c.partSize i :=
+          Finset.sum_le_sum (fun i _ => c.partSize_pos i)
+  omega
+
+/-- The "other" partitions: everything except `cTarget` and `atomic`. -/
+private noncomputable def cOther (n : ℕ) (hn : 0 < n) :
+    Finset (OrderedFinpartition n) :=
+  (Finset.univ.erase (cTarget n hn)).erase (OrderedFinpartition.atomic n)
+
+/-- For `n ≥ 3`, `cTarget ≠ atomic`. -/
+private lemma cTarget_ne_atomic (n : ℕ) (hn : 2 ≤ n) :
+    cTarget n (by omega) ≠ OrderedFinpartition.atomic n := by
+  intro h_eq
+  have : (1 : ℕ) = n := by
+    have := congr_arg OrderedFinpartition.length h_eq
+    simpa using this
+  omega
+
+/-- For `c ∈ cOther`, every part has size `< n`.
+
+    Proof: `c ≠ cTarget` and `c.length ≥ 1` (since `n ≥ 1`).  We show
+    `c.length ≥ 2`: otherwise `c.length = 1` would force `c = cTarget` by
+    `eq_cTarget_of_length_one`, contradicting `c ≠ cTarget`. -/
+private lemma partSize_lt_of_mem_cOther {n : ℕ} (hn : 2 ≤ n)
+    {c : OrderedFinpartition n} (hc : c ∈ cOther n (by omega))
+    (j : Fin c.length) : c.partSize j < n := by
+  have h_ne_target : c ≠ cTarget n (by omega) := by
+    intro h_eq
+    -- c ∈ erase (erase univ cTarget) atomic ⟹ c ≠ cTarget.
+    have h1 : c ∈ Finset.univ.erase (cTarget n (by omega)) := by
+      exact (Finset.mem_erase.mp hc).2
+    have : c ≠ cTarget n (by omega) := (Finset.mem_erase.mp h1).1
+    exact this h_eq
+  have h_pos : 0 < c.length := by
+    -- partition of nonempty Fin n must have length ≥ 1
+    have := c.length_pos (by omega : 0 < n)
+    exact this
+  by_cases h_len_one : c.length = 1
+  · exact absurd (eq_cTarget_of_length_one (by omega : 0 < n) c h_len_one) h_ne_target
+  · have h_ge_two : 2 ≤ c.length := by omega
+    exact partSize_lt_of_length_ge_two c h_ge_two j
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
