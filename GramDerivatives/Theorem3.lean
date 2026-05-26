@@ -1850,6 +1850,70 @@ private lemma iteratedDeriv_n_gram_solved_eventually (n : ℕ) (hn : 3 ≤ n) :
     with u hu hg hg'
   exact iteratedDeriv_n_gram_solved n hn u hu hg hg'
 
+/-!
+  ## §2.4  Atomic-term asymptotic expansion
+
+  Generalises §1.12 + §1.13 + §1.14 to all `n ≥ 2`.  The atomic
+  contribution is
+
+      −(1/π) · θ^(n)(gram u) · (deriv gram u)^(n+1)
+
+  and we show it equals `gramLeading n u · (1 + 2 · ll/l) + o(...)`.
+
+  Key trick: factor
+
+      (gram u)^(1-n) · (deriv gram u)^(n+1)
+        = [(gramL u)⁻¹ · (gramLDeriv u)^3] · [(gram u)^(2-n) · (deriv gram u)^(n-2)] · …
+
+  so we can recycle `prod_inv_cube_expansion_aux` (the existing `n = 2`
+  building block).  The "extra factor" `((1+δ')/(1+δ))^(n-2)` is
+  `1 + o(ε)` by a simple `(1+η)^k - 1 = o(ε)` helper.
+-/
+
+/-- `(1 + η u)^k - 1 = o(ε)` when `η = o(ε)` and `ε → 0`.  Induction on `k`. -/
+private lemma pow_one_plus_isLittleO_aux {α : Type*} {l : Filter α} (k : ℕ)
+    {η ε : α → ℝ}
+    (hη : η =o[l] ε)
+    (hε : Tendsto ε l (𝓝 0)) :
+    (fun u => (1 + η u) ^ k - 1) =o[l] ε := by
+  -- η → 0 (from η = O(ε) and ε → 0).
+  have h_η_tendsto : Tendsto η l (𝓝 0) := hη.isBigO.trans_tendsto hε
+  induction k with
+  | zero =>
+    simp only [pow_zero, sub_self]
+    exact Asymptotics.isLittleO_zero _ _
+  | succ k ih =>
+    -- (1+η)^(k+1) - 1 = (1+η)*((1+η)^k - 1) + η.
+    have h_1η_tendsto : Tendsto (fun u => 1 + η u) l (𝓝 1) := by
+      have := h_η_tendsto.const_add 1
+      simpa using this
+    have h_1η_O : (fun u => 1 + η u) =O[l] (fun _ => (1 : ℝ)) :=
+      h_1η_tendsto.isBigO_one ℝ
+    have h_prod : (fun u => (1 + η u) * ((1 + η u) ^ k - 1)) =o[l] ε := by
+      have h := h_1η_O.mul_isLittleO ih
+      refine h.congr_right ?_
+      intro u; ring
+    have h_sum : (fun u => (1 + η u) * ((1 + η u) ^ k - 1) + η u) =o[l] ε :=
+      h_prod.add hη
+    refine h_sum.congr_left ?_
+    intro u
+    ring
+
+/-- **Algebraic factorisation** of `gramLeading n u` in terms of `gramL`
+    and `gramLDeriv`. -/
+private lemma gramLeading_factorization (n : ℕ) (hn : 2 ≤ n) {u : ℝ}
+    (hu : u ≠ 0) (hlog : Real.log u ≠ 0) :
+    (-(1 / Real.pi)) * ((-1 : ℝ) ^ n * (n - 2).factorial / 2)
+      * ((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1)
+      = gramLeading n u := by
+  unfold gramL gramLDeriv gramLeading
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  have h_pow : (-1 : ℝ) ^ (n + 1) = -((-1 : ℝ) ^ n) := by
+    rw [pow_succ]; ring
+  rw [h_pow]
+  field_simp
+  ring
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
