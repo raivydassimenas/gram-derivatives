@@ -1365,6 +1365,85 @@ private theorem theorem3_two :
     intro h; apply this; linarith
   exact (Asymptotics.isLittleO_const_mul_right_iff hπ2).mp h_E_isO_RHS'
 
+/-!
+  ## §2.0  Strong-IH packaging
+
+  The inductive hypothesis we carry through the proof of Theorem 3 is the
+  full `(1 + (2 + o(1))·ll/l)` precision at every index `k ≥ 2`, packaged
+  as the predicate `GramAsymp k`.  From this we derive the two
+  asymptotic-equivalence consequences (`iteratedDeriv k gram ~ gramLeading k`
+  and the corresponding `IsBigO` bound) used throughout the induction step.
+-/
+
+/-- The inductive-hypothesis predicate for Theorem 3 at index `k`.
+
+    For `k ≥ 2`, `GramAsymp k` packages the asymptotic
+        t_u^(k) = gramLeading k u · (1 + (2 + o(1)) · log log u / log u). -/
+private def GramAsymp (k : ℕ) : Prop :=
+  Iso
+    (fun u : ℝ =>
+      iteratedDeriv k gram u - gramLeading k u
+      - 2 * gramLeading k u * Real.log (Real.log u) / Real.log u)
+    (fun u : ℝ => gramLeading k u * Real.log (Real.log u) / Real.log u)
+    𝓝∞
+
+/-- `theorem3_two` repackaged as `GramAsymp 2`. -/
+private lemma gramAsymp_two : GramAsymp 2 := theorem3_two
+
+/-- `gramLeading k u * log log u / log u =o[𝓝∞] gramLeading k u`.
+
+    Uses the left-associative grouping `(a * b) / c` (matching `GramAsymp`),
+    not the parenthesised `a * (b / c)`. -/
+private lemma gramLeading_mul_loglog_isLittleO_gramLeading (k : ℕ) :
+    Iso (fun u : ℝ => gramLeading k u * Real.log (Real.log u) / Real.log u)
+        (gramLeading k) 𝓝∞ := by
+  have h : (fun u : ℝ => gramLeading k u * (Real.log (Real.log u) / Real.log u))
+      =o[(𝓝∞ : Filter ℝ)] gramLeading k := by
+    have h0 := (Asymptotics.isBigO_refl (gramLeading k) 𝓝∞).mul_isLittleO
+                  loglog_div_log_isLittleO_one
+    simpa using h0
+  refine h.congr_left ?_
+  intro u
+  ring
+
+/-- From `GramAsymp k` (the `(2 + o(1))·ll/l` precision form), derive the
+    asymptotic equivalence `iteratedDeriv k gram - gramLeading k = o(gramLeading k)`. -/
+private lemma iteratedDeriv_sub_gramLeading_isLittleO
+    {k : ℕ} (h : GramAsymp k) :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => iteratedDeriv k gram u - gramLeading k u)
+      (gramLeading k) := by
+  have h_mll := gramLeading_mul_loglog_isLittleO_gramLeading k
+  -- residual part (h itself) is =o(gramLeading k · ll/l) =o gramLeading k.
+  have h1 : Asymptotics.IsLittleO 𝓝∞
+      (fun u : ℝ =>
+        iteratedDeriv k gram u - gramLeading k u
+        - 2 * gramLeading k u * Real.log (Real.log u) / Real.log u)
+      (gramLeading k) := h.trans h_mll
+  -- the `2 · gramLeading k · ll/l` correction is also =o gramLeading k.
+  have h2 : Asymptotics.IsLittleO 𝓝∞
+      (fun u : ℝ => 2 * gramLeading k u * Real.log (Real.log u) / Real.log u)
+      (gramLeading k) := by
+    have h' := h_mll.const_mul_left (c := (2 : ℝ))
+    refine h'.congr_left ?_
+    intro u
+    ring
+  have h_sum := h1.add h2
+  refine h_sum.congr_left ?_
+  intro u; ring
+
+/-- `iteratedDeriv k gram ~[𝓝∞] gramLeading k`, derived from `GramAsymp k`. -/
+private lemma iteratedDeriv_isEquivalent_gramLeading
+    {k : ℕ} (h : GramAsymp k) :
+    IsEquivalent 𝓝∞ (iteratedDeriv k gram) (gramLeading k) :=
+  iteratedDeriv_sub_gramLeading_isLittleO h
+
+/-- `iteratedDeriv k gram =O[𝓝∞] gramLeading k`, derived from `GramAsymp k`. -/
+private lemma iteratedDeriv_isBigO_gramLeading
+    {k : ℕ} (h : GramAsymp k) :
+    Asymptotics.IsBigO 𝓝∞ (iteratedDeriv k gram) (gramLeading k) :=
+  (iteratedDeriv_isEquivalent_gramLeading h).isBigO
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
