@@ -1906,11 +1906,15 @@ private lemma gramLeading_factorization (n : ℕ) (hn : 2 ≤ n) {u : ℝ}
     (-(1 / Real.pi)) * ((-1 : ℝ) ^ n * (n - 2).factorial / 2)
       * ((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1)
       = gramLeading n u := by
+  -- Eliminate natural-number subtractions by writing `n = m + 2`.
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
+  have h1 : m + 2 - 1 = m + 1 := by omega
+  have h2 : m + 2 - 2 = m := by omega
   unfold gramL gramLDeriv gramLeading
+  rw [h1, h2]
   have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
-  have h_pow : (-1 : ℝ) ^ (n + 1) = -((-1 : ℝ) ^ n) := by
-    rw [pow_succ]; ring
-  rw [h_pow]
+  -- Expand `(a/b)^k` and `(a·b)^k` so `field_simp` can clear denominators.
+  simp only [div_pow, mul_pow]
   field_simp
   ring
 
