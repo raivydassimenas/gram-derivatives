@@ -1899,6 +1899,112 @@ private lemma pow_one_plus_isLittleO_aux {α : Type*} {l : Filter α} (k : ℕ)
     intro u
     ring
 
+/-- **Generalised cubic-over-linear asymptotic.**  Generalises
+    `prod_inv_cube_expansion_aux` from `(1+δ)⁻¹ · (1+δ')^3` to
+    `((1+δ)^(m+1))⁻¹ · (1+δ')^(m+3)` for arbitrary `m : ℕ`.
+
+    Indexed by `m` so all exponents are explicit additions (no
+    natural-number subtraction).  Specialises to
+    `prod_inv_cube_expansion_aux` at `m = 0`.
+
+    Proof: factor
+        ((1+δ)^(m+1))⁻¹ · (1+δ')^(m+3)
+          = [(1+δ)⁻¹ · (1+δ')^3] · ((1+δ')/(1+δ))^m
+          = A · B,
+    where `A − (1 + 2ε) = o(ε)` by `prod_inv_cube_expansion_aux` and
+    `B − 1 = o(ε)` by `pow_one_plus_isLittleO_aux` applied to
+    `η := (δ' − δ)/(1+δ) = o(ε)`.  Combine via
+    `A · B − (1+2ε) = (A − (1+2ε)) · B + (1+2ε) · (B − 1)`. -/
+private lemma prod_inv_pow_expansion_aux
+    {α : Type*} {l : Filter α} {δ δ' ε : α → ℝ} (m : ℕ)
+    (hδ : (fun u => δ u - ε u) =o[l] ε)
+    (hδ' : (fun u => δ' u - ε u) =o[l] ε)
+    (hε : Tendsto ε l (𝓝 0)) :
+    (fun u => ((1 + δ u) ^ (m + 1))⁻¹ * (1 + δ' u) ^ (m + 3)
+      - (1 + 2 * ε u)) =o[l] ε := by
+  -- (1) δ, δ' = O(ε), → 0, → (1 + δ), (1 + δ') → 1.
+  have hδ_O : (fun u => δ u) =O[l] ε := by
+    have h := hδ.isBigO.add (Asymptotics.isBigO_refl ε l)
+    refine h.congr_left ?_; intro u; ring
+  have hδ'_O : (fun u => δ' u) =O[l] ε := by
+    have h := hδ'.isBigO.add (Asymptotics.isBigO_refl ε l)
+    refine h.congr_left ?_; intro u; ring
+  have hδ_zero : Tendsto δ l (𝓝 0) := hδ_O.trans_tendsto hε
+  have hδ'_zero : Tendsto δ' l (𝓝 0) := hδ'_O.trans_tendsto hε
+  have h1δ_tend : Tendsto (fun u => 1 + δ u) l (𝓝 1) := by
+    have := hδ_zero.const_add 1; simpa using this
+  have h1δ'_tend : Tendsto (fun u => 1 + δ' u) l (𝓝 1) := by
+    have := hδ'_zero.const_add 1; simpa using this
+  have h1δ_ne : ∀ᶠ u in l, (1 + δ u) ≠ 0 :=
+    h1δ_tend.eventually_ne (by norm_num : (1 : ℝ) ≠ 0)
+  -- (2) η := (δ' - δ)/(1 + δ).  Show η = o(ε).
+  have hδ'_sub_δ : (fun u => δ' u - δ u) =o[l] ε := by
+    have h := hδ'.sub hδ
+    refine h.congr_left ?_; intro u; ring
+  have h1δ_inv_tend : Tendsto (fun u => (1 + δ u)⁻¹) l (𝓝 1) := by
+    have := h1δ_tend.inv₀ (by norm_num : (1 : ℝ) ≠ 0)
+    simpa using this
+  have h1δ_inv_O : (fun u => (1 + δ u)⁻¹) =O[l] (fun _ : α => (1 : ℝ)) :=
+    h1δ_inv_tend.isBigO_one ℝ
+  have hη : (fun u => (δ' u - δ u) * (1 + δ u)⁻¹) =o[l] ε := by
+    have h := hδ'_sub_δ.mul_isBigO h1δ_inv_O
+    refine h.congr_right ?_; intro u; ring
+  -- (3) B − 1 = ((1+δ')/(1+δ))^m − 1 = o(ε).
+  have h_quot_eq : (fun u => (1 + δ' u) / (1 + δ u) - 1)
+      =ᶠ[l] (fun u => (δ' u - δ u) * (1 + δ u)⁻¹) := by
+    filter_upwards [h1δ_ne] with u hne
+    field_simp
+    ring
+  have h_quot_o : (fun u => (1 + δ' u) / (1 + δ u) - 1) =o[l] ε :=
+    hη.congr' h_quot_eq.symm Filter.EventuallyEq.rfl
+  have h_B_sub_one : (fun u => ((1 + δ' u) / (1 + δ u)) ^ m - 1) =o[l] ε := by
+    have h := pow_one_plus_isLittleO_aux m h_quot_o hε
+    refine h.congr_left ?_
+    intro u
+    have : (1 + ((1 + δ' u) / (1 + δ u) - 1)) = (1 + δ' u) / (1 + δ u) := by ring
+    rw [this]
+  -- (4) A − (1 + 2ε) = o(ε) — the n = 2 building block.
+  have h_A_sub : (fun u => (1 + δ u)⁻¹ * (1 + δ' u) ^ 3 - (1 + 2 * ε u)) =o[l] ε :=
+    prod_inv_cube_expansion_aux hδ hδ' hε
+  -- (5) B = O(1) and (1 + 2ε) = O(1).
+  have h_B_tend : Tendsto (fun u => ((1 + δ' u) / (1 + δ u)) ^ m) l (𝓝 1) := by
+    have h_div : Tendsto (fun u => (1 + δ' u) / (1 + δ u)) l (𝓝 (1 / 1)) :=
+      h1δ'_tend.div h1δ_tend (by norm_num : (1 : ℝ) ≠ 0)
+    have := h_div.pow m
+    simpa using this
+  have h_B_O : (fun u => ((1 + δ' u) / (1 + δ u)) ^ m) =O[l] (fun _ : α => (1 : ℝ)) :=
+    h_B_tend.isBigO_one ℝ
+  have h_1plus2ε_tend : Tendsto (fun u => 1 + 2 * ε u) l (𝓝 1) := by
+    have := (hε.const_mul 2).const_add 1; simpa using this
+  have h_1plus2ε_O : (fun u => 1 + 2 * ε u) =O[l] (fun _ : α => (1 : ℝ)) :=
+    h_1plus2ε_tend.isBigO_one ℝ
+  -- (6) term1 := (A − (1 + 2ε)) · B = o(ε) · O(1) = o(ε).
+  have h_term1 :
+      (fun u => ((1 + δ u)⁻¹ * (1 + δ' u) ^ 3 - (1 + 2 * ε u))
+                * ((1 + δ' u) / (1 + δ u)) ^ m) =o[l] ε := by
+    have h := h_A_sub.mul_isBigO h_B_O
+    refine h.congr_right ?_; intro u; ring
+  -- (7) term2 := (1 + 2ε) · (B − 1) = O(1) · o(ε) = o(ε).
+  have h_term2 :
+      (fun u => (1 + 2 * ε u) * (((1 + δ' u) / (1 + δ u)) ^ m - 1)) =o[l] ε := by
+    have h := h_1plus2ε_O.mul_isLittleO h_B_sub_one
+    refine h.congr_right ?_; intro u; ring
+  -- (8) Sum is o(ε).
+  have h_sum := h_term1.add h_term2
+  -- (9) Algebraic identity (eventually, using 1 + δ ≠ 0).
+  refine h_sum.congr' ?_ Filter.EventuallyEq.rfl
+  filter_upwards [h1δ_ne] with u hne
+  have h_pow_ne : (1 + δ u) ^ m ≠ 0 := pow_ne_zero _ hne
+  change ((1 + δ u)⁻¹ * (1 + δ' u) ^ 3 - (1 + 2 * ε u))
+          * ((1 + δ' u) / (1 + δ u)) ^ m
+        + (1 + 2 * ε u) * (((1 + δ' u) / (1 + δ u)) ^ m - 1)
+        = ((1 + δ u) ^ (m + 1))⁻¹ * (1 + δ' u) ^ (m + 3) - (1 + 2 * ε u)
+  -- Expand the division power and the (m+1), (m+3) powers.
+  rw [div_pow, pow_succ (1 + δ u) m,
+      show m + 3 = m + 1 + 2 from by ring, pow_add, pow_succ (1 + δ' u) m]
+  field_simp
+  ring
+
 /-- **Algebraic factorisation** of `gramLeading n u` in terms of `gramL`
     and `gramLDeriv`. -/
 private lemma gramLeading_factorization (n : ℕ) (hn : 2 ≤ n) {u : ℝ}
