@@ -2196,6 +2196,184 @@ private lemma inv_gram_pow_mul_deriv_gram_pow_expansion (n : ℕ) (hn : 2 ≤ n)
   have h_g_pow : (gram u) ^ (m + 1) ≠ 0 := pow_ne_zero _ hg_ne
   field_simp
 
+/-!
+  ## §2.4 closure: Atomic-term asymptotic
+
+  Combine the refined θ^(n)(gram u) bound with the generalised
+  cubic-over-linear expansion to obtain the **atomic-term asymptotic**
+  for the Faà di Bruno expansion of `iteratedDeriv n gram u`.
+
+      −(1/π) · θ^(n)(gram u) · (deriv gram u)^(n+1)
+        − gramLeading n u
+        − 2 · gramLeading n u · (log log u / log u)
+      = o(gramLeading n u · (log log u / log u)).
+
+  This is the n-version of `theorem3_two` modulo the structural
+  identity `iteratedDeriv 2 gram u = −(1/π) · θ''(gram u) · (deriv gram u)^3`.
+-/
+
+/-- **Atomic-term asymptotic expansion** for the Faà di Bruno expansion
+    of `iteratedDeriv n gram u` (for `n ≥ 2`).
+
+    Combines `iteratedDeriv_n_theta_at_gram_isLittleO_refined`,
+    `inv_gram_pow_mul_deriv_gram_pow_expansion`, and
+    `gramLeading_factorization`. -/
+private lemma theorem3_atomic_term (n : ℕ) (hn : 2 ≤ n) :
+    Iso
+      (fun u : ℝ =>
+        -(1 / Real.pi) * iteratedDeriv n theta (gram u) * (deriv gram u) ^ (n + 1)
+        - gramLeading n u
+        - 2 * gramLeading n u * Real.log (Real.log u) / Real.log u)
+      (fun u : ℝ => gramLeading n u * Real.log (Real.log u) / Real.log u)
+      𝓝∞ := by
+  -- Shorthand `F := ((gramL u)⁻¹)^(n-1) · (gramLDeriv u)^(n+1)`.
+  set F : ℝ → ℝ := fun u => ((gramL u)⁻¹) ^ (n - 1) * (gramLDeriv u) ^ (n + 1) with hF_def
+  -- Constant `c := −(1/π) · (−1)^n · (n − 2)! / 2`.
+  set c : ℝ := -(1 / Real.pi) * ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2)
+    with hc_def
+  -- (i) Residual r_θ · (deriv gram u)^(n+1) = o(F · ε).
+  have h_rθ_mul :
+      (fun u : ℝ =>
+        (iteratedDeriv n theta (gram u)
+          - (-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) * (1 / 2)
+            * ((gram u)⁻¹) ^ (n - 1))
+          * (deriv gram u) ^ (n + 1))
+        =o[(𝓝∞ : Filter ℝ)]
+        (fun u : ℝ => F u * (Real.log (Real.log u) / Real.log u)) := by
+    have h_rθ := iteratedDeriv_n_theta_at_gram_isLittleO_refined n hn
+    have h_deriv_O :
+        (fun u : ℝ => (deriv gram u) ^ (n + 1)) =O[(𝓝∞ : Filter ℝ)]
+        (fun u : ℝ => (gramLDeriv u) ^ (n + 1)) :=
+      (deriv_gram_isEquivalent_gramLDeriv.pow (n + 1)).isBigO
+    have h := h_rθ.mul_isBigO h_deriv_O
+    refine h.congr_right ?_
+    intro u
+    change ((gramL u)⁻¹) ^ (n - 1) * (Real.log (Real.log u) / Real.log u)
+            * (gramLDeriv u) ^ (n + 1)
+        = ((gramL u)⁻¹) ^ (n - 1) * (gramLDeriv u) ^ (n + 1)
+            * (Real.log (Real.log u) / Real.log u)
+    ring
+  -- (ii) Cubic-over-linear expansion: s := ... = o(F · ε).
+  have h_s := inv_gram_pow_mul_deriv_gram_pow_expansion n hn
+  -- (iii) Constant multiples.
+  have h_term1 :
+      (fun u : ℝ =>
+        -(1 / Real.pi) * ((iteratedDeriv n theta (gram u)
+          - (-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) * (1 / 2)
+            * ((gram u)⁻¹) ^ (n - 1))
+          * (deriv gram u) ^ (n + 1)))
+        =o[(𝓝∞ : Filter ℝ)]
+        (fun u : ℝ => F u * (Real.log (Real.log u) / Real.log u)) :=
+    h_rθ_mul.const_mul_left _
+  have h_term2 :
+      (fun u : ℝ => c * (((gram u)⁻¹) ^ (n - 1) * (deriv gram u) ^ (n + 1)
+          - F u * (1 + 2 * (Real.log (Real.log u) / Real.log u))))
+        =o[(𝓝∞ : Filter ℝ)]
+        (fun u : ℝ => F u * (Real.log (Real.log u) / Real.log u)) :=
+    h_s.const_mul_left _
+  have h_sum := h_term1.add h_term2
+  -- (iv) Eventual nonzeros.
+  have hL_ne : ∀ᶠ u in (𝓝∞ : Filter ℝ), gramL u ≠ 0 := by
+    have hL_tend : Tendsto gramL (𝓝∞ : Filter ℝ) 𝓝∞ :=
+      linear_div_log_tendsto_atTop.congr (fun u => by simp [gramL])
+    filter_upwards [hL_tend.eventually_gt_atTop (0 : ℝ)] with u hu
+    exact ne_of_gt hu
+  -- (v) Algebraic identity: the sum equals the target residual (eventually).
+  have h_lhs_eq :
+      (fun u : ℝ =>
+        -(1 / Real.pi) * ((iteratedDeriv n theta (gram u)
+          - (-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) * (1 / 2)
+            * ((gram u)⁻¹) ^ (n - 1))
+          * (deriv gram u) ^ (n + 1))
+        + c * (((gram u)⁻¹) ^ (n - 1) * (deriv gram u) ^ (n + 1)
+          - F u * (1 + 2 * (Real.log (Real.log u) / Real.log u))))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ =>
+        -(1 / Real.pi) * iteratedDeriv n theta (gram u) * (deriv gram u) ^ (n + 1)
+        - gramLeading n u
+        - 2 * gramLeading n u * Real.log (Real.log u) / Real.log u) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ), log_pos_atTop, hL_ne]
+      with u hu hlog hLu
+    have hu_ne : u ≠ 0 := ne_of_gt hu
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hlog
+    have h_inv_pow : ((gramL u) ^ (n - 1))⁻¹ = ((gramL u)⁻¹) ^ (n - 1) :=
+      (inv_pow _ _).symm
+    have h_factor := gramLeading_factorization n hn hu_ne hlog_ne
+    -- gramLeading n u = c · F u (using inv_pow to convert).
+    have h_gL_eq : gramLeading n u = c * F u := by
+      have h1 : c * F u = -(1 / Real.pi)
+            * ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2)
+            * (((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1)) := by
+        rw [hc_def, hF_def, h_inv_pow]
+      rw [h1]
+      have h2 : -(1 / Real.pi)
+            * ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2)
+            * (((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1))
+          = -(1 / Real.pi)
+            * ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2)
+            * ((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1) := by ring
+      rw [h2, ← h_factor]
+    rw [h_gL_eq]
+    ring
+  have h_E_isO_F :
+      (fun u : ℝ =>
+        -(1 / Real.pi) * iteratedDeriv n theta (gram u) * (deriv gram u) ^ (n + 1)
+        - gramLeading n u
+        - 2 * gramLeading n u * Real.log (Real.log u) / Real.log u)
+        =o[(𝓝∞ : Filter ℝ)]
+        (fun u : ℝ => F u * (Real.log (Real.log u) / Real.log u)) :=
+    h_sum.congr' h_lhs_eq Filter.EventuallyEq.rfl
+  -- (vi) Convert RHS bound from F · ε to gramLeading n · ε.  Since
+  -- `gramLeading n u = c · F u` eventually and `c ≠ 0`, we have
+  -- `F u · ε = (1/c) · (gramLeading n u · ε)`.
+  have hc_ne : c ≠ 0 := by
+    rw [hc_def]
+    have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+    have h_neg_one_pow : ((-1 : ℝ) ^ n) ≠ 0 :=
+      pow_ne_zero _ (by norm_num : (-1 : ℝ) ≠ 0)
+    have h_fact_ne : ((Nat.factorial (n - 2) : ℕ) : ℝ) ≠ 0 := by
+      exact_mod_cast (Nat.factorial_pos (n - 2)).ne'
+    intro h
+    have h_lhs_ne : (-(1 / Real.pi)) ≠ 0 := by
+      have : (1 / Real.pi) ≠ 0 := one_div_ne_zero hπ
+      exact neg_ne_zero.mpr this
+    have h_rhs_ne : ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2) ≠ 0 := by
+      apply div_ne_zero
+      · exact mul_ne_zero h_neg_one_pow h_fact_ne
+      · norm_num
+    exact (mul_ne_zero h_lhs_ne h_rhs_ne) h
+  have h_RHS_eq :
+      (fun u : ℝ => F u * (Real.log (Real.log u) / Real.log u))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => c⁻¹ * (gramLeading n u * Real.log (Real.log u) / Real.log u)) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ), log_pos_atTop, hL_ne]
+      with u hu hlog hLu
+    have hu_ne : u ≠ 0 := ne_of_gt hu
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hlog
+    have h_inv_pow : ((gramL u) ^ (n - 1))⁻¹ = ((gramL u)⁻¹) ^ (n - 1) :=
+      (inv_pow _ _).symm
+    have h_factor := gramLeading_factorization n hn hu_ne hlog_ne
+    have h_gL_eq : gramLeading n u = c * F u := by
+      have h1 : c * F u = -(1 / Real.pi)
+            * ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2)
+            * (((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1)) := by
+        rw [hc_def, hF_def, h_inv_pow]
+      rw [h1]
+      have h2 : -(1 / Real.pi)
+            * ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2)
+            * (((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1))
+          = -(1 / Real.pi)
+            * ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) / 2)
+            * ((gramL u) ^ (n - 1))⁻¹ * (gramLDeriv u) ^ (n + 1) := by ring
+      rw [h2, ← h_factor]
+    rw [h_gL_eq]
+    field_simp
+  have h_E_isO_RHS' :=
+    h_E_isO_F.congr' Filter.EventuallyEq.rfl h_RHS_eq
+  -- (vii) Strip the constant factor `c⁻¹`.
+  have hc_inv_ne : c⁻¹ ≠ 0 := inv_ne_zero hc_ne
+  exact (Asymptotics.isLittleO_const_mul_right_iff hc_inv_ne).mp h_E_isO_RHS'
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
