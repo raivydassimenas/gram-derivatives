@@ -2115,6 +2115,87 @@ private lemma iteratedDeriv_n_theta_at_gram_isLittleO_refined (n : ℕ) (hn : 2 
   -- Compose with the o-bound for ((gram u)⁻¹)^(n+1).
   exact h_isO_clean.trans_isLittleO (inv_gram_pow_isLittleO_inv_gramL_pow_mul_frac n hn)
 
+/-- **Generalised cubic-over-linear expansion** for `(gram u)`-powers.
+
+    For `n ≥ 2`,
+
+        ((gram u)⁻¹)^(n-1) · (deriv gram u)^(n+1)
+          = ((gramL u)⁻¹)^(n-1) · (gramLDeriv u)^(n+1)
+              · (1 + 2 · (log log u / log u))
+            + o(((gramL u)⁻¹)^(n-1) · (gramLDeriv u)^(n+1) · (log log u / log u)).
+
+    Specialises to `inv_gram_mul_deriv_gram_cube_expansion` at `n = 2`.
+
+    Specialisation of `prod_inv_pow_expansion_aux` to
+        δ  := gram u / gramL u - 1,
+        δ' := deriv gram u / gramLDeriv u - 1,
+        ε  := log log u / log u. -/
+private lemma inv_gram_pow_mul_deriv_gram_pow_expansion (n : ℕ) (hn : 2 ≤ n) :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gram u)⁻¹) ^ (n - 1) * (deriv gram u) ^ (n + 1)
+        - ((gramL u)⁻¹) ^ (n - 1) * (gramLDeriv u) ^ (n + 1)
+            * (1 + 2 * (Real.log (Real.log u) / Real.log u)))
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (n - 1) * (gramLDeriv u) ^ (n + 1)
+        * (Real.log (Real.log u) / Real.log u)) := by
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
+  have h_n_sub_one : m + 2 - 1 = m + 1 := by omega
+  have h_n_plus_one : m + 2 + 1 = m + 3 := by omega
+  rw [h_n_sub_one, h_n_plus_one]
+  -- Set δ, δ', ε as in `inv_gram_mul_deriv_gram_cube_expansion`.
+  set δ : ℝ → ℝ := fun u => gram u / gramL u - 1 with hδ_def
+  set δ' : ℝ → ℝ := fun u => deriv gram u / gramLDeriv u - 1 with hδ'_def
+  set ε : ℝ → ℝ := fun u => Real.log (Real.log u) / Real.log u with hε_def
+  have hδ_resid : (fun u => δ u - ε u) =o[(𝓝∞ : Filter ℝ)] ε := by
+    have := gram_quot_residual
+    refine this.congr_left ?_; intro u
+    change gram u / gramL u - 1 - Real.log (Real.log u) / Real.log u
+        = (gram u / gramL u - 1) - Real.log (Real.log u) / Real.log u
+    ring
+  have hδ'_resid : (fun u => δ' u - ε u) =o[(𝓝∞ : Filter ℝ)] ε := by
+    have := deriv_gram_quot_residual
+    refine this.congr_left ?_; intro u
+    change deriv gram u / gramLDeriv u - 1 - Real.log (Real.log u) / Real.log u
+        = (deriv gram u / gramLDeriv u - 1) - Real.log (Real.log u) / Real.log u
+    ring
+  have hε_tendsto : Tendsto ε (𝓝∞ : Filter ℝ) (𝓝 0) := frac_tendsto_zero
+  -- Apply the abstract lemma.
+  have h_abs := prod_inv_pow_expansion_aux m hδ_resid hδ'_resid hε_tendsto
+  -- Multiply by F := ((gramL u)⁻¹)^(m+1) * (gramLDeriv u)^(m+3) (=O of itself).
+  have h_F_O := Asymptotics.isBigO_refl
+    (fun u : ℝ => ((gramL u)⁻¹) ^ (m + 1) * (gramLDeriv u) ^ (m + 3)) (𝓝∞ : Filter ℝ)
+  have h_mul := h_F_O.mul_isLittleO h_abs
+  -- Eventually `gramL u ≠ 0`, `gramLDeriv u ≠ 0`, `gram u > 0`.
+  have hL_ne : ∀ᶠ u in (𝓝∞ : Filter ℝ), gramL u ≠ 0 := by
+    have hL_tend : Tendsto gramL (𝓝∞ : Filter ℝ) 𝓝∞ :=
+      linear_div_log_tendsto_atTop.congr (fun u => by simp [gramL])
+    filter_upwards [hL_tend.eventually_gt_atTop (0 : ℝ)] with u hu
+    exact ne_of_gt hu
+  have hL'_ne : ∀ᶠ u in (𝓝∞ : Filter ℝ), gramLDeriv u ≠ 0 := by
+    filter_upwards [log_pos_atTop] with u hu
+    unfold gramLDeriv
+    have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hu
+    positivity
+  -- Rewrite the LHS to match the goal.
+  refine h_mul.congr' ?_ Filter.EventuallyEq.rfl
+  filter_upwards [hL_ne, hL'_ne, eventually_gram_pos] with u hLu hL'u hgu
+  have hg_ne : gram u ≠ 0 := ne_of_gt hgu
+  have hδ_val : 1 + δ u = gram u / gramL u := by
+    change 1 + (gram u / gramL u - 1) = gram u / gramL u; ring
+  have hδ'_val : 1 + δ' u = deriv gram u / gramLDeriv u := by
+    change 1 + (deriv gram u / gramLDeriv u - 1) = deriv gram u / gramLDeriv u; ring
+  change ((gramL u)⁻¹) ^ (m + 1) * (gramLDeriv u) ^ (m + 3)
+        * (((1 + δ u) ^ (m + 1))⁻¹ * (1 + δ' u) ^ (m + 3) - (1 + 2 * ε u))
+      = ((gram u)⁻¹) ^ (m + 1) * (deriv gram u) ^ (m + 3)
+        - ((gramL u)⁻¹) ^ (m + 1) * (gramLDeriv u) ^ (m + 3) * (1 + 2 * ε u)
+  rw [hδ_val, hδ'_val]
+  -- Pull inverses outside the powers and expand the quotient powers.
+  simp only [inv_pow, div_pow, inv_div]
+  have h_gL_pow : (gramL u) ^ (m + 1) ≠ 0 := pow_ne_zero _ hLu
+  have h_gL'_pow : (gramLDeriv u) ^ (m + 3) ≠ 0 := pow_ne_zero _ hL'u
+  have h_g_pow : (gram u) ^ (m + 1) ≠ 0 := pow_ne_zero _ hg_ne
+  field_simp
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
