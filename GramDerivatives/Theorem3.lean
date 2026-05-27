@@ -1918,6 +1918,97 @@ private lemma gramLeading_factorization (n : ℕ) (hn : 2 ≤ n) {u : ℝ}
   field_simp
   ring
 
+/-- **Generalised `(gram u)`-power asymptotic.**  For `n ≥ 2`,
+
+        ((gram u)⁻¹)^(n+1) = o(((gramL u)⁻¹)^(n-1) · log log u / log u).
+
+    Specialises to `inv_gram_cube_isLittleO_inv_gramL_mul_frac` at `n = 2`
+    (where `(n+1) = 3` and `(n-1) = 1`).
+
+    Proof: factor `((gram u)⁻¹)^(n+1) = ((gram u)⁻¹)^(n-1) · ((gram u)⁻¹)^2`,
+    use `gram⁻¹ ~ gramL⁻¹` (so `((gram u)⁻¹)^(n-1) = O(((gramL u)⁻¹)^(n-1))`)
+    and `((gram u)⁻¹)^2 = o(ε)` from `inv_gram_sq_isLittleO_frac`. -/
+private lemma inv_gram_pow_isLittleO_inv_gramL_pow_mul_frac (n : ℕ) (hn : 2 ≤ n) :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gram u)⁻¹) ^ (n + 1))
+      (fun u : ℝ =>
+        ((gramL u)⁻¹) ^ (n - 1) * (Real.log (Real.log u) / Real.log u)) := by
+  obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
+  have h1 : m + 2 - 1 = m + 1 := by omega
+  rw [h1]
+  -- ((gram u)⁻¹)^(m+1) =O[𝓝∞] ((gramL u)⁻¹)^(m+1).
+  have h_factor : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gram u)⁻¹) ^ (m + 1))
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (m + 1)) :=
+    (gram_inv_isEquivalent_gramL_inv.pow (m + 1)).isBigO
+  -- ((gram u)⁻¹)^2 = o(ε).
+  have h_sq := inv_gram_sq_isLittleO_frac
+  -- Product is o(((gramL u)⁻¹)^(m+1) · ε).
+  have h_prod := h_factor.mul_isLittleO h_sq
+  refine h_prod.congr_left ?_
+  intro u
+  show ((gram u)⁻¹) ^ (m + 1) * ((gram u)⁻¹) ^ 2
+      = ((gram u)⁻¹) ^ (m + 2 + 1)
+  rw [← pow_add]
+
+/-- **Refined θ^(n)(gram u) asymptotic.**  For `n ≥ 2`,
+
+        iteratedDeriv n theta (gram u)
+          − (-1)^n · (n − 2)! · (1/2) · ((gram u)⁻¹)^(n − 1)
+          = o(((gramL u)⁻¹)^(n − 1) · log log u / log u)
+
+    as `u → +∞`.  Specialises to
+    `iteratedDeriv_two_theta_at_gram_isLittleO_refined` at `n = 2`.
+
+    Proof: take the raw `IsO` from `iteratedDeriv_theta_at_gram_isO`, convert
+    the rpow exponents `(1 − n)` and `(−n − 1)` into `Nat`-power inverses
+    `((gram u)⁻¹)^(n − 1)` and `((gram u)⁻¹)^(n + 1)` using `Real.rpow_neg`
+    and `Real.rpow_natCast` (valid because `gram u > 0` eventually), then
+    compose with `inv_gram_pow_isLittleO_inv_gramL_pow_mul_frac`. -/
+private lemma iteratedDeriv_n_theta_at_gram_isLittleO_refined (n : ℕ) (hn : 2 ≤ n) :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => iteratedDeriv n theta (gram u)
+        - ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) * (1 / 2)
+           * ((gram u)⁻¹) ^ (n - 1)))
+      (fun u : ℝ =>
+        ((gramL u)⁻¹) ^ (n - 1) * (Real.log (Real.log u) / Real.log u)) := by
+  -- Raw IsO statement from Corollary 2 transport.
+  have h_isO := iteratedDeriv_theta_at_gram_isO n hn
+  -- Eventually rewrite LHS rpow `(gram u)^(1 − (n:ℝ))` as `((gram u)⁻¹)^(n − 1)`.
+  have h_pos := eventually_gram_pos
+  have h_cast_sub : ((n - 1 : ℕ) : ℝ) = (n : ℝ) - 1 := by
+    have h := Nat.cast_sub (R := ℝ) (show (1 : ℕ) ≤ n from by omega)
+    simpa using h
+  have h_lhs :
+      (fun u : ℝ => iteratedDeriv n theta (gram u)
+        - ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) * (1 / 2)
+           * (gram u) ^ (1 - (n : ℝ))))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => iteratedDeriv n theta (gram u)
+        - ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) * (1 / 2)
+           * ((gram u)⁻¹) ^ (n - 1))) := by
+    filter_upwards [h_pos] with u hgu
+    have h_exp : (1 - (n : ℝ)) = -((n - 1 : ℕ) : ℝ) := by rw [h_cast_sub]; ring
+    rw [h_exp, Real.rpow_neg hgu.le, Real.rpow_natCast, inv_pow]
+  -- Eventually rewrite RHS rpow `(gram u)^(-(n:ℝ) - 1)` as `((gram u)⁻¹)^(n + 1)`.
+  have h_rhs :
+      (fun u : ℝ => (gram u) ^ (-(n : ℝ) - 1))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => ((gram u)⁻¹) ^ (n + 1)) := by
+    filter_upwards [h_pos] with u hgu
+    have h_exp : (-(n : ℝ) - 1) = -((n + 1 : ℕ) : ℝ) := by push_cast; ring
+    rw [h_exp, Real.rpow_neg hgu.le, Real.rpow_natCast, inv_pow]
+  -- Apply both rewrites to the IsO.
+  have h_isO_clean :
+      Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+        (fun u : ℝ => iteratedDeriv n theta (gram u)
+          - ((-1 : ℝ) ^ n * ((Nat.factorial (n - 2) : ℕ) : ℝ) * (1 / 2)
+             * ((gram u)⁻¹) ^ (n - 1)))
+        (fun u : ℝ => ((gram u)⁻¹) ^ (n + 1)) :=
+    (h_isO.congr' h_lhs h_rhs : _)
+  -- Compose with the o-bound for ((gram u)⁻¹)^(n+1).
+  exact h_isO_clean.trans_isLittleO (inv_gram_pow_isLittleO_inv_gramL_pow_mul_frac n hn)
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
