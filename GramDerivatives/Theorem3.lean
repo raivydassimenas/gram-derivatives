@@ -2595,6 +2595,61 @@ private lemma length_ge_two_of_mem_cOther {n : ℕ} (hn : 2 ≤ n)
     (Finset.mem_erase.mp h_mem_inner).1
   exact h_ne h_eq
 
+/-- `1/log u =o[𝓝∞] 1`.  Standard since `log u → +∞`. -/
+private lemma one_div_log_isLittleO_one :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => 1 / Real.log u) (fun _ : ℝ => (1 : ℝ)) := by
+  rw [Asymptotics.isLittleO_one_iff]
+  exact Real.tendsto_log_atTop.inv_tendsto_atTop.congr (fun _ => (one_div _).symm)
+
+/-- `1/(u^a · log² u) =O[𝓝∞] 1/(u^a · log u)`.  Pulls out a factor of
+    `1/log u = o(1)`. -/
+private lemma inv_polylog_weaken (a : ℕ) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => 1 / (u ^ a * Real.log u ^ 2))
+      (fun u : ℝ => 1 / (u ^ a * Real.log u)) := by
+  have h_eq : (fun u : ℝ => 1 / (u ^ a * Real.log u ^ 2))
+              =ᶠ[(𝓝∞ : Filter ℝ)]
+              (fun u : ℝ => (1 / (u ^ a * Real.log u)) * (1 / Real.log u)) := by
+    filter_upwards [log_pos_atTop, Filter.eventually_gt_atTop (0 : ℝ)] with u hlog hu
+    have hlog_ne : Real.log u ≠ 0 := ne_of_gt hlog
+    have hu_ne : u ≠ 0 := ne_of_gt hu
+    field_simp
+  have h_aux : (fun u : ℝ => (1 / (u ^ a * Real.log u)) * (1 / Real.log u))
+              =o[(𝓝∞ : Filter ℝ)]
+              (fun u : ℝ => (1 / (u ^ a * Real.log u)) * (1 : ℝ)) :=
+    (Asymptotics.isBigO_refl _ _).mul_isLittleO one_div_log_isLittleO_one
+  have h_o : (fun u : ℝ => 1 / (u ^ a * Real.log u ^ 2))
+            =o[(𝓝∞ : Filter ℝ)]
+            (fun u : ℝ => 1 / (u ^ a * Real.log u)) := by
+    refine h_aux.congr' h_eq.symm ?_
+    filter_upwards with u
+    ring
+  exact h_o.isBigO
+
+/-- **Unified weak per-derivative bound.**  For `1 ≤ k < n`, given the strong
+    inductive hypothesis `∀ k', 2 ≤ k' → k' < n → GramAsymp k'`:
+
+      `iteratedDeriv k gram =O[𝓝∞] (fun u => 1 / (u^(k-1) · log u))`.
+
+    For `k = 1`, this is Korolev (`iteratedDeriv_one_gram_isBigO_explicit`).
+    For `k ≥ 2`, weakens the tight `1/(u^(k-1) · log² u)` bound via
+    `inv_polylog_weaken`. -/
+private lemma iteratedDeriv_gram_isBigO_weak (n k : ℕ) (hk : 1 ≤ k) (hkn : k < n)
+    (ih : ∀ k', 2 ≤ k' → k' < n → GramAsymp k') :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (iteratedDeriv k gram)
+      (fun u : ℝ => 1 / (u ^ (k - 1) * Real.log u)) := by
+  by_cases h_one : k = 1
+  · subst h_one
+    have h := iteratedDeriv_one_gram_isBigO_explicit
+    refine h.congr_right ?_
+    intro u
+    change 1 / Real.log u = 1 / (u ^ (1 - 1) * Real.log u)
+    rw [Nat.sub_self, pow_zero, one_mul]
+  · have hk2 : 2 ≤ k := by omega
+    exact (iteratedDeriv_isBigO_explicit k (ih k hk2 hkn)).trans (inv_polylog_weaken (k - 1))
+
 /-- **`IsBigO` of finset products.**  If `f i =O[l] g i` for every `i ∈ s`,
     then `∏ i ∈ s, f i x =O[l] ∏ i ∈ s, g i x`.  Proof: induct on `s`. -/
 private lemma isBigO_finset_prod {ι : Type*} (s : Finset ι) {f g : ι → ℝ → ℝ}
