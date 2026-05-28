@@ -2374,6 +2374,137 @@ private lemma theorem3_atomic_term (n : ℕ) (hn : 2 ≤ n) :
   have hc_inv_ne : c⁻¹ ≠ 0 := inv_ne_zero hc_ne
   exact (Asymptotics.isLittleO_const_mul_right_iff hc_inv_ne).mp h_E_isO_RHS'
 
+/-!
+  ## §2.5  Per-factor bigO bounds
+
+  Explicit-polynomial upper bounds for each factor in the Faà di Bruno
+  expansion of `θ ∘ gram`:
+    • `iteratedDeriv 1 gram u   = O(1 / log u)`              — Korolev (eq. 9).
+    • `iteratedDeriv k gram u   = O(1 / (u^{k-1} log² u))`   — `GramAsymp k`, `k ≥ 2`.
+    • `θ^(ℓ)(gram u)            = O(log^{ℓ-1} u / u^{ℓ-1})` — Corollary 2 transported.
+
+  These are the building blocks for the per-summand estimate in §2.5.3.
+-/
+
+/-- `((gramL u)⁻¹)^m =O[𝓝∞] (fun u => Real.log u^m / u^m)`.  Pointwise
+    constant identity `((gramL u)⁻¹)^m = (1/(2π))^m · log^m u / u^m`. -/
+private lemma inv_gramL_pow_isBigO_explicit (m : ℕ) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gramL u)⁻¹) ^ m)
+      (fun u : ℝ => Real.log u ^ m / u ^ m) := by
+  have h := Asymptotics.isBigO_const_mul_self
+    ((1 / (2 * Real.pi)) ^ m)
+    (fun u : ℝ => Real.log u ^ m / u ^ m) (𝓝∞ : Filter ℝ)
+  refine h.congr_left ?_
+  intro u
+  change (1 / (2 * Real.pi)) ^ m * (Real.log u ^ m / u ^ m) = ((gramL u)⁻¹) ^ m
+  have h_lhs : (1 / (2 * Real.pi)) ^ m * (Real.log u ^ m / u ^ m)
+             = Real.log u ^ m / ((2 * Real.pi) ^ m * u ^ m) := by
+    rw [div_pow, one_pow, div_mul_div_comm, one_mul]
+  have h_rhs : ((gramL u)⁻¹) ^ m
+             = Real.log u ^ m / ((2 * Real.pi) ^ m * u ^ m) := by
+    unfold gramL
+    rw [inv_div, div_pow, mul_pow]
+  rw [h_lhs, h_rhs]
+
+/-- `θ^(ℓ)(gram u) =O[𝓝∞] ((gramL u)⁻¹)^(ℓ − 1)` for `ℓ ≥ 2`.
+
+    Comes from the refined Corollary-2 transport
+    `iteratedDeriv_n_theta_at_gram_isLittleO_refined` combined with
+    `gram⁻¹ ~ gramL⁻¹` and the trivial bound
+    `((gramL u)⁻¹)^(ℓ-1) · log log u / log u =o ((gramL u)⁻¹)^(ℓ-1)`. -/
+private lemma theta_iter_at_gram_isBigO_inv_gramL_pow (ℓ : ℕ) (hℓ : 2 ≤ ℓ) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => iteratedDeriv ℓ theta (gram u))
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (ℓ - 1)) := by
+  -- Refined residual: (θ^(ℓ)(gram u) − C · ((gram u)⁻¹)^(ℓ-1))
+  --                    =o[𝓝∞] (((gramL u)⁻¹)^(ℓ-1) · ll/l).
+  have h_refined := iteratedDeriv_n_theta_at_gram_isLittleO_refined ℓ hℓ
+  -- ((gramL u)⁻¹)^(ℓ-1) · ll/l =o ((gramL u)⁻¹)^(ℓ-1) (since ll/l → 0).
+  have h_ll_o_one := loglog_div_log_isLittleO_one
+  have h_mul_o_self : Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (ℓ - 1) * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (ℓ - 1)) := by
+    have h := (Asymptotics.isBigO_refl
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (ℓ - 1)) (𝓝∞ : Filter ℝ)).mul_isLittleO h_ll_o_one
+    simpa using h
+  -- Residual =O ((gramL u)⁻¹)^(ℓ-1).
+  have h_residual_O : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => iteratedDeriv ℓ theta (gram u)
+        - ((-1 : ℝ) ^ ℓ * ((Nat.factorial (ℓ - 2) : ℕ) : ℝ) * (1 / 2)
+           * ((gram u)⁻¹) ^ (ℓ - 1)))
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (ℓ - 1)) :=
+    (h_refined.trans_isBigO h_mul_o_self.isBigO).isBigO
+  -- ((gram u)⁻¹)^(ℓ-1) =O ((gramL u)⁻¹)^(ℓ-1).
+  have h_gram_to_gramL : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ((gram u)⁻¹) ^ (ℓ - 1))
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (ℓ - 1)) :=
+    (gram_inv_isEquivalent_gramL_inv.pow (ℓ - 1)).isBigO
+  -- Leading term =O target.
+  have h_lead_O : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => (-1 : ℝ) ^ ℓ * ((Nat.factorial (ℓ - 2) : ℕ) : ℝ) * (1 / 2)
+                    * ((gram u)⁻¹) ^ (ℓ - 1))
+      (fun u : ℝ => ((gramL u)⁻¹) ^ (ℓ - 1)) :=
+    (Asymptotics.isBigO_const_mul_self
+      ((-1 : ℝ) ^ ℓ * ((Nat.factorial (ℓ - 2) : ℕ) : ℝ) * (1 / 2))
+      (fun u : ℝ => ((gram u)⁻¹) ^ (ℓ - 1)) (𝓝∞ : Filter ℝ)).trans h_gram_to_gramL
+  -- Sum: θ^(ℓ)(gram u) = (residual + lead) =O ((gramL u)⁻¹)^(ℓ-1).
+  have h_total := h_residual_O.add h_lead_O
+  refine h_total.congr_left ?_
+  intro u
+  ring
+
+/-- `θ^(ℓ)(gram u) =O[𝓝∞] (fun u => Real.log u^(ℓ-1) / u^(ℓ-1))` for `ℓ ≥ 2`. -/
+private lemma theta_iter_at_gram_isBigO_explicit (ℓ : ℕ) (hℓ : 2 ≤ ℓ) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => iteratedDeriv ℓ theta (gram u))
+      (fun u : ℝ => Real.log u ^ (ℓ - 1) / u ^ (ℓ - 1)) :=
+  (theta_iter_at_gram_isBigO_inv_gramL_pow ℓ hℓ).trans
+    (inv_gramL_pow_isBigO_explicit (ℓ - 1))
+
+/-- `gramLeading k =O[𝓝∞] (fun u => 1 / (u^(k-1) · log² u))`.  Strips the
+    explicit constant `(−1)^(k+1) · 2π · (k − 2)!`. -/
+private lemma gramLeading_isBigO_explicit (k : ℕ) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ) (gramLeading k)
+      (fun u : ℝ => 1 / (u ^ (k - 1) * Real.log u ^ 2)) := by
+  have h := Asymptotics.isBigO_const_mul_self
+    ((-1 : ℝ) ^ (k + 1) * (2 * Real.pi) * ((Nat.factorial (k - 2) : ℕ) : ℝ))
+    (fun u : ℝ => 1 / (u ^ (k - 1) * Real.log u ^ 2)) (𝓝∞ : Filter ℝ)
+  refine h.congr_left ?_
+  intro u
+  show (-1 : ℝ) ^ (k + 1) * (2 * Real.pi) * ((Nat.factorial (k - 2) : ℕ) : ℝ)
+       * (1 / (u ^ (k - 1) * Real.log u ^ 2)) = gramLeading k u
+  unfold gramLeading
+  ring
+
+/-- `iteratedDeriv k gram =O[𝓝∞] (fun u => 1 / (u^(k-1) · log² u))` for
+    `k ≥ 2`, given the inductive hypothesis `GramAsymp k`. -/
+private lemma iteratedDeriv_isBigO_explicit (k : ℕ) (ih : GramAsymp k) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (iteratedDeriv k gram)
+      (fun u : ℝ => 1 / (u ^ (k - 1) * Real.log u ^ 2)) :=
+  (iteratedDeriv_isBigO_gramLeading ih).trans (gramLeading_isBigO_explicit k)
+
+/-- `iteratedDeriv 1 gram =O[𝓝∞] (fun u => 1 / Real.log u)`.  From Korolev
+    (eq. 9), packaged via `iteratedDeriv 1 gram ~ gramLDeriv` and
+    `gramLDeriv u = 2π · (1/log u)`. -/
+private lemma iteratedDeriv_one_gram_isBigO_explicit :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (iteratedDeriv 1 gram)
+      (fun u : ℝ => 1 / Real.log u) := by
+  have h1 : Asymptotics.IsBigO (𝓝∞ : Filter ℝ) (iteratedDeriv 1 gram) gramLDeriv :=
+    gram_deriv_isEquivalent_gramLDeriv.isBigO
+  have h2 : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      gramLDeriv (fun u : ℝ => 1 / Real.log u) := by
+    have h := Asymptotics.isBigO_const_mul_self
+      (2 * Real.pi) (fun u : ℝ => 1 / Real.log u) (𝓝∞ : Filter ℝ)
+    refine h.congr_left ?_
+    intro u
+    change 2 * Real.pi * (1 / Real.log u) = gramLDeriv u
+    unfold gramLDeriv
+    ring
+  exact h1.trans h2
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
