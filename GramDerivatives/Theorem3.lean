@@ -2505,6 +2505,120 @@ private lemma iteratedDeriv_one_gram_isBigO_explicit :
     ring
   exact h1.trans h2
 
+/-!
+  ## §2.5.3a  Structural helpers
+
+  Two structural lemmas about `OrderedFinpartition`:
+    • `eq_atomic_of_partSize_all_one`: a finpartition with every part of size
+      `1` is the `atomic` finpartition (an extensionality fact, mirror of the
+      existing `eq_cTarget_of_length_one`).
+    • `exists_partSize_ge_two_of_mem_cOther`: every `c ∈ cOther` has at least
+      one part of size `≥ 2`.  This is the key witness used in §2.5.3 to pick
+      the index `j₀` at which we apply the *tight* bound
+      `iteratedDeriv (c.partSize j₀) gram = O(1/(u^{k-1} log² u))` while using
+      the weaker `1/(u^{k-1} log u)` bound at the remaining indices.
+-/
+
+/-- A finpartition all of whose parts have size 1 equals `OrderedFinpartition.atomic n`.
+
+    Combined with `partSize_pos`, this is the structural converse to
+    `OrderedFinpartition.atomic_partSize : (atomic n).partSize j = 1`. -/
+private lemma eq_atomic_of_partSize_all_one {n : ℕ}
+    (c : OrderedFinpartition n) (h_all_one : ∀ j, c.partSize j = 1) :
+    c = OrderedFinpartition.atomic n := by
+  -- Length = n (from `sum_partSize_eq`).
+  have h_sum := sum_partSize_eq c
+  have h_const_one :
+      (fun i : Fin c.length => c.partSize i) = (fun _ => 1) := funext h_all_one
+  rw [h_const_one] at h_sum
+  simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+             smul_eq_mul, mul_one] at h_sum
+  have h_len_eq_n : c.length = n := h_sum
+  -- Destructure.
+  rcases c with ⟨length, partSize, partSize_pos, emb, emb_strictMono,
+                 parts_strictMono, disjoint, cover⟩
+  simp only at h_len_eq_n h_all_one
+  subst length
+  have h_partSize : partSize = (fun _ : Fin n => 1) := funext h_all_one
+  subst h_partSize
+  -- Show `emb m = (fun _ => m)` (forced by strict-mono + cover ⇒ identity).
+  have h_emb_zero_id : ∀ m, emb m ⟨0, Nat.zero_lt_one⟩ = m := by
+    apply fin_strictMono_surj_eq_id
+    · intro a b h_lt; exact parts_strictMono h_lt
+    · intro x
+      obtain ⟨m, r, hr⟩ := cover x
+      refine ⟨m, ?_⟩
+      change emb m ⟨0, Nat.zero_lt_one⟩ = x
+      have hr_eq : r = ⟨0, Nat.zero_lt_one⟩ := Subsingleton.elim _ _
+      rw [← hr_eq]; exact hr
+  have h_emb : emb = fun (m : Fin n) (_ : Fin 1) => m := by
+    funext m j
+    have hj : j = ⟨0, Nat.zero_lt_one⟩ := Subsingleton.elim _ _
+    rw [hj]; exact h_emb_zero_id m
+  subst h_emb
+  rfl
+
+/-- For `c ∈ cOther n hn` (with `n ≥ 2`), some part has size `≥ 2`.
+
+    Contrapositive: if all parts have size `1` then `c = atomic`, contradicting
+    `c ∈ cOther` (which excludes the atomic partition). -/
+private lemma exists_partSize_ge_two_of_mem_cOther {n : ℕ} (hn : 2 ≤ n)
+    {c : OrderedFinpartition n} (hc : c ∈ cOther n (by omega : 0 < n)) :
+    ∃ j : Fin c.length, 2 ≤ c.partSize j := by
+  by_contra h
+  push_neg at h
+  -- All partSize = 1 (since partSize_pos and partSize < 2 ⟹ = 1).
+  have h_all_one : ∀ j, c.partSize j = 1 := fun j =>
+    Nat.le_antisymm (Nat.lt_succ_iff.mp (h j)) (c.partSize_pos j)
+  -- Hence c = atomic n.
+  have h_eq : c = OrderedFinpartition.atomic n :=
+    eq_atomic_of_partSize_all_one c h_all_one
+  -- But c ∈ cOther excludes atomic.
+  have h_ne_atomic : c ≠ OrderedFinpartition.atomic n :=
+    (Finset.mem_erase.mp hc).1
+  exact h_ne_atomic h_eq
+
+/-- For `c ∈ cOther n hn` (with `n ≥ 2`), `c.length ≥ 2`. -/
+private lemma length_ge_two_of_mem_cOther {n : ℕ} (hn : 2 ≤ n)
+    {c : OrderedFinpartition n} (hc : c ∈ cOther n (by omega : 0 < n)) :
+    2 ≤ c.length := by
+  have h_pos : 0 < c.length := c.length_pos (by omega : 0 < n)
+  by_contra h
+  push_neg at h
+  have h_len_one : c.length = 1 := by omega
+  -- c.length = 1 ⟹ c = cTarget — but c ∈ cOther excludes cTarget.
+  have h_eq : c = cTarget n (by omega : 0 < n) :=
+    eq_cTarget_of_length_one (by omega) c h_len_one
+  have h_mem_inner : c ∈ Finset.univ.erase (cTarget n (by omega : 0 < n)) :=
+    (Finset.mem_erase.mp hc).2
+  have h_ne : c ≠ cTarget n (by omega : 0 < n) :=
+    (Finset.mem_erase.mp h_mem_inner).1
+  exact h_ne h_eq
+
+/-- **`IsBigO` of finset products.**  If `f i =O[l] g i` for every `i ∈ s`,
+    then `∏ i ∈ s, f i x =O[l] ∏ i ∈ s, g i x`.  Proof: induct on `s`. -/
+private lemma isBigO_finset_prod {ι : Type*} (s : Finset ι) {f g : ι → ℝ → ℝ}
+    (h : ∀ i ∈ s, Asymptotics.IsBigO (𝓝∞ : Filter ℝ) (f i) (g i)) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ∏ i ∈ s, f i u)
+      (fun u : ℝ => ∏ i ∈ s, g i u) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty =>
+    simp only [Finset.prod_empty]
+    exact Asymptotics.isBigO_refl _ _
+  | @insert a s ha ih =>
+    have h_s : ∀ i ∈ s, Asymptotics.IsBigO (𝓝∞ : Filter ℝ) (f i) (g i) := fun i hi =>
+      h i (Finset.mem_insert_of_mem hi)
+    have h_rest := ih h_s
+    have h_a := h a (Finset.mem_insert_self a s)
+    have h_combined : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => f a u * ∏ i ∈ s, f i u)
+      (fun u : ℝ => g a u * ∏ i ∈ s, g i u) := h_a.mul h_rest
+    refine (h_combined.congr_left ?_).congr_right ?_
+    · intro u; rw [Finset.prod_insert ha]
+    · intro u; rw [Finset.prod_insert ha]
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
