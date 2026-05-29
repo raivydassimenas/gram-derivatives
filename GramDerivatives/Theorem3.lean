@@ -1611,7 +1611,7 @@ private lemma fin_strictMono_surj_eq_id {n : ℕ} {f : Fin n → Fin n}
       exact h_mono_lt
     have h_j_le : j.val ≤ k + 1 := by
       by_contra h_gt
-      push_neg at h_gt
+      push Not at h_gt
       have h_jlt : (⟨k+1, hk⟩ : Fin n) < j := by
         exact Fin.mk_lt_mk.mpr (by omega)
       have h_strict := h_mono h_jlt
@@ -1621,7 +1621,7 @@ private lemma fin_strictMono_surj_eq_id {n : ℕ} {f : Fin n → Fin n}
       omega  -- combined with h_lower: k < ... < k+1, contradiction.
     have h_j_ge : k + 1 ≤ j.val := by
       by_contra h_lt
-      push_neg at h_lt
+      push Not at h_lt
       have h_j_le_k : j.val ≤ k := Nat.lt_succ_iff.mp h_lt
       have h_jle : j ≤ (⟨k, hk'⟩ : Fin n) := by
         rw [Fin.le_iff_val_le_val]; exact h_j_le_k
@@ -2569,7 +2569,7 @@ private lemma exists_partSize_ge_two_of_mem_cOther {n : ℕ} (hn : 2 ≤ n)
     {c : OrderedFinpartition n} (hc : c ∈ cOther n (by omega : 0 < n)) :
     ∃ j : Fin c.length, 2 ≤ c.partSize j := by
   by_contra h
-  push_neg at h
+  push Not at h
   -- All partSize = 1 (since partSize_pos and partSize < 2 ⟹ = 1).
   have h_all_one : ∀ j, c.partSize j = 1 := fun j =>
     Nat.le_antisymm (Nat.lt_succ_iff.mp (h j)) (c.partSize_pos j)
@@ -2587,7 +2587,7 @@ private lemma length_ge_two_of_mem_cOther {n : ℕ} (hn : 2 ≤ n)
     2 ≤ c.length := by
   have h_pos : 0 < c.length := c.length_pos (by omega : 0 < n)
   by_contra h
-  push_neg at h
+  push Not at h
   have h_len_one : c.length = 1 := by omega
   -- c.length = 1 ⟹ c = cTarget — but c ∈ cOther excludes cTarget.
   have h_eq : c = cTarget n (by omega : 0 < n) :=
