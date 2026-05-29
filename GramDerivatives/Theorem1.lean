@@ -2593,7 +2593,7 @@ private lemma iteratedDeriv_lorSq_eq (n : ℕ) (s : ℝ) :
   | zero =>
     rw [iteratedDeriv_zero]
     -- `lorSqNumer 0 = 1` and `(1 : Polynomial ℝ).eval s = 1`.
-    show lorSq s = (1 : Polynomial ℝ).eval s / (1 + s ^ 2) ^ (0 + 2)
+    change lorSq s = (1 : Polynomial ℝ).eval s / (1 + s ^ 2) ^ (0 + 2)
     rw [Polynomial.eval_one]
     unfold lorSq lor
     have h_ne : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
