@@ -38,9 +38,12 @@
     Faà di Bruno / general Leibniz, isolate `t_u^(k)`, and substitute.
 
   ─── Status ────────────────────────────────────────────────────────────
-  This file is a **stub**: axiom signatures and the top-level statement
-  are in place; the proof of `theorem3` is `sorry` and will be filled in
-  later.
+  Complete: `theorem3` is fully proven by strong induction on `n ≥ 2`.
+  Base case `n = 2` is `theorem3_two` (§1.14); the inductive step combines
+  the atomic-term asymptotic (`theorem3_atomic_term`, §2.4) with the
+  cOther contribution bound (`cOther_contribution_isLittleO`, §2.5.4) via
+  the Faà di Bruno solved form `iteratedDeriv_n_gram_solved_eventually`
+  (§2.3).  All remaining `-- ASSUMPTION` axioms are listed under §1.
 -/
 
 import GramDerivatives.Corollary2
@@ -2674,6 +2677,383 @@ private lemma isBigO_finset_prod {ι : Type*} (s : Finset ι) {f g : ι → ℝ 
     · intro u; rw [Finset.prod_insert ha]
     · intro u; rw [Finset.prod_insert ha]
 
+/-!
+  ## §2.5.3  Per-summand `cOther` bound
+
+  Combine the per-factor bounds with the structural witness
+  `exists_partSize_ge_two_of_mem_cOther`: apply the tight bound at one such
+  `j₀` and the weak bound at the remaining indices.  The combined product
+  factorises as `1/(u^(n-1) · log² u)` after telescoping the explicit
+  log-and-power exponents (`Finset.pow_sum`, `Finset.prod_const`).
+-/
+
+/-- Sum of `(c.partSize j - 1)` over all parts equals `n - c.length`.  Uses
+    `sum_partSize_eq` and `partSize_pos`. -/
+private lemma sum_partSize_sub_one_eq {n : ℕ} (c : OrderedFinpartition n) :
+    ∑ j : Fin c.length, (c.partSize j - 1) = n - c.length := by
+  have h_sum := sum_partSize_eq c
+  have h_pos := c.partSize_pos
+  -- c.length ≤ n.
+  have h_len_le : c.length ≤ n := by
+    have h := Finset.sum_le_sum (s := (Finset.univ : Finset (Fin c.length)))
+                                (f := fun _ => 1) (g := c.partSize)
+                                (fun i _ => h_pos i)
+    simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+               smul_eq_mul, mul_one] at h
+    rw [h_sum] at h
+    exact h
+  -- Add c.length back: ∑ (partSize j - 1) + c.length = n.
+  have h_back : (∑ j : Fin c.length, (c.partSize j - 1)) + c.length = n := by
+    have h_eq : ∑ j : Fin c.length, ((c.partSize j - 1) + 1)
+                = ∑ j : Fin c.length, c.partSize j := by
+      refine Finset.sum_congr rfl (fun j _ => ?_)
+      exact Nat.sub_add_cancel (h_pos j)
+    rw [Finset.sum_add_distrib] at h_eq
+    simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+               smul_eq_mul, mul_one] at h_eq
+    rw [h_sum] at h_eq
+    exact h_eq
+  omega
+
+/-- Closed form for the "weak per-factor" product over a finset `s ⊆ Fin c.length`:
+
+      `∏ j ∈ s, 1/(u^(c.partSize j - 1) · log u)
+         = 1 / (u^(∑ j ∈ s, c.partSize j - 1) · log u ^ s.card)`. -/
+private lemma prod_weak_factor_closed_form {n : ℕ} (c : OrderedFinpartition n)
+    (s : Finset (Fin c.length)) {u : ℝ}
+    (hu : 0 < u) (hlog : Real.log u ≠ 0) :
+    ∏ j ∈ s, (1 / (u ^ (c.partSize j - 1) * Real.log u))
+      = 1 / (u ^ (∑ j ∈ s, (c.partSize j - 1)) * Real.log u ^ s.card) := by
+  classical
+  have hu_ne : u ≠ 0 := ne_of_gt hu
+  induction s using Finset.induction_on with
+  | empty => simp
+  | @insert a t ha ih =>
+    rw [Finset.prod_insert ha, ih, Finset.sum_insert ha,
+        Finset.card_insert_of_notMem ha]
+    have h_u_pow_t : u ^ (∑ j ∈ t, (c.partSize j - 1)) ≠ 0 := pow_ne_zero _ hu_ne
+    have h_u_pow_a : u ^ (c.partSize a - 1) ≠ 0 := pow_ne_zero _ hu_ne
+    have h_log_pow : Real.log u ^ t.card ≠ 0 := pow_ne_zero _ hlog
+    rw [pow_add, pow_succ]
+    field_simp
+
+/-- **Per-summand `cOther` bound.**  For `c ∈ cOther n` and the strong IH
+    `∀ k', 2 ≤ k' → k' < n → GramAsymp k'`,
+
+      `θ^(c.length)(gram u) · ∏ⱼ iteratedDeriv (c.partSize j) gram u
+         =O[𝓝∞] 1 / (u^(n-1) · log² u)`. -/
+private lemma cOther_summand_isBigO {n : ℕ} (hn : 2 ≤ n)
+    (ih : ∀ k', 2 ≤ k' → k' < n → GramAsymp k')
+    {c : OrderedFinpartition n} (hc : c ∈ cOther n (by omega : 0 < n)) :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ =>
+        iteratedDeriv c.length theta (gram u) *
+        ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => 1 / (u ^ (n - 1) * Real.log u ^ 2)) := by
+  classical
+  -- (1) Structural data for c ∈ cOther.
+  have h_len : 2 ≤ c.length := length_ge_two_of_mem_cOther hn hc
+  obtain ⟨j₀, hj₀⟩ := exists_partSize_ge_two_of_mem_cOther hn hc
+  have hj₀_lt : c.partSize j₀ < n := partSize_lt_of_mem_cOther hn hc j₀
+  -- (2) θ^(c.length)(gram u) bound.
+  have h_θ : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => iteratedDeriv c.length theta (gram u))
+      (fun u : ℝ => Real.log u ^ (c.length - 1) / u ^ (c.length - 1)) :=
+    theta_iter_at_gram_isBigO_explicit c.length h_len
+  -- (3) Tight bound at j₀.
+  have h_tight : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (iteratedDeriv (c.partSize j₀) gram)
+      (fun u : ℝ => 1 / (u ^ (c.partSize j₀ - 1) * Real.log u ^ 2)) :=
+    iteratedDeriv_isBigO_explicit (c.partSize j₀) (ih (c.partSize j₀) hj₀ hj₀_lt)
+  -- (4) Weak bound at each j ≠ j₀.
+  have h_weak : ∀ j ∈ (Finset.univ.erase j₀ : Finset (Fin c.length)),
+      Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+        (iteratedDeriv (c.partSize j) gram)
+        (fun u : ℝ => 1 / (u ^ (c.partSize j - 1) * Real.log u)) := by
+    intro j _
+    have h_pos : 1 ≤ c.partSize j := c.partSize_pos j
+    have h_lt : c.partSize j < n := partSize_lt_of_mem_cOther hn hc j
+    exact iteratedDeriv_gram_isBigO_weak n (c.partSize j) h_pos h_lt ih
+  -- (5) Product of weak bounds.
+  have h_prod_weak : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ∏ j ∈ Finset.univ.erase j₀, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => ∏ j ∈ Finset.univ.erase j₀,
+                      1 / (u ^ (c.partSize j - 1) * Real.log u)) :=
+    isBigO_finset_prod _ h_weak
+  -- (6) Split ∏ⱼ at j₀.
+  have h_prod_split :
+      (fun u : ℝ => ∏ j, iteratedDeriv (c.partSize j) gram u)
+        =
+      (fun u : ℝ => iteratedDeriv (c.partSize j₀) gram u *
+                    ∏ j ∈ Finset.univ.erase j₀, iteratedDeriv (c.partSize j) gram u) := by
+    funext u
+    exact (Finset.mul_prod_erase _ _ (Finset.mem_univ j₀)).symm
+  -- (7) Combine: ∏ⱼ iteratedDeriv =O tight(j₀) · ∏_{erase j₀} weak.
+  have h_prod_O : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => (1 / (u ^ (c.partSize j₀ - 1) * Real.log u ^ 2)) *
+                    ∏ j ∈ Finset.univ.erase j₀,
+                      1 / (u ^ (c.partSize j - 1) * Real.log u)) := by
+    rw [h_prod_split]
+    exact h_tight.mul h_prod_weak
+  -- (8) Multiply by θ-bound.
+  have h_total_O : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ =>
+        iteratedDeriv c.length theta (gram u) *
+        ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ =>
+        (Real.log u ^ (c.length - 1) / u ^ (c.length - 1)) *
+        ((1 / (u ^ (c.partSize j₀ - 1) * Real.log u ^ 2)) *
+         ∏ j ∈ Finset.univ.erase j₀,
+           1 / (u ^ (c.partSize j - 1) * Real.log u))) :=
+    h_θ.mul h_prod_O
+  -- (9) Pointwise simplify the bound to `1/(u^(n-1) · log² u)` eventually.
+  refine h_total_O.trans ?_
+  -- Goal: the explicit bound function is =O[𝓝∞] (1/(u^(n-1) · log² u)).
+  -- We show it's eventually equal.
+  refine Asymptotics.IsBigO.of_bound 1 ?_
+  filter_upwards [Filter.eventually_gt_atTop (1 : ℝ), log_pos_atTop]
+    with u hu hlog
+  have hu0 : 0 < u := by linarith
+  have hu_ne : u ≠ 0 := ne_of_gt hu0
+  have hlog_ne : Real.log u ≠ 0 := ne_of_gt hlog
+  -- Step A: closed form for the erase j₀ product.
+  have h_erase_card : (Finset.univ.erase j₀ : Finset (Fin c.length)).card
+                      = c.length - 1 := by
+    rw [Finset.card_erase_of_mem (Finset.mem_univ j₀),
+        Finset.card_univ, Fintype.card_fin]
+  have h_prod_closed :
+      ∏ j ∈ (Finset.univ.erase j₀ : Finset (Fin c.length)),
+        1 / (u ^ (c.partSize j - 1) * Real.log u) =
+      1 / (u ^ (∑ j ∈ (Finset.univ.erase j₀ : Finset (Fin c.length)),
+                  (c.partSize j - 1))
+           * Real.log u ^ (c.length - 1)) := by
+    rw [prod_weak_factor_closed_form c _ hu0 hlog_ne, h_erase_card]
+  -- Step B: telescope the u-exponent.
+  -- (c.length - 1) + (c.partSize j₀ - 1) + ∑_{erase j₀}(partSize j - 1) = n - 1.
+  have h_sum_partSize_sub_one : ∑ j : Fin c.length, (c.partSize j - 1) = n - c.length :=
+    sum_partSize_sub_one_eq c
+  have h_sum_erase :
+      (c.partSize j₀ - 1) +
+        ∑ j ∈ (Finset.univ.erase j₀ : Finset (Fin c.length)), (c.partSize j - 1)
+      = n - c.length := by
+    have h_add_erase := Finset.add_sum_erase
+      (Finset.univ : Finset (Fin c.length))
+      (fun j => c.partSize j - 1) (Finset.mem_univ j₀)
+    rw [h_add_erase, h_sum_partSize_sub_one]
+  -- u-exponent: (c.length - 1) + (c.partSize j₀ - 1) + (n - c.length - (partSize j₀ - 1)).
+  -- Working in ℕ, equivalently c.length - 1 + n - c.length.
+  have h_len_le : c.length ≤ n := by
+    -- From sum_partSize_eq and partSize_pos.
+    have h_sum := sum_partSize_eq c
+    have h_pos := c.partSize_pos
+    have h := Finset.sum_le_sum (s := (Finset.univ : Finset (Fin c.length)))
+                                (f := fun _ => 1) (g := c.partSize)
+                                (fun i _ => h_pos i)
+    simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+               smul_eq_mul, mul_one] at h
+    rw [h_sum] at h
+    exact h
+  -- Final pointwise calc.
+  rw [h_prod_closed]
+  have hu_pow_ne : ∀ k : ℕ, u ^ k ≠ 0 := fun k => pow_ne_zero _ hu_ne
+  have hlog_pow_ne : ∀ k : ℕ, Real.log u ^ k ≠ 0 := fun k => pow_ne_zero _ hlog_ne
+  -- LHS: (log u)^(c.length - 1) / u^(c.length - 1) *
+  --       ((1/(u^(partSize j₀ - 1) · log² u)) *
+  --        (1/(u^∑_erase(partSize-1) · log^(c.length - 1) u)))
+  -- = 1 / (u^(n-1) · log² u)
+  set m : ℕ := c.length - 1 with hm_def
+  set s_erase : ℕ := ∑ j ∈ (Finset.univ.erase j₀ : Finset (Fin c.length)),
+                       (c.partSize j - 1) with hs_def
+  -- u-exponent telescope:
+  --   m + ((partSize j₀ - 1) + s_erase) = (c.length - 1) + (n - c.length) = n - 1.
+  have h_telescope_u :
+      m + (c.partSize j₀ - 1) + s_erase = n - 1 := by
+    have : (c.partSize j₀ - 1) + s_erase = n - c.length := h_sum_erase
+    omega
+  -- log-exponent telescope:
+  --   m + 2 + m = (c.length - 1) + 2 + (c.length - 1) -- on numerator side m
+  --   Numerator log u^m, denominator log² u · log^m u → log^(m+2-m) = log² u net effect.
+  -- The identity:
+  --   (log u)^m / u^m · 1/(u^(partSize j₀ - 1) · log² u) ·
+  --   1/(u^s_erase · log^m u)
+  --   = (log u)^m / (u^m · u^(partSize j₀ - 1) · u^s_erase · log² u · log^m u)
+  --   = 1 / (u^(m + (partSize j₀ - 1) + s_erase) · log² u)
+  --   = 1 / (u^(n-1) · log² u).
+  -- Algebraic manipulation:
+  have h_pow_add_u : u ^ (m + (c.partSize j₀ - 1) + s_erase)
+                    = u ^ m * u ^ (c.partSize j₀ - 1) * u ^ s_erase := by
+    rw [pow_add, pow_add]
+  -- Use h_telescope_u to rewrite to u^(n-1).
+  have h_u_n_sub_1 : u ^ (n - 1) =
+      u ^ m * u ^ (c.partSize j₀ - 1) * u ^ s_erase := by
+    rw [← h_telescope_u, pow_add, pow_add]
+  -- Final norm: |LHS| ≤ 1 * |1 / (u^(n-1) · log² u)|.
+  -- Compute LHS algebraically.
+  have h_lhs :
+      Real.log u ^ m / u ^ m *
+        (1 / (u ^ (c.partSize j₀ - 1) * Real.log u ^ 2) *
+          (1 / (u ^ s_erase * Real.log u ^ m)))
+      = 1 / (u ^ (n - 1) * Real.log u ^ 2) := by
+    rw [h_u_n_sub_1]
+    have hum := hu_pow_ne m
+    have hus := hu_pow_ne s_erase
+    have huj0 := hu_pow_ne (c.partSize j₀ - 1)
+    have hlogm := hlog_pow_ne m
+    have hlog2 : Real.log u ^ 2 ≠ 0 := pow_ne_zero _ hlog_ne
+    field_simp
+  rw [h_lhs]
+  rw [one_mul]
+
+/-!
+  ## §2.5.4  Sum over `cOther` and contribution to the residual
+
+  Sum the per-summand bounds over `cOther` and multiply by `-(deriv gram u / π)`
+  (the prefactor in the §2.3 solved form).  Conclude that the cOther
+  contribution is `o[𝓝∞] (gramLeading n u · log log u / log u)`.
+-/
+
+/-- Sum of per-summand bounds: `∑ c ∈ cOther n, c-summand =O[𝓝∞] 1/(u^(n-1) · log² u)`. -/
+private lemma cOther_sum_isBigO {n : ℕ} (hn : 2 ≤ n)
+    (ih : ∀ k', 2 ≤ k' → k' < n → GramAsymp k') :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => ∑ c ∈ cOther n (by omega : 0 < n),
+        iteratedDeriv c.length theta (gram u) *
+        ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => 1 / (u ^ (n - 1) * Real.log u ^ 2)) :=
+  Asymptotics.IsBigO.sum (fun _ hc => cOther_summand_isBigO hn ih hc)
+
+/-- `gramLeading n u · log log u / log u =O[𝓝∞] 1/(u^(n-1) · log² u) · log log u`.
+    Hidden constant `|gramLeading n u| ≤ const / (u^(n-1) · log² u)`. -/
+private lemma gramLeading_mul_loglog_div_log_eq {n : ℕ} (u : ℝ)
+    (hu : u ≠ 0) (hlog : Real.log u ≠ 0) :
+    gramLeading n u * Real.log (Real.log u) / Real.log u
+      = ((-1 : ℝ) ^ (n + 1) * (2 * Real.pi) * ((n - 2).factorial : ℝ))
+        * (Real.log (Real.log u) / (u ^ (n - 1) * Real.log u ^ 3)) := by
+  unfold gramLeading
+  have hu_pow : u ^ (n - 1) ≠ 0 := pow_ne_zero _ hu
+  have hlog_pow : Real.log u ^ 2 ≠ 0 := pow_ne_zero _ hlog
+  field_simp
+
+/-- `1 = o(log log u)` at `+∞`.  Standard consequence of `log log u → +∞`. -/
+private lemma one_isLittleO_loglog :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun _ : ℝ => (1 : ℝ))
+      (fun u : ℝ => Real.log (Real.log u)) := by
+  rw [Asymptotics.isLittleO_iff_tendsto']
+  · -- Tendsto (fun u => 1 / log log u) 𝓝∞ (𝓝 0).
+    have h_tend : Tendsto (fun u : ℝ => Real.log (Real.log u)) 𝓝∞ 𝓝∞ :=
+      Real.tendsto_log_atTop.comp Real.tendsto_log_atTop
+    refine h_tend.inv_tendsto_atTop.congr ?_
+    intro u
+    exact (one_div _).symm
+  · filter_upwards [loglog_pos_atTop] with u hu h_zero
+    exact absurd h_zero (ne_of_gt hu)
+
+/-- `-(deriv gram u / π) =O[𝓝∞] 1 / log u`.
+
+    Combines `iteratedDeriv_one_gram_isBigO_explicit` (Korolev) with
+    `iteratedDeriv_one gram = deriv gram`. -/
+private lemma neg_deriv_gram_div_pi_isBigO_inv_log :
+    Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => -(deriv gram u / Real.pi))
+      (fun u : ℝ => 1 / Real.log u) := by
+  have h_pre := iteratedDeriv_one_gram_isBigO_explicit
+  have h_const : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => -(deriv gram u / Real.pi))
+      (iteratedDeriv 1 gram) := by
+    have h := Asymptotics.isBigO_const_mul_self (-(1 / Real.pi))
+      (iteratedDeriv 1 gram) (𝓝∞ : Filter ℝ)
+    refine h.congr_left ?_
+    intro u
+    rw [iteratedDeriv_one]
+    ring
+  exact h_const.trans h_pre
+
+/-- `1 / log u · 1/(u^(n-1) · log² u) =ᶠ[𝓝∞] 1/(u^(n-1) · log³ u)`. -/
+private lemma inv_log_mul_inv_polylog_eq {n : ℕ} :
+    (fun u : ℝ => (1 / Real.log u) * (1 / (u ^ (n - 1) * Real.log u ^ 2)))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+    (fun u : ℝ => 1 / (u ^ (n - 1) * Real.log u ^ 3)) := by
+  filter_upwards [Filter.eventually_gt_atTop (0 : ℝ), log_pos_atTop] with u hu hlog
+  have hu_ne : u ≠ 0 := ne_of_gt hu
+  have hlog_ne : Real.log u ≠ 0 := ne_of_gt hlog
+  have hu_pow : u ^ (n - 1) ≠ 0 := pow_ne_zero _ hu_ne
+  have hlog2 : Real.log u ^ 2 ≠ 0 := pow_ne_zero _ hlog_ne
+  have h_log_cube : Real.log u ^ 3 = Real.log u * Real.log u ^ 2 := by ring
+  rw [h_log_cube]
+  field_simp
+
+/-- The cOther contribution `-(deriv gram u / π) · ∑ cOther` is
+    `o[𝓝∞] (gramLeading n u · log log u / log u)`. -/
+private lemma cOther_contribution_isLittleO {n : ℕ} (hn : 2 ≤ n)
+    (ih : ∀ k', 2 ≤ k' → k' < n → GramAsymp k') :
+    Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ =>
+        -(deriv gram u / Real.pi) *
+        ∑ c ∈ cOther n (by omega : 0 < n),
+          iteratedDeriv c.length theta (gram u) *
+          ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => gramLeading n u * Real.log (Real.log u) / Real.log u) := by
+  -- (1) -(deriv gram u / π) · ∑ c-summand =O 1/(u^(n-1) · log³ u).
+  have h_deriv_O := neg_deriv_gram_div_pi_isBigO_inv_log
+  have h_sum := cOther_sum_isBigO hn ih
+  have h_prod_full : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ =>
+        -(deriv gram u / Real.pi) *
+        ∑ c ∈ cOther n (by omega : 0 < n),
+          iteratedDeriv c.length theta (gram u) *
+          ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => 1 / (u ^ (n - 1) * Real.log u ^ 3)) := by
+    have h := h_deriv_O.mul h_sum
+    exact h.congr' Filter.EventuallyEq.rfl inv_log_mul_inv_polylog_eq
+  -- (2) 1/(u^(n-1) · log³ u) =o log log u / (u^(n-1) · log³ u).
+  have h_one_o_loglog := one_isLittleO_loglog
+  have h_polylog_o_loglog_polylog : Asymptotics.IsLittleO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => 1 / (u ^ (n - 1) * Real.log u ^ 3))
+      (fun u : ℝ => Real.log (Real.log u) / (u ^ (n - 1) * Real.log u ^ 3)) := by
+    have h := h_one_o_loglog.mul_isBigO
+      (Asymptotics.isBigO_refl (fun u : ℝ => 1 / (u ^ (n - 1) * Real.log u ^ 3)) 𝓝∞)
+    refine (h.congr_left ?_).congr_right ?_
+    · intro u; rw [one_mul]
+    · intro u; ring
+  -- (3) log log u / (u^(n-1) · log³ u) =O gramLeading n u · log log u / log u.
+  have c_ne : ((-1 : ℝ) ^ (n + 1) * (2 * Real.pi) * ((n - 2).factorial : ℝ)) ≠ 0 := by
+    have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+    have h1 : (-1 : ℝ) ^ (n + 1) ≠ 0 := pow_ne_zero _ (by norm_num)
+    have h2 : (2 * Real.pi) ≠ 0 := by positivity
+    have h3 : ((n - 2).factorial : ℝ) ≠ 0 := by exact_mod_cast (Nat.factorial_pos _).ne'
+    exact mul_ne_zero (mul_ne_zero h1 h2) h3
+  have h_loglog_polylog_O_gramLeading : Asymptotics.IsBigO (𝓝∞ : Filter ℝ)
+      (fun u : ℝ => Real.log (Real.log u) / (u ^ (n - 1) * Real.log u ^ 3))
+      (fun u : ℝ => gramLeading n u * Real.log (Real.log u) / Real.log u) := by
+    have h_const_inv := Asymptotics.isBigO_const_mul_self
+      (((-1 : ℝ) ^ (n + 1) * (2 * Real.pi) * ((n - 2).factorial : ℝ))⁻¹)
+      (fun u : ℝ => gramLeading n u * Real.log (Real.log u) / Real.log u)
+      (𝓝∞ : Filter ℝ)
+    have h_eq : (fun u : ℝ =>
+        ((-1 : ℝ) ^ (n + 1) * (2 * Real.pi) * ((n - 2).factorial : ℝ))⁻¹ *
+          (gramLeading n u * Real.log (Real.log u) / Real.log u))
+        =ᶠ[(𝓝∞ : Filter ℝ)]
+        (fun u : ℝ => Real.log (Real.log u) / (u ^ (n - 1) * Real.log u ^ 3)) := by
+      filter_upwards [Filter.eventually_gt_atTop (0 : ℝ), log_pos_atTop] with u hu hlog
+      have hu_ne : u ≠ 0 := ne_of_gt hu
+      have hlog_ne : Real.log u ≠ 0 := ne_of_gt hlog
+      rw [gramLeading_mul_loglog_div_log_eq u hu_ne hlog_ne,
+          ← mul_assoc, inv_mul_cancel₀ c_ne, one_mul]
+    exact h_const_inv.congr' h_eq Filter.EventuallyEq.rfl
+  -- (4) Chain: full =O 1/(...) =o log log u /(...)) =O gramLeading n u · ll/l.
+  exact (h_prod_full.trans_isLittleO h_polylog_o_loglog_polylog).trans_isBigO
+    h_loglog_polylog_O_gramLeading
+
+/-!
+  ## §2.6  Theorem 3, induction step
+
+  Combine `theorem3_atomic_term` with `cOther_contribution_isLittleO` via
+  `iteratedDeriv_n_gram_solved_eventually` to close the induction step.  Base
+  case `n = 2` is `gramAsymp_two = theorem3_two`.
+-/
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies
@@ -2694,4 +3074,43 @@ theorem theorem3 (n : ℕ) (hn : 2 ≤ n) :
         - 2 * gramLeading n u * Real.log (Real.log u) / Real.log u)
       (fun u : ℝ => gramLeading n u * Real.log (Real.log u) / Real.log u)
       𝓝∞ := by
-  sorry
+  -- Strong induction on `N ≥ 2`, with `theorem3 n hn` extracted at the end.
+  suffices h : ∀ N : ℕ, 2 ≤ N → GramAsymp N from h n hn
+  clear hn n
+  intro N
+  induction N using Nat.strong_induction_on with
+  | _ N ih_strong =>
+    intro hN
+    by_cases h_two : N = 2
+    · subst h_two; exact gramAsymp_two
+    · have h_ge_three : 3 ≤ N := by omega
+      -- Strong inductive hypothesis in the form expected by §2.5.4.
+      have ih : ∀ k', 2 ≤ k' → k' < N → GramAsymp k' :=
+        fun k' h2 hlt => ih_strong k' hlt h2
+      -- Atomic-term residual is `o(target)`.
+      have h_atomic := theorem3_atomic_term N hN
+      -- cOther contribution is `o(target)`.
+      have h_cOther := cOther_contribution_isLittleO hN ih
+      -- Their sum is `o(target)`.
+      have h_sum := h_atomic.add h_cOther
+      -- §2.3 solved form: `iteratedDeriv N gram u = atomic + cOther` (eventually).
+      have h_solved := iteratedDeriv_n_gram_solved_eventually N h_ge_three
+      -- Lift the eventual equality to swap `h_sum`'s LHS for the target shape.
+      refine h_sum.congr' ?_ Filter.EventuallyEq.rfl
+      filter_upwards [h_solved] with u h_iter
+      -- `h_iter` rewrites `iteratedDeriv N gram u` on the RHS, after which `ring`
+      -- (with `(deriv gram u)^(N+1) = (deriv gram u)^N · deriv gram u`) closes.
+      change
+        (-(1 / Real.pi) * iteratedDeriv N theta (gram u) * (deriv gram u) ^ (N + 1)
+            - gramLeading N u
+            - 2 * gramLeading N u * Real.log (Real.log u) / Real.log u)
+          + -(deriv gram u / Real.pi) *
+            ∑ c ∈ cOther N (by omega : 0 < N),
+              iteratedDeriv c.length theta (gram u) *
+              ∏ j, iteratedDeriv (c.partSize j) gram u
+          =
+          iteratedDeriv N gram u
+            - gramLeading N u
+            - 2 * gramLeading N u * Real.log (Real.log u) / Real.log u
+      rw [h_iter, pow_succ]
+      ring
