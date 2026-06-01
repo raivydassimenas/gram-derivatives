@@ -23,6 +23,7 @@
   ─── Status ────────────────────────────────────────────────────────────
   Skeleton: complete, no `sorry`.
   Proved:  `contDiffAt_gramPow`, `eventually_contDiffAt_gramPow`,
+           `iteratedDeriv_n_gramPow_n_tendsto_zero`,
            `theorem4` itself (one-line application of the K–N criterion).
   Axioms (this file):
     • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion.
@@ -31,8 +32,6 @@
       Theorem 3 + eq. (9).  Provable, deferred.
     • `iteratedDeriv_n_gramPow_n_eventually_monotone` — TODO; follows
       from the asymp via monotonicity of `1/log u`.  Provable, deferred.
-    • `iteratedDeriv_n_gramPow_n_tendsto_zero` — TODO; follows from
-      the asymp via `2π/log u → 0`.  Provable, deferred.
     • `mul_iteratedDeriv_n_gramPow_n_tendsto_atTop` — TODO; follows
       from the asymp via `u / log^n u → ∞`.  Provable, deferred.
 -/
@@ -129,20 +128,43 @@ axiom iteratedDeriv_n_gramPow_n_eventually_monotone (n : ℕ) (_hn : 1 ≤ n) :
     ∃ x₀ : ℝ,
       MonotoneOn (fun u : ℝ => |iteratedDeriv n (gramPow n) u|) (Set.Ici x₀)
 
-/-! ## §5  Decay to zero (TODO) -/
+/-! ## §5  Decay to zero (proved) -/
+
+/-- `2π / log u → 0` as `u → ∞`. -/
+private lemma tendsto_two_pi_div_log_atTop_zero :
+    Tendsto (fun u : ℝ => 2 * Real.pi / Real.log u) atTop (𝓝 0) := by
+  have hLog : Tendsto Real.log atTop atTop := Real.tendsto_log_atTop
+  have h1 : Tendsto (fun u : ℝ => (Real.log u)⁻¹) atTop (𝓝 0) :=
+    tendsto_inv_atTop_zero.comp hLog
+  have h2 : Tendsto (fun u : ℝ => 2 * Real.pi * (Real.log u)⁻¹) atTop
+      (𝓝 (2 * Real.pi * 0)) := h1.const_mul (2 * Real.pi)
+  simp only [mul_zero] at h2
+  refine h2.congr' ?_
+  filter_upwards with u
+  rw [div_eq_mul_inv]
+
+/-- `(2π / log u)^n → 0` as `u → ∞`, for `n ≥ 1`. -/
+private lemma tendsto_two_pi_div_log_pow_atTop_zero (n : ℕ) (hn : 1 ≤ n) :
+    Tendsto (fun u : ℝ => (2 * Real.pi / Real.log u) ^ n) atTop (𝓝 0) := by
+  have h := tendsto_two_pi_div_log_atTop_zero.pow n
+  simpa [zero_pow (Nat.one_le_iff_ne_zero.mp hn)] using h
+
+/-- `n! · (2π / log u)^n → 0` as `u → ∞`, for `n ≥ 1`. -/
+private lemma tendsto_leading_atTop_zero (n : ℕ) (hn : 1 ≤ n) :
+    Tendsto (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
+      atTop (𝓝 0) := by
+  have h := (tendsto_two_pi_div_log_pow_atTop_zero n hn).const_mul (n.factorial : ℝ)
+  simpa using h
 
 /-- The `n`-th derivative of `(gram)^n` tends to `0` as `u → ∞`.
 
-Sketch: from `iteratedDeriv_n_gramPow_n_isEquivalent`, the function is
-asymp-equivalent to `n! · (2π / log u)^n`.  Since `log u → ∞`, also
-`2π / log u → 0`, and so does any positive power.
-
--- TODO (deferred): combine `IsEquivalent.symm.tendsto_nhds` with
--- `Tendsto.div_atTop` + `Tendsto.pow` for the `(2π/log u)^n` factor and
--- `Tendsto.const_mul` for the factorial.
--- ASSUMPTION -/
-axiom iteratedDeriv_n_gramPow_n_tendsto_zero (n : ℕ) (_hn : 1 ≤ n) :
-    Tendsto (fun u : ℝ => iteratedDeriv n (gramPow n) u) atTop (𝓝 0)
+Strategy: transfer through the leading-term asymp from §3
+(`iteratedDeriv_n_gramPow_n_isEquivalent`) via `IsEquivalent.symm.tendsto_nhds`;
+the leading-term limit is established by the helpers above. -/
+lemma iteratedDeriv_n_gramPow_n_tendsto_zero (n : ℕ) (hn : 1 ≤ n) :
+    Tendsto (fun u : ℝ => iteratedDeriv n (gramPow n) u) atTop (𝓝 0) :=
+  (iteratedDeriv_n_gramPow_n_isEquivalent n hn).symm.tendsto_nhds
+    (tendsto_leading_atTop_zero n hn)
 
 /-! ## §6  `u · |·| → ∞` (TODO) -/
 
