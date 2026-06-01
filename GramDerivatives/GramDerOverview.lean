@@ -1,5 +1,6 @@
 -- Correction: use a stable umbrella import to avoid version-specific module path changes.
 import Mathlib
+import GramDerivatives.UDModOne
 
 /-!
 Formalization sketch in Lean 4 / mathlib of Theorem 1, Corollary 2,
@@ -198,23 +199,18 @@ technical analytic estimates are yet to be formalized.
 Theorem 4 and Corollary 5 are results in the theory of uniform and
 continuous uniform distribution modulo one.
 
-We work with sequences and functions `ℕ → ℝ` / `ℝ → ℝ` valued in the
-circle quotient `ℝ ⧸ ℤ`.  At the level of statements we keep things in
-`ℝ` and use the usual `fract` function (fractional part), to avoid
-introducing extra infrastructure.
+The notions of (continuous) uniform distribution modulo one are reused from
+`GramDerivatives.UDModOne`, where they are given honest Weyl-criterion
+definitions on top of `Complex.exp` and the interval integral. The
+abbreviations `UDMod1`, `CUDMod1` below are kept as local aliases for backward
+compatibility with the rest of this file.
 -/
 
-/-- Fractional part of a real number. -/
--- Correction: use `Int.floor` (coerced to `ℝ`) instead of nonexistent `Real.floor`.
-noncomputable def fract (x : ℝ) : ℝ := x - Int.floor x
-
 /-- A sequence `a : ℕ → ℝ` is uniformly distributed modulo `1`. -/
--- Correction: use a lightweight Prop wrapper to avoid parser/typeclass issues in this file.
-def UDMod1 (_a : ℕ → ℝ) : Prop := ∃ P : Prop, P
+abbrev UDMod1 (a : ℕ → ℝ) : Prop := Gram.UD.IsUDModOne a
 
 /-- A function `f : ℝ → ℝ` is continuously uniformly distributed modulo `1`. -/
--- Correction: same lightweight wrapper approach for continuous UD.
-def CUDMod1 (_f : ℝ → ℝ) : Prop := ∃ P : Prop, P
+abbrev CUDMod1 (f : ℝ → ℝ) : Prop := Gram.UD.IsCUDModOne f
 
 /--
 The analytic criterion needed in the paper (Kuipers–Niederreiter,
