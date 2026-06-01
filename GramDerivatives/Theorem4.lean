@@ -25,14 +25,16 @@
   Proved:  `contDiffAt_gramPow`, `eventually_contDiffAt_gramPow`,
            `iteratedDeriv_n_gramPow_n_tendsto_zero`,
            `mul_iteratedDeriv_n_gramPow_n_tendsto_atTop`,
+           `iteratedDeriv_n_gramPow_n_eventually_pos` (helper),
            `theorem4` itself (one-line application of the K–N criterion).
   Axioms (this file):
-    • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion.
-      Permanent: no UD-mod-1 theory in Mathlib (April 2026).
+    • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion
+      (antitone variant).  Permanent: no UD-mod-1 theory in Mathlib.
     • `iteratedDeriv_n_gramPow_n_isEquivalent` — TODO; Leibniz +
       Theorem 3 + eq. (9).  Provable, deferred.
-    • `iteratedDeriv_n_gramPow_n_eventually_monotone` — TODO; follows
-      from the asymp via monotonicity of `1/log u`.  Provable, deferred.
+    • `iteratedDeriv_n_gramPow_n_eventually_antitone` — TODO; needs
+      the sign of the `(n+1)`-th derivative (not derivable from the §3
+      asymp alone — see the docstring).
 -/
 
 import GramDerivatives.Theorem3
@@ -64,12 +66,18 @@ than the classical global `ContDiff`, because the Gram function from
 `Theorem3.lean` is only known to be `C^∞` on the tail `(gramThreshold, ∞)`.
 This is harmless: only the tail behaviour of `f` matters for the conclusion.
 
+The eventual-monotonicity hypothesis is stated with `AntitoneOn`
+(decreasing): in the application below, `|iteratedDeriv l f|` tends to
+`0` from above, so the natural direction is antitone.  Mathematically
+the classical K–N statement allows either direction, but the antitone
+side is what our setting provides.
+
 -- ASSUMPTION -/
 axiom isUDModOne_of_iteratedDeriv_decay
     (f : ℝ → ℝ) (l : ℕ) (_hl : 1 ≤ l)
     (_hC : ∀ᶠ u : ℝ in atTop, ContDiffAt ℝ l f u)
     (_hmono : ∃ x₀ : ℝ,
-        MonotoneOn (fun t : ℝ => |iteratedDeriv l f t|) (Set.Ici x₀))
+        AntitoneOn (fun t : ℝ => |iteratedDeriv l f t|) (Set.Ici x₀))
     (_h0 : Tendsto (fun u : ℝ => iteratedDeriv l f u) atTop (𝓝 0))
     (_hInf : Tendsto (fun u : ℝ => u * |iteratedDeriv l f u|) atTop atTop) :
     Gram.UD.IsUDModOne (fun k : ℕ => f k)
@@ -111,21 +119,56 @@ axiom iteratedDeriv_n_gramPow_n_isEquivalent (n : ℕ) (_hn : 1 ≤ n) :
       (fun u : ℝ => iteratedDeriv n (gramPow n) u)
       (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
 
-/-! ## §4  Eventual monotonicity (TODO) -/
+/-! ## §4  Eventual antitone in absolute value (TODO) -/
 
-/-- The `n`-th derivative of `(gram)^n` is eventually monotonic in absolute
-value.  Sketch: the leading asymptotic `n! · (2π / log u)^n` is monotonically
-decreasing for `u > e` (since `log u` is monotonically increasing), and the
-asymp equivalence transfers monotonicity to `|iteratedDeriv n (gramPow n)|`
-on a sufficiently far tail.
+/-- The `n`-th derivative of `(gram)^n` is **eventually antitone** in
+absolute value: `|iteratedDeriv n (gramPow n) ·|` is decreasing on a tail.
 
--- TODO (deferred): formalise "asymp-equivalent to a monotone function ⇒
--- eventually monotone in absolute value", combined with monotonicity of
--- `u ↦ 1/log u`.
+Why this is genuinely harder than the §5/§6 corollaries.  The §3 asymp
+equivalence
+`iteratedDeriv n (gramPow n) u ∼ n! · (2π/log u)^n`
+controls the function up to a multiplicative `(1 + o(1))` factor, but
+asymp-equivalence to an antitone function is **not** enough to force
+pointwise antitone behaviour (cf. `1/x + sin(x²)/x³ ∼ 1/x`, yet the LHS
+is not eventually antitone).
+
+The standard route is to show the `(n+1)`-th derivative of `(gram)^n`
+is eventually **negative** and invoke `antitoneOn_of_deriv_nonpos`.  By
+Leibniz, the leading term of `d^{n+1}/du^{n+1} (gram u)^n` is
+`n! · n · (gram'(u))^{n-1} · gram''(u)`, which is negative for `u`
+large (since `gram'(u) > 0` and `gram''(u) ∼ −2π / (u · log² u) < 0`
+by Theorem 3 at `n = 2`).  Formalising this is a separate Leibniz +
+asymptotic computation, comparable in size to §3.
+
+-- TODO (deferred): two-stage proof —
+--   (a) `iteratedDeriv (n+1) (gramPow n)` has leading term
+--       `n! · n · (gram')^(n-1) · gram''`, eventually negative;
+--   (b) `antitoneOn_of_deriv_nonpos` on the absolute value.
 -- ASSUMPTION -/
-axiom iteratedDeriv_n_gramPow_n_eventually_monotone (n : ℕ) (_hn : 1 ≤ n) :
+axiom iteratedDeriv_n_gramPow_n_eventually_antitone (n : ℕ) (_hn : 1 ≤ n) :
     ∃ x₀ : ℝ,
-      MonotoneOn (fun u : ℝ => |iteratedDeriv n (gramPow n) u|) (Set.Ici x₀)
+      AntitoneOn (fun u : ℝ => |iteratedDeriv n (gramPow n) u|) (Set.Ici x₀)
+
+/-- A small free corollary: `iteratedDeriv n (gramPow n) u > 0` eventually.
+Useful in §6 and §7 and a witness that the §3 asymp axiom is "consistent
+with positivity" (which the §4 antitone axiom also tacitly assumes). -/
+lemma iteratedDeriv_n_gramPow_n_eventually_pos (n : ℕ) (hn : 1 ≤ n) :
+    ∀ᶠ u : ℝ in atTop, 0 < iteratedDeriv n (gramPow n) u := by
+  have hLO : (fun u => iteratedDeriv n (gramPow n) u
+                - (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
+                =o[atTop]
+              (fun u => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n) :=
+    (iteratedDeriv_n_gramPow_n_isEquivalent n hn).isLittleO
+  have hBound := hLO.def (c := (1 / 2 : ℝ)) (by norm_num)
+  filter_upwards [hBound, eventually_gt_atTop (1 : ℝ)] with u hu hu1
+  have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
+  have hleadingPos : (0 : ℝ) < (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n := by
+    refine mul_pos ?_ (pow_pos (by positivity) n)
+    exact_mod_cast n.factorial_pos
+  rw [Real.norm_eq_abs, Real.norm_eq_abs] at hu
+  rw [abs_of_pos hleadingPos] at hu
+  have := abs_sub_le_iff.mp hu
+  linarith
 
 /-! ## §5  Decay to zero (proved) -/
 
@@ -264,7 +307,7 @@ theorem theorem4 (n : ℕ) (hn : 1 ≤ n) :
     Gram.UD.IsUDModOne (fun k : ℕ => gramPow n (k : ℝ)) :=
   isUDModOne_of_iteratedDeriv_decay (gramPow n) n hn
     (eventually_contDiffAt_gramPow n n)
-    (iteratedDeriv_n_gramPow_n_eventually_monotone n hn)
+    (iteratedDeriv_n_gramPow_n_eventually_antitone n hn)
     (iteratedDeriv_n_gramPow_n_tendsto_zero n hn)
     (mul_iteratedDeriv_n_gramPow_n_tendsto_atTop n hn)
 
