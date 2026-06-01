@@ -24,6 +24,7 @@
   Skeleton: complete, no `sorry`.
   Proved:  `contDiffAt_gramPow`, `eventually_contDiffAt_gramPow`,
            `iteratedDeriv_n_gramPow_n_tendsto_zero`,
+           `mul_iteratedDeriv_n_gramPow_n_tendsto_atTop`,
            `theorem4` itself (one-line application of the K–N criterion).
   Axioms (this file):
     • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion.
@@ -32,8 +33,6 @@
       Theorem 3 + eq. (9).  Provable, deferred.
     • `iteratedDeriv_n_gramPow_n_eventually_monotone` — TODO; follows
       from the asymp via monotonicity of `1/log u`.  Provable, deferred.
-    • `mul_iteratedDeriv_n_gramPow_n_tendsto_atTop` — TODO; follows
-      from the asymp via `u / log^n u → ∞`.  Provable, deferred.
 -/
 
 import GramDerivatives.Theorem3
@@ -166,21 +165,89 @@ lemma iteratedDeriv_n_gramPow_n_tendsto_zero (n : ℕ) (hn : 1 ≤ n) :
   (iteratedDeriv_n_gramPow_n_isEquivalent n hn).symm.tendsto_nhds
     (tendsto_leading_atTop_zero n hn)
 
-/-! ## §6  `u · |·| → ∞` (TODO) -/
+/-! ## §6  `u · |·| → ∞` (proved) -/
+
+/-- `u / (log u)^n → ∞` as `u → ∞`.  Classical: a polynomial in `log u` is
+negligible against `u`.  Proof: `(log u)^n =o[atTop] u` (Mathlib's
+`Real.isLittleO_pow_log_id_atTop`), hence `(log u)^n / u → 0`, hence its
+reciprocal tends to `∞`. -/
+private lemma tendsto_id_div_log_pow_atTop_atTop (n : ℕ) :
+    Tendsto (fun u : ℝ => u / (Real.log u) ^ n) atTop atTop := by
+  have h1 : Tendsto (fun x : ℝ => (Real.log x) ^ n / x) atTop (𝓝 0) :=
+    Real.isLittleO_pow_log_id_atTop.tendsto_div_nhds_zero
+  have h2 : ∀ᶠ x : ℝ in atTop, 0 < (Real.log x) ^ n / x := by
+    filter_upwards [eventually_gt_atTop (1 : ℝ)] with x hx
+    have hlog : 0 < Real.log x := Real.log_pos hx
+    have hpow : 0 < (Real.log x) ^ n := by positivity
+    exact div_pos hpow (by linarith)
+  have h3 : Tendsto (fun x : ℝ => (Real.log x) ^ n / x) atTop (𝓝[>] 0) :=
+    tendsto_nhdsWithin_iff.mpr ⟨h1, h2⟩
+  have h4 : Tendsto (fun x : ℝ => ((Real.log x) ^ n / x)⁻¹) atTop atTop :=
+    h3.inv_tendsto_nhdsGT_zero
+  refine h4.congr' ?_
+  filter_upwards [eventually_gt_atTop (0 : ℝ)] with x _
+  rw [inv_div]
 
 /-- `u · |iteratedDeriv n (gramPow n) u| → ∞` as `u → ∞`.
 
-Sketch: from the asymp, this behaves like
-`u · n! · (2π/log u)^n = n! · (2π)^n · u/(log u)^n`,
-which tends to `∞` because `u / (log u)^n → ∞` (a polynomial in `log u`
-is negligible against `u`).
-
--- TODO (deferred): combine `IsEquivalent.symm.tendsto_atTop` (via the
--- absolute-value variant) with `Real.isLittleO_log_id_atTop.pow` and the
--- corresponding `IsLittleO.tendsto_atTop_of` reciprocal-shape lemma.
--- ASSUMPTION -/
-axiom mul_iteratedDeriv_n_gramPow_n_tendsto_atTop (n : ℕ) (_hn : 1 ≤ n) :
-    Tendsto (fun u : ℝ => u * |iteratedDeriv n (gramPow n) u|) atTop atTop
+Strategy.  Let `leading u := n! · (2π/log u)^n`.  From the §3 asymp,
+`iteratedDeriv n (gramPow n) - leading = o(leading)`, so applying the
+little-o bound at `ε = 1/2` gives `|iteratedDeriv - leading| ≤ leading/2`
+eventually; combined with `leading > 0` (for `u > 1`) this forces
+`iteratedDeriv ≥ leading/2 > 0`, hence `|iteratedDeriv| = iteratedDeriv ≥
+leading/2`.  Then `u · |iteratedDeriv| ≥ u · leading / 2`, and
+`u · leading / 2 = (n!·(2π)^n / 2) · (u / log^n u) → ∞` via
+`tendsto_id_div_log_pow_atTop_atTop`. -/
+lemma mul_iteratedDeriv_n_gramPow_n_tendsto_atTop (n : ℕ) (hn : 1 ≤ n) :
+    Tendsto (fun u : ℝ => u * |iteratedDeriv n (gramPow n) u|) atTop atTop := by
+  set leading : ℝ → ℝ :=
+    fun u => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n with hLeadDef
+  -- u · leading u → ∞.
+  have hConstPos : (0 : ℝ) < (n.factorial : ℝ) * (2 * Real.pi) ^ n := by
+    refine mul_pos ?_ (pow_pos (by positivity) n)
+    exact_mod_cast n.factorial_pos
+  have hUmulLeading : Tendsto (fun u : ℝ => u * leading u) atTop atTop := by
+    have hCore := tendsto_id_div_log_pow_atTop_atTop n
+    have hScaled := hCore.const_mul_atTop hConstPos
+    refine hScaled.congr' ?_
+    filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu
+    have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu
+    have hlogne : Real.log u ≠ 0 := hlog.ne'
+    simp only [hLeadDef, div_pow]
+    field_simp
+  -- (u · leading u) / 2 → ∞.
+  have hHalf : Tendsto (fun u : ℝ => u * leading u / 2) atTop atTop :=
+    hUmulLeading.atTop_div_const (show (0 : ℝ) < 2 by norm_num)
+  -- Eventually `|iteratedDeriv u| ≥ leading u / 2`.
+  have hLB : ∀ᶠ u : ℝ in atTop,
+      leading u / 2 ≤ |iteratedDeriv n (gramPow n) u| := by
+    have hLO : (fun u => iteratedDeriv n (gramPow n) u - leading u)
+                  =o[atTop] leading :=
+      (iteratedDeriv_n_gramPow_n_isEquivalent n hn).isLittleO
+    have hBound := hLO.def (c := (1 / 2 : ℝ)) (by norm_num)
+    filter_upwards [hBound, eventually_gt_atTop (1 : ℝ)] with u hu hu1
+    have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
+    have hleadingPos : 0 < leading u := by
+      simp only [hLeadDef]
+      refine mul_pos ?_ (pow_pos (by positivity) n)
+      exact_mod_cast n.factorial_pos
+    rw [Real.norm_eq_abs, Real.norm_eq_abs] at hu
+    rw [abs_of_pos hleadingPos] at hu
+    have h1 : leading u - leading u / 2 ≤ iteratedDeriv n (gramPow n) u := by
+      have := abs_sub_le_iff.mp hu
+      linarith
+    have h2 : leading u / 2 ≤ iteratedDeriv n (gramPow n) u := by linarith
+    have h3 : 0 < iteratedDeriv n (gramPow n) u := by linarith
+    rw [abs_of_pos h3]
+    exact h2
+  -- Eventually `u · leading u / 2 ≤ u · |iteratedDeriv u|`.
+  have hMonoBound : ∀ᶠ u : ℝ in atTop,
+      u * leading u / 2 ≤ u * |iteratedDeriv n (gramPow n) u| := by
+    filter_upwards [hLB, eventually_gt_atTop (0 : ℝ)] with u hu hu0
+    have := mul_le_mul_of_nonneg_left hu hu0.le
+    linarith
+  -- Conclude.
+  exact tendsto_atTop_mono' atTop hMonoBound hHalf
 
 /-! ## §7  Theorem 4 -/
 
