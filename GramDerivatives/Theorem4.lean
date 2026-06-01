@@ -100,19 +100,59 @@ lemma eventually_contDiffAt_gramPow (n l : ℕ) :
 
 /-- **Leading-term asymptotic** for the `n`-th derivative of `(gram)^n`.
 
-The Leibniz formula for a product of `n` identical factors gives
-`d^n/du^n (gram u)^n = Σ_{j_1+⋯+j_n = n} (n! / Π j_i!) · Π gram^(j_i)(u)`.
-The unique partition contributing the leading order is
-`j_1 = ⋯ = j_n = 1`, yielding the term `n! · (gram' u)^n`.  Every other
-partition contains at least one factor `gram^(j)(u)` with `j ≥ 2`; by
-Theorem 3, each such factor decays like `u^{1-j}/(log u)^2`, killing the
-whole partition next to the leading one.  Substituting Korolev's
-asymptotic `gram_deriv_asymp` (eq. (9)) yields
-`(gram' u)^n ∼ (2π / log u)^n`.
+### Mathematical content
 
--- TODO (deferred): the Leibniz expansion + asymptotic match
--- (`theorem3` + `gram_deriv_asymp` ⇒ this).  Tractable but voluminous —
--- comparable to a mid-size section of `Theorem3.lean`.
+By the Leibniz formula applied to the product of `n` identical factors,
+`d^n/du^n (gram u)^n = Σ_{j_1+⋯+j_n = n} (n! / ∏ j_i!) · ∏ gram^(j_i)(u)`,
+where the sum runs over compositions `(j_1, …, j_n)` of `n` into `n`
+non-negative integers.
+
+The *unique* leading composition is `(1, 1, …, 1)`, giving the term
+`n! · (gram'(u))^n ∼ n! · (2π/log u)^n`  (by `gram_deriv_asymp`).
+
+Every other composition contains at least one `j_i ≥ 2`.  By Theorem 3
+and `gram_asymp` (eq. (8)), the magnitudes of the factor types are:
+  • `gram^(0)(u)   = gram u            ∼ 2π·u/log u`             — order `u/log u`
+  • `gram^(1)(u)   = gram' u           ∼ 2π/log u`                — order `1/log u`
+  • `gram^(j)(u)`, `j ≥ 2`             ∼ const · u^(1−j)/(log u)² — order `u^(1−j)/(log u)²`
+
+A short bookkeeping check: for a composition `(j_1, …, j_n)` with `c_j`
+parts equal to `j` (so `Σ_j c_j = n` and `Σ_j j·c_j = n`), the term has
+order `u^(c_0 − Σ_{j≥2}(j−1)c_j) / (log u)^(c_0 + c_1 + 2·Σ_{j≥2} c_j)`.
+The first identity (`Σ_j j·c_j = n`) forces `c_0 = Σ_{j≥2}(j−1)c_j`, so
+the `u`-exponent is `0` for every composition.  The `log`-exponent is
+`c_0 + c_1 + 2·Σ_{j≥2} c_j = n + Σ_{j≥2} c_j` (using `Σ c_j = n`), so the
+order is `1/(log u)^(n + #{i : j_i ≥ 2})`.  The leading
+`(1,1,…,1)` composition has `Σ_{j≥2} c_j = 0` and is the unique one of
+order `1/(log u)^n`; every other composition is smaller by at least a
+factor of `1/log u`.
+
+### Suggested Lean staging (for a future implementer)
+
+  (1) `iteratedDeriv_pow_leibniz` : for `f : ℝ → ℝ`,
+      `iteratedDeriv l (fun u => (f u)^n) u
+        = Σ over compositions of l into n parts, ...`.
+      Induction on `n` using Mathlib's `iteratedDeriv_mul` (or
+      `deriv_pow` for the first step + product Leibniz for the rest).
+
+  (2) `gramPow_n_leibniz_split (n)` : split the Leibniz sum at `l = n`
+      into the `(1,…,1)` term + remainder.
+
+  (3) `gramPow_n_leibniz_leading_asymp` : the `(1,…,1)` term equals
+      `n! · (deriv gram u)^n` and is `IsEquivalent` to
+      `n! · (2π/log u)^n` via `gram_deriv_asymp`.
+
+  (4) `gramPow_n_leibniz_remainder_isLittleO` : every other composition
+      is `o(leading)` (using Theorem 3 for high-order factors + the
+      bookkeeping above).
+
+  (5) Combine (2)–(4) via `IsEquivalent.add_isLittleO` (or hand assembly)
+      to derive the §3 asymp.
+
+Stages (1) and (4) are the bulk; estimated several hundred lines of Lean
+each, comparable to a mid-size section of `Theorem3.lean`.
+
+-- TODO (deferred): see staging above.
 -- ASSUMPTION -/
 axiom iteratedDeriv_n_gramPow_n_isEquivalent (n : ℕ) (_hn : 1 ≤ n) :
     IsEquivalent atTop
