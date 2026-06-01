@@ -26,12 +26,15 @@
            `iteratedDeriv_n_gramPow_n_tendsto_zero`,
            `mul_iteratedDeriv_n_gramPow_n_tendsto_atTop`,
            `iteratedDeriv_n_gramPow_n_eventually_pos` (helper),
+           `iteratedDeriv_one_gramPow_one_isEquivalent` (§3a, n=1 case
+             of the §3 axiom, directly from `gram_deriv_asymp`),
            `theorem4` itself (one-line application of the K–N criterion).
   Axioms (this file):
     • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion
       (antitone variant).  Permanent: no UD-mod-1 theory in Mathlib.
-    • `iteratedDeriv_n_gramPow_n_isEquivalent` — TODO; Leibniz +
-      Theorem 3 + eq. (9).  Provable, deferred.
+    • `iteratedDeriv_n_gramPow_n_isEquivalent` — TODO for `n ≥ 2`;
+      Leibniz + Theorem 3 + eq. (9).  The `n = 1` case is now proven
+      in §3a as a smoke test.
     • `iteratedDeriv_n_gramPow_n_eventually_antitone` — TODO; needs
       the sign of the `(n+1)`-th derivative (not derivable from the §3
       asymp alone — see the docstring).
@@ -158,6 +161,97 @@ axiom iteratedDeriv_n_gramPow_n_isEquivalent (n : ℕ) (_hn : 1 ≤ n) :
     IsEquivalent atTop
       (fun u : ℝ => iteratedDeriv n (gramPow n) u)
       (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
+
+/-! ### §3a  Special case `n = 1`, proved directly from `gram_deriv_asymp` -/
+
+/-- Auxiliary: `IsEquivalent atTop (iteratedDeriv 1 gram) (fun u => 2π/log u)`.
+
+Strategy.  The Korolev refined asymp `gram_deriv_asymp` (eq. (9)) is
+  `(iteratedDeriv 1 gram − A − B) =o[atTop] B`
+where `A u := 2π/log u` and `B u := A u · (log log u / log u)`.  Since
+`log log u / log u → 0` (compose `log v / v → 0` with `log`), `B =o A`.
+Then `(iteratedDeriv 1 gram − A) = (iteratedDeriv 1 gram − A − B) + B`,
+and both summands are `=o A`, giving the desired equivalence. -/
+private lemma iteratedDeriv_one_gram_isEquivalent :
+    IsEquivalent atTop (fun u : ℝ => iteratedDeriv 1 gram u)
+      (fun u : ℝ => 2 * Real.pi / Real.log u) := by
+  -- log log u / log u → 0
+  have hLogLogDiv :
+      Tendsto (fun u : ℝ => Real.log (Real.log u) / Real.log u) atTop (𝓝 0) :=
+    Real.isLittleO_log_id_atTop.tendsto_div_nhds_zero.comp Real.tendsto_log_atTop
+  -- (log log u / log u) =o[atTop] 1
+  have hLLO_one :
+      (fun u : ℝ => Real.log (Real.log u) / Real.log u)
+        =o[atTop] (fun _ : ℝ => (1 : ℝ)) :=
+    (Asymptotics.isLittleO_one_iff ℝ).mpr hLogLogDiv
+  -- B := (2π/log u) · (log log u / log u)  is  =o (2π/log u)
+  have hBoA :
+      (fun u : ℝ => (2 * Real.pi / Real.log u)
+                      * (Real.log (Real.log u) / Real.log u))
+        =o[atTop] (fun u : ℝ => 2 * Real.pi / Real.log u) := by
+    have h := hLLO_one.mul_isBigO
+      (Asymptotics.isBigO_refl (fun u : ℝ => 2 * Real.pi / Real.log u) atTop)
+    simpa [one_mul, mul_comm] using h
+  -- C := (iteratedDeriv 1 gram − A − B)  =o B  (this is `gram_deriv_asymp`)
+  have hCoB :
+      (fun u : ℝ => iteratedDeriv 1 gram u
+                      - (2 * Real.pi / Real.log u)
+                      - (2 * Real.pi / Real.log u)
+                          * (Real.log (Real.log u) / Real.log u))
+        =o[atTop] (fun u : ℝ => (2 * Real.pi / Real.log u)
+                                  * (Real.log (Real.log u) / Real.log u)) :=
+    gram_deriv_asymp
+  -- Transitivity: C =o A
+  have hCoA :
+      (fun u : ℝ => iteratedDeriv 1 gram u
+                      - (2 * Real.pi / Real.log u)
+                      - (2 * Real.pi / Real.log u)
+                          * (Real.log (Real.log u) / Real.log u))
+        =o[atTop] (fun u : ℝ => 2 * Real.pi / Real.log u) :=
+    hCoB.trans hBoA
+  -- Reassemble: (iteratedDeriv 1 gram − A) = C + B, both =o A.
+  have hFinal :
+      ((fun u : ℝ => iteratedDeriv 1 gram u)
+        - (fun u : ℝ => 2 * Real.pi / Real.log u))
+        =o[atTop] (fun u : ℝ => 2 * Real.pi / Real.log u) := by
+    have hAdd :
+        ((fun u : ℝ => iteratedDeriv 1 gram u)
+          - (fun u : ℝ => 2 * Real.pi / Real.log u))
+          = fun u : ℝ =>
+              (iteratedDeriv 1 gram u
+                - (2 * Real.pi / Real.log u)
+                - (2 * Real.pi / Real.log u)
+                    * (Real.log (Real.log u) / Real.log u))
+              + (2 * Real.pi / Real.log u)
+                  * (Real.log (Real.log u) / Real.log u) := by
+      funext u
+      change iteratedDeriv 1 gram u - 2 * Real.pi / Real.log u = _
+      ring
+    rw [hAdd]
+    exact hCoA.add hBoA
+  exact hFinal
+
+/-- Auxiliary: `gramPow 1 = gram` as functions. -/
+private lemma gramPow_one_eq_gram : gramPow 1 = (gram : ℝ → ℝ) := by
+  funext u; simp [gramPow]
+
+/-- **Special case `n = 1` of §3**, proved directly from `gram_deriv_asymp`
+without needing the Leibniz machinery.  Serves as a smoke test that the §3
+axiom is well-formed for the simplest case and that the surrounding proof
+infrastructure (asymp algebra) works as intended. -/
+lemma iteratedDeriv_one_gramPow_one_isEquivalent :
+    IsEquivalent atTop
+      (fun u : ℝ => iteratedDeriv 1 (gramPow 1) u)
+      (fun u : ℝ => ((1 : ℕ).factorial : ℝ) * (2 * Real.pi / Real.log u) ^ 1) := by
+  have hLeft : (fun u : ℝ => iteratedDeriv 1 (gramPow 1) u)
+                = (fun u : ℝ => iteratedDeriv 1 gram u) := by
+    rw [gramPow_one_eq_gram]
+  have hRight :
+      (fun u : ℝ => ((1 : ℕ).factorial : ℝ) * (2 * Real.pi / Real.log u) ^ 1)
+        = (fun u : ℝ => 2 * Real.pi / Real.log u) := by
+    funext u; simp
+  rw [hLeft, hRight]
+  exact iteratedDeriv_one_gram_isEquivalent
 
 /-! ## §4  Eventual antitone in absolute value (TODO) -/
 
