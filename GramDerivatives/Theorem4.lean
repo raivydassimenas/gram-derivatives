@@ -302,6 +302,30 @@ private lemma iteratedDeriv_two_gramPow_two_eventually_eq :
   filter_upwards [eventually_gt_atTop gramThreshold] with u hu
   exact iteratedDeriv_two_gramPow_two_eq u hu
 
+/-- **Leading-term equivalent**: `2 · (gram'(u))² ~ 2 · (2π/log u)²`.
+Combine `iteratedDeriv_one_gram_isEquivalent` (from `Theorem3.lean`) with
+`IsEquivalent.pow 2` and a `2`-scaling refl. -/
+private lemma iteratedDeriv_two_gramPow_two_leading_isEquivalent :
+    IsEquivalent atTop
+      (fun u : ℝ => 2 * (iteratedDeriv 1 gram u) ^ 2)
+      (fun u : ℝ => 2 * (2 * Real.pi / Real.log u) ^ 2) := by
+  have hPow := iteratedDeriv_one_gram_isEquivalent.pow 2
+  -- hPow : IsEquivalent atTop (iteratedDeriv 1 gram ^ 2)
+  --                            ((fun u => 2 * Real.pi / Real.log u) ^ 2)
+  have hConst : IsEquivalent atTop
+      (fun _ : ℝ => (2 : ℝ)) (fun _ : ℝ => (2 : ℝ)) := IsEquivalent.refl
+  have h := hConst.mul hPow
+  -- Normalize both sides to pointwise form.
+  have hLeftEq : ((fun _ : ℝ => (2 : ℝ)) * iteratedDeriv 1 gram ^ 2 : ℝ → ℝ)
+                  = fun u : ℝ => 2 * (iteratedDeriv 1 gram u) ^ 2 := by
+    funext u; simp [Pi.mul_apply, Pi.pow_apply]
+  have hRightEq :
+      ((fun _ : ℝ => (2 : ℝ)) * (fun u : ℝ => 2 * Real.pi / Real.log u) ^ 2 : ℝ → ℝ)
+        = fun u : ℝ => 2 * (2 * Real.pi / Real.log u) ^ 2 := by
+    funext u; simp [Pi.mul_apply, Pi.pow_apply]
+  rw [hLeftEq, hRightEq] at h
+  exact h
+
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
 /-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
