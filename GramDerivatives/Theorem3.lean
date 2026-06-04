@@ -3054,6 +3054,40 @@ private lemma cOther_contribution_isLittleO {n : ℕ} (hn : 2 ≤ n)
   case `n = 2` is `gramAsymp_two = theorem3_two`.
 -/
 
+/-!
+  ## §3.public  Public concrete consequences
+
+  Concrete-form re-exports of the (private) leading-order asymptotics for
+  `gram`, `iteratedDeriv 1 gram`, and `iteratedDeriv 2 gram`, intended for
+  use in downstream files (in particular `Theorem4.lean §3b`).  Each
+  unfolds the internal shorthands (`gramL`, `gramLDeriv`, `gramLeading 2`)
+  into a closed expression.
+-/
+
+/-- **Public concrete form** of the leading-order Lavrik asymp:
+`gram u ~ 2π·u/log u` as `u → +∞`. -/
+lemma gram_isEquivalent :
+    IsEquivalent atTop gram (fun u : ℝ => 2 * Real.pi * u / Real.log u) :=
+  gram_isEquivalent_gramL
+
+/-- **Public concrete form** of the leading-order Korolev asymp:
+`iteratedDeriv 1 gram u ~ 2π/log u` as `u → +∞`. -/
+lemma iteratedDeriv_one_gram_isEquivalent :
+    IsEquivalent atTop (iteratedDeriv 1 gram)
+      (fun u : ℝ => 2 * Real.pi / Real.log u) :=
+  gram_deriv_isEquivalent_gramLDeriv
+
+/-- **Public concrete form** of the n=2 leading-order asymp:
+`iteratedDeriv 2 gram u ~ -2π/(u·log²u)` as `u → +∞`. -/
+lemma iteratedDeriv_two_gram_isEquivalent :
+    IsEquivalent atTop (iteratedDeriv 2 gram)
+      (fun u : ℝ => -(2 * Real.pi) / (u * Real.log u ^ 2)) := by
+  have h := iteratedDeriv_two_gram_isEquivalent_gramLeading_two
+  have heq : (gramLeading 2 : ℝ → ℝ)
+              = fun u : ℝ => -(2 * Real.pi) / (u * Real.log u ^ 2) := by
+    funext u; exact gramLeading_two u
+  rwa [heq] at h
+
 /-- **Theorem 3** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
     For `n ≥ 2`, the `n`-th derivative of the Gram function satisfies

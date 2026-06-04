@@ -253,6 +253,55 @@ lemma iteratedDeriv_one_gramPow_one_isEquivalent :
   rw [hLeft, hRight]
   exact iteratedDeriv_one_gram_isEquivalent
 
+/-! ### §3b  Special case `n = 2`, via binary Leibniz + Theorem 3
+
+Step 1 of an inductive proof of §3 by Leibniz expansion.  For `n = 2`,
+the binary Leibniz formula (`iteratedDeriv_mul`) applied to
+`gramPow 2 u = gram u * gram u` gives
+
+    (gramPow 2)''(u) = 2·gram(u)·gram''(u) + 2·(gram'(u))² .
+
+The §3a / §3b lemmas in this sub-section establish the *pointwise*
+identity and its eventually-true filter form, which the asymp-side
+arguments will consume in later steps.  The full §3b smoke test
+(`iteratedDeriv 2 (gramPow 2) ~ 2! · (2π/log u)²`) will follow from
+combining these with the public asymp equivalences exposed in
+`Theorem3.lean §3.public`. -/
+
+/-- `gramPow 2 = fun u : ℝ => gram u * gram u`. -/
+private lemma gramPow_two_eq_mul :
+    (gramPow 2 : ℝ → ℝ) = fun u : ℝ => gram u * gram u := by
+  funext u
+  simp [gramPow, sq]
+
+/-- **Binary Leibniz at n = 2**: at any `u > gramThreshold`,
+    `(gramPow 2)''(u) = 2·gram(u)·gram''(u) + 2·(gram'(u))²`.
+Foundation lemma for the n = 2 case of §3, derived directly from
+`iteratedDeriv_mul` applied to `gram * gram`. -/
+private lemma iteratedDeriv_two_gramPow_two_eq (u : ℝ) (hu : gramThreshold < u) :
+    iteratedDeriv 2 (gramPow 2) u
+      = 2 * gram u * iteratedDeriv 2 gram u
+        + 2 * (iteratedDeriv 1 gram u) ^ 2 := by
+  have hContDiff : ContDiffAt ℝ 2 gram u := contDiffAt_gram 2 hu
+  rw [gramPow_two_eq_mul]
+  rw [iteratedDeriv_fun_mul hContDiff hContDiff]
+  -- Unfold the sum over i ∈ range 3.
+  rw [show (2 : ℕ) + 1 = 3 from rfl]
+  rw [Finset.sum_range_succ, Finset.sum_range_succ, Finset.sum_range_succ,
+      Finset.sum_range_zero]
+  simp [iteratedDeriv_zero, Nat.choose, sq]
+  ring
+
+/-- Eventually-true filter form of `iteratedDeriv_two_gramPow_two_eq`. -/
+private lemma iteratedDeriv_two_gramPow_two_eventually_eq :
+    (fun u : ℝ => iteratedDeriv 2 (gramPow 2) u)
+      =ᶠ[atTop]
+      (fun u : ℝ =>
+        2 * gram u * iteratedDeriv 2 gram u
+          + 2 * (iteratedDeriv 1 gram u) ^ 2) := by
+  filter_upwards [eventually_gt_atTop gramThreshold] with u hu
+  exact iteratedDeriv_two_gramPow_two_eq u hu
+
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
 /-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
