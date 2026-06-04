@@ -253,35 +253,124 @@ lemma iteratedDeriv_one_gramPow_one_isEquivalent :
   rw [hLeft, hRight]
   exact iteratedDeriv_one_gram_isEquivalent
 
-/-! ## §4  Eventual antitone in absolute value (TODO) -/
+/-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
+
+/-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
+
+Eventually `iteratedDeriv (n+1) (gramPow n) u ≤ 0`.  This is the analytic
+ingredient that turns asymp-equivalence into pointwise antitone
+monotonicity: by `antitoneOn_of_deriv_nonpos`, a function with non-positive
+derivative is antitone.
+
+Sketch.  By Leibniz the leading term of `d^{n+1}/du^{n+1} (gram u)^n` is
+`n! · n · (gram'(u))^{n-1} · gram''(u)`, and from Theorem 3 at order 2,
+`gram''(u) ∼ −2π / (u · log² u) < 0` for `u` large.  Hence the leading
+term is negative, and the remainder is `o`-of-it, so the whole expression
+is eventually non-positive.
+
+-- TODO (deferred): the Leibniz expansion + asymptotic match at order
+-- `n + 1`.  Comparable in size to §3 (a separate Leibniz pass) but
+-- isolated from §3 itself: the §3 asymp gives the order-`n` magnitude;
+-- this axiom gives the order-`(n+1)` sign.
+-- ASSUMPTION -/
+axiom iteratedDeriv_succ_n_gramPow_n_eventually_nonpos (n : ℕ) (_hn : 1 ≤ n) :
+    ∀ᶠ u : ℝ in atTop, iteratedDeriv (n + 1) (gramPow n) u ≤ 0
 
 /-- The `n`-th derivative of `(gram)^n` is **eventually antitone** in
 absolute value: `|iteratedDeriv n (gramPow n) ·|` is decreasing on a tail.
 
-Why this is genuinely harder than the §5/§6 corollaries.  The §3 asymp
-equivalence
-`iteratedDeriv n (gramPow n) u ∼ n! · (2π/log u)^n`
-controls the function up to a multiplicative `(1 + o(1))` factor, but
-asymp-equivalence to an antitone function is **not** enough to force
-pointwise antitone behaviour (cf. `1/x + sin(x²)/x³ ∼ 1/x`, yet the LHS
-is not eventually antitone).
-
-The standard route is to show the `(n+1)`-th derivative of `(gram)^n`
-is eventually **negative** and invoke `antitoneOn_of_deriv_nonpos`.  By
-Leibniz, the leading term of `d^{n+1}/du^{n+1} (gram u)^n` is
-`n! · n · (gram'(u))^{n-1} · gram''(u)`, which is negative for `u`
-large (since `gram'(u) > 0` and `gram''(u) ∼ −2π / (u · log² u) < 0`
-by Theorem 3 at `n = 2`).  Formalising this is a separate Leibniz +
-asymptotic computation, comparable in size to §3.
-
--- TODO (deferred): two-stage proof —
---   (a) `iteratedDeriv (n+1) (gramPow n)` has leading term
---       `n! · n · (gram')^(n-1) · gram''`, eventually negative;
---   (b) `antitoneOn_of_deriv_nonpos` on the absolute value.
--- ASSUMPTION -/
-axiom iteratedDeriv_n_gramPow_n_eventually_antitone (n : ℕ) (_hn : 1 ≤ n) :
+Proof.  On a sufficiently far tail `[x₀, ∞)`:
+  • `iteratedDeriv n (gramPow n) u > 0` (`eventually_pos` from §3 asymp);
+    so `|·| = iteratedDeriv n (gramPow n)` there.
+  • `iteratedDeriv (n+1) (gramPow n) u ≤ 0` (the sign axiom above);
+    this is `deriv (iteratedDeriv n (gramPow n)) u ≤ 0` by
+    `iteratedDeriv_succ`.
+  • `iteratedDeriv n (gramPow n)` is continuous and differentiable on the
+    tail (`gramPow n` is `C^∞` on `(gramThreshold, ∞)` via `contDiffAt_gramPow`).
+Apply `antitoneOn_of_deriv_nonpos` to conclude `AntitoneOn (iteratedDeriv n …)`
+on `[x₀, ∞)`, then transport to `|·|` via the positivity identity. -/
+lemma iteratedDeriv_n_gramPow_n_eventually_antitone (n : ℕ) (hn : 1 ≤ n) :
     ∃ x₀ : ℝ,
-      AntitoneOn (fun u : ℝ => |iteratedDeriv n (gramPow n) u|) (Set.Ici x₀)
+      AntitoneOn (fun u : ℝ => |iteratedDeriv n (gramPow n) u|) (Set.Ici x₀) := by
+  -- Extract witness points for the three eventual conditions.
+  obtain ⟨x_d, hx_d⟩ := eventually_atTop.mp
+    (iteratedDeriv_succ_n_gramPow_n_eventually_nonpos n hn)
+  obtain ⟨x_p, hx_p⟩ := eventually_atTop.mp
+    (iteratedDeriv_n_gramPow_n_eventually_pos n hn)
+  set x₀ : ℝ := max (max x_d x_p) (gramThreshold + 1) with hx₀_def
+  refine ⟨x₀, ?_⟩
+  -- Bookkeeping bounds on x₀.
+  have hx₀_gt_gramT : gramThreshold < x₀ := by
+    have h1 : gramThreshold + 1 ≤ x₀ := le_max_right _ _
+    linarith
+  have hx₀_ge_xd : x_d ≤ x₀ := le_trans (le_max_left _ _) (le_max_left _ _)
+  have hx₀_ge_xp : x_p ≤ x₀ := le_trans (le_max_right _ _) (le_max_left _ _)
+  -- Positivity of `iteratedDeriv n` on `[x₀, ∞)`.
+  have hPos : ∀ u ∈ Set.Ici x₀, 0 < iteratedDeriv n (gramPow n) u := fun u hu =>
+    hx_p u (le_trans hx₀_ge_xp hu)
+  -- `|iteratedDeriv n| = iteratedDeriv n` on `[x₀, ∞)`.
+  have hAbsEq : Set.EqOn (fun u : ℝ => |iteratedDeriv n (gramPow n) u|)
+                          (fun u : ℝ => iteratedDeriv n (gramPow n) u)
+                          (Set.Ici x₀) := fun u hu => abs_of_pos (hPos u hu)
+  -- Non-positivity of `iteratedDeriv (n+1)` on `(x₀, ∞)`.
+  have hNonPos : ∀ u ∈ Set.Ioi x₀,
+      iteratedDeriv (n + 1) (gramPow n) u ≤ 0 := fun u hu =>
+    hx_d u (le_trans hx₀_ge_xd hu.le)
+  -- Smoothness scaffolding.
+  have hUDiff : UniqueDiffOn ℝ (Set.Ioi gramThreshold) := isOpen_Ioi.uniqueDiffOn
+  have hContDiffOn : ContDiffOn ℝ ((n : ℕ) + 2) (gramPow n) (Set.Ioi gramThreshold) :=
+    fun u hu => (contDiffAt_gramPow n (n + 2) hu).contDiffWithinAt
+  have hLE : ((n : ℕ) : WithTop ℕ∞) ≤ ((n + 2 : ℕ) : WithTop ℕ∞) := by
+    exact_mod_cast Nat.le_add_right n 2
+  have hLT : ((n : ℕ) : WithTop ℕ∞) < ((n + 2 : ℕ) : WithTop ℕ∞) := by
+    exact_mod_cast (by omega : n < n + 2)
+  have hContWithin :
+      ContinuousOn (iteratedDerivWithin n (gramPow n) (Set.Ioi gramThreshold))
+                    (Set.Ioi gramThreshold) :=
+    hContDiffOn.continuousOn_iteratedDerivWithin hLE hUDiff
+  have hDiffWithin :
+      DifferentiableOn ℝ
+        (iteratedDerivWithin n (gramPow n) (Set.Ioi gramThreshold))
+        (Set.Ioi gramThreshold) :=
+    hContDiffOn.differentiableOn_iteratedDerivWithin hLT hUDiff
+  -- `iteratedDerivWithin n (...) (Ioi gramThreshold) = iteratedDeriv n (...)` on the set.
+  have hEqOn : Set.EqOn
+      (iteratedDerivWithin n (gramPow n) (Set.Ioi gramThreshold))
+      (iteratedDeriv n (gramPow n))
+      (Set.Ioi gramThreshold) :=
+    iteratedDerivWithin_of_isOpen isOpen_Ioi
+  have hCont_on_Ioi :
+      ContinuousOn (iteratedDeriv n (gramPow n)) (Set.Ioi gramThreshold) :=
+    hContWithin.congr hEqOn
+  have hDiff_on_Ioi :
+      DifferentiableOn ℝ (iteratedDeriv n (gramPow n)) (Set.Ioi gramThreshold) := by
+    intro u hu
+    have h := hDiffWithin u hu
+    -- Transport via the EqOn (within = plain on open set).
+    refine h.congr (fun v hv => hEqOn hv) (hEqOn hu)
+  -- Restrict to `Ici x₀ ⊆ Ioi gramThreshold`.
+  have hSubset : Set.Ici x₀ ⊆ Set.Ioi gramThreshold := fun u hu =>
+    lt_of_lt_of_le hx₀_gt_gramT hu
+  have hSubset' : Set.Ioi x₀ ⊆ Set.Ioi gramThreshold := fun u hu =>
+    lt_trans hx₀_gt_gramT hu
+  have hContIci :
+      ContinuousOn (iteratedDeriv n (gramPow n)) (Set.Ici x₀) :=
+    hCont_on_Ioi.mono hSubset
+  have hDiffInterior :
+      DifferentiableOn ℝ (iteratedDeriv n (gramPow n)) (interior (Set.Ici x₀)) := by
+    rw [interior_Ici]
+    exact hDiff_on_Ioi.mono hSubset'
+  -- Antitone on `[x₀, ∞)` via `antitoneOn_of_deriv_nonpos`.
+  have hAntit : AntitoneOn (iteratedDeriv n (gramPow n)) (Set.Ici x₀) := by
+    refine antitoneOn_of_deriv_nonpos (convex_Ici x₀) hContIci hDiffInterior ?_
+    intro u hu
+    rw [interior_Ici] at hu
+    rw [show deriv (iteratedDeriv n (gramPow n)) u
+            = iteratedDeriv (n + 1) (gramPow n) u from
+            (congrArg (· u) iteratedDeriv_succ.symm)]
+    exact hNonPos u hu
+  -- Transport antitone from `iteratedDeriv n` to `|iteratedDeriv n|` via positivity.
+  exact hAntit.congr hAbsEq.symm
 
 /-- A small free corollary: `iteratedDeriv n (gramPow n) u > 0` eventually.
 Useful in §6 and §7 and a witness that the §3 asymp axiom is "consistent
