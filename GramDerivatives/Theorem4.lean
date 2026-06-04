@@ -276,6 +276,29 @@ is eventually non-positive.
 axiom iteratedDeriv_succ_n_gramPow_n_eventually_nonpos (n : ℕ) (_hn : 1 ≤ n) :
     ∀ᶠ u : ℝ in atTop, iteratedDeriv (n + 1) (gramPow n) u ≤ 0
 
+/-- A small free corollary: `iteratedDeriv n (gramPow n) u > 0` eventually.
+Used by §4 to identify `|iteratedDeriv n …|` with `iteratedDeriv n …` on a
+tail, and by §6 to lower-bound the latter by half the §3-leading.  A
+witness that the §3 asymp axiom is "consistent with positivity" (which
+the §4 sign axiom also tacitly assumes). -/
+lemma iteratedDeriv_n_gramPow_n_eventually_pos (n : ℕ) (hn : 1 ≤ n) :
+    ∀ᶠ u : ℝ in atTop, 0 < iteratedDeriv n (gramPow n) u := by
+  have hLO : (fun u => iteratedDeriv n (gramPow n) u
+                - (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
+                =o[atTop]
+              (fun u => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n) :=
+    (iteratedDeriv_n_gramPow_n_isEquivalent n hn).isLittleO
+  have hBound := hLO.def (c := (1 / 2 : ℝ)) (by norm_num)
+  filter_upwards [hBound, eventually_gt_atTop (1 : ℝ)] with u hu hu1
+  have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
+  have hleadingPos : (0 : ℝ) < (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n := by
+    refine mul_pos ?_ (pow_pos (by positivity) n)
+    exact_mod_cast n.factorial_pos
+  rw [Real.norm_eq_abs, Real.norm_eq_abs] at hu
+  rw [abs_of_pos hleadingPos] at hu
+  have := abs_sub_le_iff.mp hu
+  linarith
+
 /-- The `n`-th derivative of `(gram)^n` is **eventually antitone** in
 absolute value: `|iteratedDeriv n (gramPow n) ·|` is decreasing on a tail.
 
@@ -341,13 +364,13 @@ lemma iteratedDeriv_n_gramPow_n_eventually_antitone (n : ℕ) (hn : 1 ≤ n) :
     iteratedDerivWithin_of_isOpen isOpen_Ioi
   have hCont_on_Ioi :
       ContinuousOn (iteratedDeriv n (gramPow n)) (Set.Ioi gramThreshold) :=
-    hContWithin.congr hEqOn
+    hContWithin.congr hEqOn.symm
   have hDiff_on_Ioi :
       DifferentiableOn ℝ (iteratedDeriv n (gramPow n)) (Set.Ioi gramThreshold) := by
     intro u hu
     have h := hDiffWithin u hu
     -- Transport via the EqOn (within = plain on open set).
-    refine h.congr (fun v hv => hEqOn hv) (hEqOn hu)
+    refine h.congr (fun v hv => (hEqOn hv).symm) (hEqOn hu).symm
   -- Restrict to `Ici x₀ ⊆ Ioi gramThreshold`.
   have hSubset : Set.Ici x₀ ⊆ Set.Ioi gramThreshold := fun u hu =>
     lt_of_lt_of_le hx₀_gt_gramT hu
@@ -371,27 +394,6 @@ lemma iteratedDeriv_n_gramPow_n_eventually_antitone (n : ℕ) (hn : 1 ≤ n) :
     exact hNonPos u hu
   -- Transport antitone from `iteratedDeriv n` to `|iteratedDeriv n|` via positivity.
   exact hAntit.congr hAbsEq.symm
-
-/-- A small free corollary: `iteratedDeriv n (gramPow n) u > 0` eventually.
-Useful in §6 and §7 and a witness that the §3 asymp axiom is "consistent
-with positivity" (which the §4 antitone axiom also tacitly assumes). -/
-lemma iteratedDeriv_n_gramPow_n_eventually_pos (n : ℕ) (hn : 1 ≤ n) :
-    ∀ᶠ u : ℝ in atTop, 0 < iteratedDeriv n (gramPow n) u := by
-  have hLO : (fun u => iteratedDeriv n (gramPow n) u
-                - (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
-                =o[atTop]
-              (fun u => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n) :=
-    (iteratedDeriv_n_gramPow_n_isEquivalent n hn).isLittleO
-  have hBound := hLO.def (c := (1 / 2 : ℝ)) (by norm_num)
-  filter_upwards [hBound, eventually_gt_atTop (1 : ℝ)] with u hu hu1
-  have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
-  have hleadingPos : (0 : ℝ) < (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n := by
-    refine mul_pos ?_ (pow_pos (by positivity) n)
-    exact_mod_cast n.factorial_pos
-  rw [Real.norm_eq_abs, Real.norm_eq_abs] at hu
-  rw [abs_of_pos hleadingPos] at hu
-  have := abs_sub_le_iff.mp hu
-  linarith
 
 /-! ## §5  Decay to zero (proved) -/
 
