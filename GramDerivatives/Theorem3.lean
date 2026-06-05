@@ -3148,3 +3148,21 @@ theorem theorem3 (n : ℕ) (hn : 2 ≤ n) :
             - 2 * gramLeading N u * Real.log (Real.log u) / Real.log u
       rw [h_iter, pow_succ]
       ring
+
+/-- **Public concrete form** of the general n-th derivative asymp, `n ≥ 2`:
+`iteratedDeriv n gram u ~ (-1)^(n+1)·2π·(n-2)!/(u^(n-1)·log²u)` as `u → +∞`.
+
+Generalises `iteratedDeriv_two_gram_isEquivalent` to all `n ≥ 2`.  Exported for
+`Theorem4.lean`, where the Faà di Bruno remainder bound needs the leading order
+of `iteratedDeriv s gram` for arbitrary part sizes `s ≥ 2`. -/
+lemma iteratedDeriv_n_gram_isEquivalent (n : ℕ) (hn : 2 ≤ n) :
+    IsEquivalent atTop (iteratedDeriv n gram)
+      (fun u : ℝ => (-1 : ℝ) ^ (n + 1) * (2 * Real.pi) * ((n - 2).factorial : ℝ)
+                      / (u ^ (n - 1) * Real.log u ^ 2)) := by
+  have h := iteratedDeriv_isEquivalent_gramLeading (theorem3 n hn)
+  have heq : (gramLeading n : ℝ → ℝ)
+              = fun u : ℝ => (-1 : ℝ) ^ (n + 1) * (2 * Real.pi)
+                              * ((n - 2).factorial : ℝ)
+                              / (u ^ (n - 1) * Real.log u ^ 2) := by
+    funext u; rw [gramLeading]
+  rwa [heq] at h

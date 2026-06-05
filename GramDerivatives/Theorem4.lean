@@ -23,21 +23,23 @@
   ─── Status ────────────────────────────────────────────────────────────
   Skeleton: complete, no `sorry`.
   Proved:  `contDiffAt_gramPow`, `eventually_contDiffAt_gramPow`,
+           `iteratedDeriv_n_gramPow_n_isEquivalent` (§3 magnitude, ALL `n`;
+             Faà di Bruno on `(·^n) ∘ gram` + Theorem 3 — see §3c),
            `iteratedDeriv_n_gramPow_n_tendsto_zero`,
            `mul_iteratedDeriv_n_gramPow_n_tendsto_atTop`,
            `iteratedDeriv_n_gramPow_n_eventually_pos` (helper),
-           `iteratedDeriv_one_gramPow_one_isEquivalent` (§3a, n=1 case
-             of the §3 axiom, directly from `gram_deriv_asymp`),
+           `iteratedDeriv_n_gramPow_n_eventually_antitone` (§4),
+           `iteratedDeriv_one_gramPow_one_isEquivalent` (§3a, n=1 smoke test),
+           `iteratedDeriv_two_gramPow_two_isEquivalent` (§3b, n=2 smoke test),
            `theorem4` itself (one-line application of the K–N criterion).
   Axioms (this file):
     • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion
       (antitone variant).  Permanent: no UD-mod-1 theory in Mathlib.
-    • `iteratedDeriv_n_gramPow_n_isEquivalent` — TODO for `n ≥ 2`;
-      Leibniz + Theorem 3 + eq. (9).  The `n = 1` case is now proven
-      in §3a as a smoke test.
-    • `iteratedDeriv_n_gramPow_n_eventually_antitone` — TODO; needs
-      the sign of the `(n+1)`-th derivative (not derivable from the §3
-      asymp alone — see the docstring).
+    • `iteratedDeriv_succ_n_gramPow_n_eventually_nonpos` — the sign of
+      the `(n+1)`-th derivative of `(gram)^n` (used by §4 for eventual
+      antitonicity).  Deferred: needs an order-`(n+1)` Faà di Bruno pass
+      whose leading coefficient sign is `−n·n!·(2π)^n < 0`; not derivable
+      from the §3 magnitude asymp alone — see the docstring.
 -/
 
 import GramDerivatives.Theorem3
@@ -99,68 +101,17 @@ lemma eventually_contDiffAt_gramPow (n l : ℕ) :
   filter_upwards [eventually_gt_atTop gramThreshold] with u hu
   exact contDiffAt_gramPow n l hu
 
-/-! ## §3  Leading-term asymptotic (TODO) -/
+/-! ## §3  Leading-term asymptotic (proved)
 
-/-- **Leading-term asymptotic** for the `n`-th derivative of `(gram)^n`.
+The leading-term asymptotic `iteratedDeriv n (gramPow n) u ~ n!·(2π/log u)^n`
+is now **proved** (no longer an axiom) as
+`iteratedDeriv_n_gramPow_n_isEquivalent` in §3c.3 below, via the Faà di Bruno
+expansion of `(·^n) ∘ gram` (`faadi_bruno_gramPow`).  The unique length-`n`
+(atomic) partition supplies the leading term `n!·(gram'(u))^n`; every other
+partition has a part of size `≥ 2` and is `o(leading)` by Theorem 3.
 
-### Mathematical content
-
-By the Leibniz formula applied to the product of `n` identical factors,
-`d^n/du^n (gram u)^n = Σ_{j_1+⋯+j_n = n} (n! / ∏ j_i!) · ∏ gram^(j_i)(u)`,
-where the sum runs over compositions `(j_1, …, j_n)` of `n` into `n`
-non-negative integers.
-
-The *unique* leading composition is `(1, 1, …, 1)`, giving the term
-`n! · (gram'(u))^n ∼ n! · (2π/log u)^n`  (by `gram_deriv_asymp`).
-
-Every other composition contains at least one `j_i ≥ 2`.  By Theorem 3
-and `gram_asymp` (eq. (8)), the magnitudes of the factor types are:
-  • `gram^(0)(u)   = gram u            ∼ 2π·u/log u`             — order `u/log u`
-  • `gram^(1)(u)   = gram' u           ∼ 2π/log u`                — order `1/log u`
-  • `gram^(j)(u)`, `j ≥ 2`             ∼ const · u^(1−j)/(log u)² — order `u^(1−j)/(log u)²`
-
-A short bookkeeping check: for a composition `(j_1, …, j_n)` with `c_j`
-parts equal to `j` (so `Σ_j c_j = n` and `Σ_j j·c_j = n`), the term has
-order `u^(c_0 − Σ_{j≥2}(j−1)c_j) / (log u)^(c_0 + c_1 + 2·Σ_{j≥2} c_j)`.
-The first identity (`Σ_j j·c_j = n`) forces `c_0 = Σ_{j≥2}(j−1)c_j`, so
-the `u`-exponent is `0` for every composition.  The `log`-exponent is
-`c_0 + c_1 + 2·Σ_{j≥2} c_j = n + Σ_{j≥2} c_j` (using `Σ c_j = n`), so the
-order is `1/(log u)^(n + #{i : j_i ≥ 2})`.  The leading
-`(1,1,…,1)` composition has `Σ_{j≥2} c_j = 0` and is the unique one of
-order `1/(log u)^n`; every other composition is smaller by at least a
-factor of `1/log u`.
-
-### Suggested Lean staging (for a future implementer)
-
-  (1) `iteratedDeriv_pow_leibniz` : for `f : ℝ → ℝ`,
-      `iteratedDeriv l (fun u => (f u)^n) u
-        = Σ over compositions of l into n parts, ...`.
-      Induction on `n` using Mathlib's `iteratedDeriv_mul` (or
-      `deriv_pow` for the first step + product Leibniz for the rest).
-
-  (2) `gramPow_n_leibniz_split (n)` : split the Leibniz sum at `l = n`
-      into the `(1,…,1)` term + remainder.
-
-  (3) `gramPow_n_leibniz_leading_asymp` : the `(1,…,1)` term equals
-      `n! · (deriv gram u)^n` and is `IsEquivalent` to
-      `n! · (2π/log u)^n` via `gram_deriv_asymp`.
-
-  (4) `gramPow_n_leibniz_remainder_isLittleO` : every other composition
-      is `o(leading)` (using Theorem 3 for high-order factors + the
-      bookkeeping above).
-
-  (5) Combine (2)–(4) via `IsEquivalent.add_isLittleO` (or hand assembly)
-      to derive the §3 asymp.
-
-Stages (1) and (4) are the bulk; estimated several hundred lines of Lean
-each, comparable to a mid-size section of `Theorem3.lean`.
-
--- TODO (deferred): see staging above.
--- ASSUMPTION -/
-axiom iteratedDeriv_n_gramPow_n_isEquivalent (n : ℕ) (_hn : 1 ≤ n) :
-    IsEquivalent atTop
-      (fun u : ℝ => iteratedDeriv n (gramPow n) u)
-      (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
+Sections §3a (`n = 1`) and §3b (`n = 2`) remain as standalone smoke tests, now
+strict special cases of the general lemma. -/
 
 /-! ### §3a  Special case `n = 1`, proved directly from `gram_deriv_asymp` -/
 
@@ -420,6 +371,327 @@ lemma iteratedDeriv_two_gramPow_two_isEquivalent :
     funext u; simp
   rw [← hTarget]
   exact h_eqv
+
+/-! ### §3c  General case `n ≥ 2`, via Faà di Bruno + Theorem 3
+
+Discharges the §3 magnitude axiom for all `n`.  Writing `gramPow n = (·^n) ∘ gram`
+and applying Mathlib's Faà di Bruno formula
+(`iteratedDeriv_comp_eq_sum_orderedFinpartition`) expands `(gram^n)^(n)` as a sum
+over `OrderedFinpartition n`.  The atomic partition (all parts of size `1`) gives
+the leading term `n!·(gram'(u))^n`; every other partition has a part of size `≥ 2`
+and contributes `o` of the leading term by Theorem 3. -/
+
+/-- **Faà di Bruno expansion** of `(gram^n)^(n)` at `u > gramThreshold`:
+
+    `iteratedDeriv n (gramPow n) u
+       = ∑ c : OrderedFinpartition n,
+           n.descFactorial c.length · (gram u)^(n − c.length)
+             · ∏ j, iteratedDeriv (c.partSize j) gram u`.
+
+Mirrors `faadi_bruno_gram` from `Theorem3.lean`, with the outer function `(·^n)`
+in place of `θ` and `iteratedDeriv_pow` supplying the monomial derivatives. -/
+private lemma faadi_bruno_gramPow (n : ℕ) (u : ℝ) (hu : gramThreshold < u) :
+    iteratedDeriv n (gramPow n) u
+      = ∑ c : OrderedFinpartition n,
+          (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u := by
+  have hcomp_fun : (gramPow n : ℝ → ℝ) = (fun x : ℝ => x ^ n) ∘ gram := by
+    funext x; rfl
+  have hg : ContDiffAt ℝ n (fun x : ℝ => x ^ n) (gram u) := contDiffAt_id.pow n
+  have hf : ContDiffAt ℝ n gram u := contDiffAt_gram n hu
+  rw [hcomp_fun, iteratedDeriv_comp_eq_sum_orderedFinpartition hg hf le_rfl]
+  refine Finset.sum_congr rfl (fun c _ => ?_)
+  rw [iteratedDeriv_pow]
+
+/-- Eventually-true filter form of `faadi_bruno_gramPow`. -/
+private lemma faadi_bruno_gramPow_eventually (n : ℕ) :
+    (fun u : ℝ => iteratedDeriv n (gramPow n) u)
+      =ᶠ[atTop]
+      (fun u : ℝ =>
+        ∑ c : OrderedFinpartition n,
+          (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u) := by
+  filter_upwards [eventually_gt_atTop gramThreshold] with u hu
+  exact faadi_bruno_gramPow n u hu
+
+/-- `(Real.log u)⁻¹ → 0` as `u → ∞`. -/
+private lemma tendsto_inv_log_atTop_zero :
+    Tendsto (fun u : ℝ => (Real.log u)⁻¹) atTop (𝓝 0) :=
+  tendsto_inv_atTop_zero.comp Real.tendsto_log_atTop
+
+/-- `(Real.log u)⁻¹ =o[atTop] 1`. -/
+private lemma inv_log_isLittleO_one :
+    (fun u : ℝ => (Real.log u)⁻¹) =o[atTop] (fun _ : ℝ => (1 : ℝ)) :=
+  (Asymptotics.isLittleO_one_iff ℝ).mpr tendsto_inv_log_atTop_zero
+
+/-- **Sharp weak bound, `s ≥ 2`.**  `iteratedDeriv s gram =o[atTop] (u⁻¹)^(s−1)·(log u)⁻¹`.
+
+The Theorem 3 monomial is `C·u^(1−s)/log²u = (C/log u)·[(u⁻¹)^(s−1)·(log u)⁻¹]`, and the
+coefficient `C/log u → 0`, so the derivative is `o` of the weak bound. -/
+private lemma iteratedDeriv_gram_isLittleO_weak (s : ℕ) (hs : 2 ≤ s) :
+    (fun u : ℝ => iteratedDeriv s gram u)
+      =o[atTop] (fun u : ℝ => (u⁻¹) ^ (s - 1) * (Real.log u)⁻¹) := by
+  refine (iteratedDeriv_n_gram_isEquivalent s hs).trans_isLittleO ?_
+  set C : ℝ := (-1 : ℝ) ^ (s + 1) * (2 * Real.pi) * ((s - 2).factorial : ℝ) with hC
+  -- coefficient `C·(log u)⁻¹` is `=o 1`.
+  have hcoeff : (fun u : ℝ => C * (Real.log u)⁻¹) =o[atTop] (fun _ : ℝ => (1 : ℝ)) :=
+    inv_log_isLittleO_one.const_mul_left C
+  have hmul := hcoeff.mul_isBigO (Asymptotics.isBigO_refl
+    (fun u : ℝ => (u⁻¹ : ℝ) ^ (s - 1) * (Real.log u)⁻¹) atTop)
+  -- hmul : (fun u => (C·(log u)⁻¹)·((u⁻¹)^(s-1)·(log u)⁻¹)) =o (fun u => 1·((u⁻¹)^(s-1)·(log u)⁻¹))
+  have hsimp : (fun u : ℝ => (1 : ℝ) * ((u⁻¹ : ℝ) ^ (s - 1) * (Real.log u)⁻¹))
+                = (fun u : ℝ => (u⁻¹ : ℝ) ^ (s - 1) * (Real.log u)⁻¹) := by
+    funext u; rw [one_mul]
+  rw [hsimp] at hmul
+  refine Filter.EventuallyEq.trans_isLittleO ?_ hmul
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu1
+  have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
+  have hune : (u : ℝ) ≠ 0 := by linarith
+  have hlne : Real.log u ≠ 0 := hlog.ne'
+  rw [inv_pow]
+  field_simp
+
+/-- **Weak uniform derivative bound.**  For every part size `s ≥ 1`,
+`iteratedDeriv s gram =O[atTop] (u⁻¹)^(s−1) · (log u)⁻¹`.
+
+For `s = 1` this is Korolev's `gram' ~ 2π/log u`; for `s ≥ 2` it follows from
+`iteratedDeriv_gram_isLittleO_weak`. -/
+private lemma iteratedDeriv_gram_isBigO_weak (s : ℕ) (hs : 1 ≤ s) :
+    (fun u : ℝ => iteratedDeriv s gram u)
+      =O[atTop] (fun u : ℝ => (u⁻¹) ^ (s - 1) * (Real.log u)⁻¹) := by
+  rcases Nat.lt_or_ge s 2 with hs1 | hs2
+  · -- s = 1
+    obtain rfl : s = 1 := by omega
+    refine iteratedDeriv_one_gram_isEquivalent.isBigO.trans ?_
+    have hpow : (fun u : ℝ => (u⁻¹ : ℝ) ^ (1 - 1) * (Real.log u)⁻¹)
+            = (fun u : ℝ => (Real.log u)⁻¹) := by funext u; simp
+    rw [hpow]
+    refine (isBigO_const_mul_self (2 * Real.pi) (fun u : ℝ => (Real.log u)⁻¹) atTop).congr_left ?_
+    intro u; rw [div_eq_mul_inv]
+  · exact (iteratedDeriv_gram_isLittleO_weak s hs2).isBigO
+
+/-! ### §3c.1  Combinatorial facts about `OrderedFinpartition` -/
+
+/-- The part sizes of an ordered finpartition of `Fin n` sum to `n`. -/
+private lemma orderedFinpartition_sum_partSize (n : ℕ) (c : OrderedFinpartition n) :
+    ∑ i, c.partSize i = n := by
+  have h := Fintype.card_congr c.equivSigma
+  rw [Fintype.card_sigma, Fintype.card_fin] at h
+  simpa [Fintype.card_fin] using h
+
+/-- A strictly monotone self-map of `Fin n` is the identity. -/
+private lemma strictMono_fin_eq_id {n : ℕ} (f : Fin n → Fin n) (hf : StrictMono f) (i : Fin n) :
+    f i = i := by
+  have hsurj : Function.Surjective f := Finite.injective_iff_surjective.mp hf.injective
+  have hcoe : ((StrictMono.orderIsoOfSurjective f hf hsurj) i : ℕ) = (i : ℕ) :=
+    Fin.coe_orderIso_apply _ i
+  exact Fin.ext hcoe
+
+/-- **`atomic` is the unique length-`n` ordered finpartition of `Fin n`.**
+A finpartition of `Fin n` into exactly `n` parts must have every part a
+singleton, and the ordering constraint then forces the embeddings to be the
+identity. -/
+private lemma orderedFinpartition_eq_atomic_of_length (n : ℕ)
+    (c : OrderedFinpartition n) (hlen : c.length = n) :
+    c = OrderedFinpartition.atomic n := by
+  -- Every part has size 1.
+  have hps1 : ∀ i, c.partSize i = 1 := by
+    have hsum := orderedFinpartition_sum_partSize n c
+    have hcard : Fintype.card (Fin c.length) = n := by rw [Fintype.card_fin, hlen]
+    have e1 : ∑ i, c.partSize i = ∑ i : Fin c.length, ((c.partSize i - 1) + 1) :=
+      Finset.sum_congr rfl (fun i _ => (Nat.sub_add_cancel (c.partSize_pos i)).symm)
+    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, hcard, smul_eq_mul,
+      mul_one] at e1
+    have hzero : ∑ i, (c.partSize i - 1) = 0 := by omega
+    intro i
+    have hi := (Finset.sum_eq_zero_iff.mp hzero) i (Finset.mem_univ i)
+    have hpos := c.partSize_pos i
+    omega
+  -- Destructure and substitute `length = n`.
+  obtain ⟨len, partSize, hpos, emb, hembmono, hpartsmono, hdisj, hcov⟩ := c
+  obtain rfl : len = n := hlen
+  obtain rfl : partSize = fun _ => 1 := funext hps1
+  -- The "largest-element" map is `m ↦ emb m 0`; it is strictly monotone, hence the identity.
+  have hg : ∀ m : Fin len, emb m ⟨0, Nat.one_pos⟩ = m := by
+    have hmono : StrictMono (fun m : Fin len => emb m ⟨0, Nat.one_pos⟩) := hpartsmono
+    exact fun m => strictMono_fin_eq_id _ hmono m
+  obtain rfl : emb = fun m _ => m := by
+    funext m j
+    have hj : j = ⟨0, Nat.one_pos⟩ := Subsingleton.elim _ _
+    rw [hj]; exact hg m
+  rfl
+
+/-- Two nonzero-constant multiples of the same function are `=O` of each other. -/
+private lemma isBigO_const_mul_const_mul (a b : ℝ) (hb : b ≠ 0) (f : ℝ → ℝ) :
+    (fun u : ℝ => a * f u) =O[atTop] (fun u : ℝ => b * f u) := by
+  have hrw : (fun u : ℝ => a * f u) = (fun u : ℝ => a / b * (b * f u)) := by
+    funext u
+    rw [show a / b * (b * f u) = a / b * b * f u from by ring, div_mul_cancel₀ a hb]
+  rw [hrw]
+  exact isBigO_const_mul_self (a / b) (fun u : ℝ => b * f u) atTop
+
+/-! ### §3c.2  Non-leading partition terms are little-o of the leading term -/
+
+/-- **A non-leading Faà di Bruno term is `o(leading)`.**  If `c` has at least one
+part of size `≥ 2`, the corresponding term
+`n.descFactorial c.length · (gram u)^(n−c.length) · ∏ⱼ gram^(c.partSize j)(u)`
+is `o[atTop]` of `n!·(2π/log u)^n`.
+
+The decay comes entirely from the size-`≥2` part: by the weak uniform bound every
+factor is `O((u⁻¹)^(sⱼ−1)·(log u)⁻¹)`, and the distinguished part is `o` of its weak
+bound (`iteratedDeriv_gram_isLittleO_weak`).  The `u`-powers cancel (`∑(sⱼ−1) = n−len`),
+so the comparison product is `Θ((log u)⁻¹ⁿ) = Θ(leading)`. -/
+private lemma orderedFinpartition_term_isLittleO (n : ℕ)
+    (c : OrderedFinpartition n) (hc : ∃ i, 2 ≤ c.partSize i) :
+    (fun u : ℝ => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+        * ∏ j, iteratedDeriv (c.partSize j) gram u)
+      =o[atTop] (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n) := by
+  obtain ⟨i₀, hi₀⟩ := hc
+  -- Exponent bookkeeping.
+  have hsumsub : ∑ j, (c.partSize j - 1) = n - c.length := by
+    have hsum := orderedFinpartition_sum_partSize n c
+    have e1 : ∑ i, ((c.partSize i - 1) + 1) = ∑ i, c.partSize i :=
+      Finset.sum_congr rfl (fun i _ => Nat.sub_add_cancel (c.partSize_pos i))
+    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+      smul_eq_mul, mul_one, hsum] at e1
+    omega
+  have hnm : (n - c.length) + c.length = n := Nat.sub_add_cancel c.length_le
+  -- (1) gram^(n-len) =O (2π u/log u)^(n-len).
+  have hgramO : (fun u : ℝ => (gram u) ^ (n - c.length))
+      =O[atTop] (fun u : ℝ => (2 * Real.pi * u / Real.log u) ^ (n - c.length)) :=
+    (gram_isEquivalent.pow (n - c.length)).isBigO
+  -- (2) ∏ deriv =o ∏ weakbound.
+  have hprodo : (fun u : ℝ => ∏ j, iteratedDeriv (c.partSize j) gram u)
+      =o[atTop] (fun u : ℝ => ∏ j, ((u⁻¹) ^ (c.partSize j - 1) * (Real.log u)⁻¹)) := by
+    refine IsLittleO.finsetProd (fun j _ =>
+      iteratedDeriv_gram_isBigO_weak (c.partSize j) (c.partSize_pos j)) ?_
+    exact ⟨i₀, Finset.mem_univ i₀, iteratedDeriv_gram_isLittleO_weak (c.partSize i₀) hi₀⟩
+  -- (3) product little-o.
+  have hmul := hgramO.mul_isLittleO hprodo
+  -- (4) the comparison product is =O leading.
+  have hQO :
+      (fun u : ℝ => (2 * Real.pi * u / Real.log u) ^ (n - c.length)
+          * ∏ j, ((u⁻¹) ^ (c.partSize j - 1) * (Real.log u)⁻¹))
+        =O[atTop] (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n) := by
+    -- Simplify the comparison product to `(2π)^(n-len) · (log u)⁻¹^n`.
+    have hQeq :
+        (fun u : ℝ => (2 * Real.pi * u / Real.log u) ^ (n - c.length)
+            * ∏ j, ((u⁻¹) ^ (c.partSize j - 1) * (Real.log u)⁻¹))
+          =ᶠ[atTop]
+          (fun u : ℝ => (2 * Real.pi) ^ (n - c.length) * (Real.log u)⁻¹ ^ n) := by
+      filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu1
+      have hlog : 0 < Real.log u := Real.log_pos hu1
+      have hune : (u : ℝ) ≠ 0 := by linarith
+      have hlne : Real.log u ≠ 0 := hlog.ne'
+      have hpowmerge : (Real.log u)⁻¹ ^ (n - c.length) * (Real.log u)⁻¹ ^ c.length
+          = (Real.log u)⁻¹ ^ n := by rw [← pow_add, hnm]
+      have hbase : (2 * Real.pi * u / Real.log u) * u⁻¹ = 2 * Real.pi * (Real.log u)⁻¹ := by
+        field_simp
+      have hstep : (2 * Real.pi * u / Real.log u) ^ (n - c.length) * u⁻¹ ^ (n - c.length)
+          = (2 * Real.pi) ^ (n - c.length) * (Real.log u)⁻¹ ^ (n - c.length) := by
+        rw [← mul_pow, hbase, mul_pow]
+      rw [Finset.prod_mul_distrib, Finset.prod_pow_eq_pow_sum, hsumsub, Finset.prod_const,
+        Finset.card_univ, Fintype.card_fin, ← mul_assoc, hstep, mul_assoc, hpowmerge]
+    refine hQeq.trans_isBigO ?_
+    -- leading = (n! · (2π)^n) · (log u)⁻¹^n.
+    have hlead_eq :
+        (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n)
+          = (fun u : ℝ => ((n.factorial : ℝ) * (2 * Real.pi) ^ n) * (Real.log u)⁻¹ ^ n) := by
+      funext u; simp only [div_eq_mul_inv, mul_pow]; ring
+    rw [hlead_eq]
+    refine isBigO_const_mul_const_mul _ _ ?_ _
+    have : (0 : ℝ) < (n.factorial : ℝ) * (2 * Real.pi) ^ n := by positivity
+    exact this.ne'
+  -- Assemble.
+  have hgoal_eq :
+      (fun u : ℝ => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u)
+        = (fun u : ℝ => (n.descFactorial c.length : ℝ) * ((gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u)) := by
+    funext u; ring
+  rw [hgoal_eq]
+  exact (hmul.const_mul_left (n.descFactorial c.length : ℝ)).trans_isBigO hQO
+
+/-! ### §3c.3  The §3 magnitude lemma, assembled -/
+
+/-- **§3 magnitude lemma (general `n`).**  For every `n ≥ 1`,
+
+    `iteratedDeriv n (gramPow n) u ~ n!·(2π/log u)^n`  as `u → +∞`.
+
+For `n = 1` this is `iteratedDeriv_one_gramPow_one_isEquivalent`.  For `n ≥ 2`,
+the Faà di Bruno expansion `faadi_bruno_gramPow_eventually` splits off the
+unique length-`n` (atomic) partition, whose term is `n!·(gram'(u))^n ~ leading`;
+every other partition has a part of size `≥ 2` and is `o(leading)`
+(`orderedFinpartition_term_isLittleO`). -/
+lemma iteratedDeriv_n_gramPow_n_isEquivalent (n : ℕ) (hn : 1 ≤ n) :
+    IsEquivalent atTop
+      (fun u : ℝ => iteratedDeriv n (gramPow n) u)
+      (fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n) := by
+  rcases Nat.lt_or_ge n 2 with h1 | h2
+  · obtain rfl : n = 1 := by omega
+    exact iteratedDeriv_one_gramPow_one_isEquivalent
+  · set leading : ℝ → ℝ :=
+      fun u => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n with hlead
+    set term : OrderedFinpartition n → ℝ → ℝ :=
+      fun c u => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+        * ∏ j, iteratedDeriv (c.partSize j) gram u with hterm
+    -- The atomic term is `n!·(gram')^n`, equivalent to `leading`.
+    have hatom : IsEquivalent atTop (term (OrderedFinpartition.atomic n)) leading := by
+      have hval : term (OrderedFinpartition.atomic n)
+          = fun u : ℝ => (n.factorial : ℝ) * (iteratedDeriv 1 gram u) ^ n := by
+        funext u
+        rw [hterm]
+        simp only [OrderedFinpartition.atomic_partSize]
+        rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin,
+          OrderedFinpartition.atomic_length, Nat.descFactorial_self, Nat.sub_self,
+          pow_zero, mul_one]
+      rw [hval, hlead]
+      have hPow := iteratedDeriv_one_gram_isEquivalent.pow n
+      have hConst : IsEquivalent atTop (fun _ : ℝ => (n.factorial : ℝ))
+          (fun _ : ℝ => (n.factorial : ℝ)) := IsEquivalent.refl
+      have h := hConst.mul hPow
+      have hLeftEq :
+          ((fun _ : ℝ => (n.factorial : ℝ)) * iteratedDeriv 1 gram ^ n : ℝ → ℝ)
+            = fun u : ℝ => (n.factorial : ℝ) * (iteratedDeriv 1 gram u) ^ n := by
+        funext u; simp [Pi.mul_apply, Pi.pow_apply]
+      have hRightEq :
+          ((fun _ : ℝ => (n.factorial : ℝ))
+              * (fun u : ℝ => 2 * Real.pi / Real.log u) ^ n : ℝ → ℝ)
+            = fun u : ℝ => (n.factorial : ℝ) * (2 * Real.pi / Real.log u) ^ n := by
+        funext u; simp [Pi.mul_apply, Pi.pow_apply]
+      rw [hLeftEq, hRightEq] at h
+      exact h
+    -- Every non-atomic term is `o(leading)`, so their sum is `o(leading)`.
+    have hrem : (fun u : ℝ =>
+          ∑ c ∈ Finset.univ.erase (OrderedFinpartition.atomic n), term c u)
+        =o[atTop] leading := by
+      refine IsLittleO.sum ?_
+      intro c hcmem
+      have hc2 : ∃ i, 2 ≤ c.partSize i := by
+        by_contra h
+        simp only [not_exists, not_le] at h
+        have hps1 : ∀ i, c.partSize i = 1 := fun i => by
+          have h1 := c.partSize_pos i; have h2 := h i; omega
+        have hlen : c.length = n := by
+          have hsum := orderedFinpartition_sum_partSize n c
+          have hcl : ∑ i, c.partSize i = c.length := by
+            rw [Finset.sum_congr rfl (fun i _ => hps1 i), Finset.sum_const, Finset.card_univ,
+              Fintype.card_fin, smul_eq_mul, mul_one]
+          exact hcl.symm.trans hsum
+        exact (Finset.mem_erase.mp hcmem).1
+          (orderedFinpartition_eq_atomic_of_length n c hlen)
+      exact orderedFinpartition_term_isLittleO n c hc2
+    -- Split the Faà di Bruno sum, combine, and transport.
+    have hsplit : (fun u : ℝ => ∑ c : OrderedFinpartition n, term c u)
+        = fun u : ℝ => (∑ c ∈ Finset.univ.erase (OrderedFinpartition.atomic n), term c u)
+            + term (OrderedFinpartition.atomic n) u := by
+      funext u
+      exact (Finset.sum_erase_add Finset.univ (fun c => term c u)
+        (Finset.mem_univ (OrderedFinpartition.atomic n))).symm
+    have hres : IsEquivalent atTop
+        (fun u : ℝ => ∑ c : OrderedFinpartition n, term c u) leading := by
+      rw [hsplit]; exact hrem.add_isEquivalent hatom
+    exact (faadi_bruno_gramPow_eventually n).trans_isEquivalent hres
 
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
