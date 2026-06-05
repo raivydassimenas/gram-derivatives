@@ -261,12 +261,12 @@ the binary Leibniz formula (`iteratedDeriv_mul`) applied to
 
     (gramPow 2)''(u) = 2·gram(u)·gram''(u) + 2·(gram'(u))² .
 
-The §3a / §3b lemmas in this sub-section establish the *pointwise*
-identity and its eventually-true filter form, which the asymp-side
-arguments will consume in later steps.  The full §3b smoke test
-(`iteratedDeriv 2 (gramPow 2) ~ 2! · (2π/log u)²`) will follow from
-combining these with the public asymp equivalences exposed in
-`Theorem3.lean §3.public`. -/
+The lemmas in this sub-section establish (1) the *pointwise* binary-Leibniz
+identity and its eventually-true filter form, (2) the leading-term equivalent
+`2·(gram'(u))² ~ 2·(2π/log u)²`, (3) the remainder bound
+`2·gram(u)·gram''(u) =o[atTop] 2·(gram'(u))²`, and (4) the full §3b smoke test
+`iteratedDeriv 2 (gramPow 2) ~ 2! · (2π/log u)²` — i.e. the n = 2 instance of
+the §3 magnitude axiom, derived without using it. -/
 
 /-- `gramPow 2 = fun u : ℝ => gram u * gram u`. -/
 private lemma gramPow_two_eq_mul :
@@ -325,6 +325,101 @@ private lemma iteratedDeriv_two_gramPow_two_leading_isEquivalent :
     funext u; simp [Pi.mul_apply, Pi.pow_apply]
   rw [hLeftEq, hRightEq] at h
   exact h
+
+/-- **Remainder is little-o of leading** at `n = 2`:
+`2·gram(u)·gram''(u) =o[atTop] 2·(gram'(u))²`.
+
+Pointwise asymptotic content: `gram·gram'' ~ −4π²/log³u` while `(gram')² ~ 4π²/log²u`,
+so the ratio `(gram·gram'')/(gram')²` is `~ −1/log u → 0`.  Closes the §3b smoke test
+by showing the non-leading binary-Leibniz term is negligible. -/
+private lemma iteratedDeriv_two_gramPow_two_remainder_isLittleO :
+    (fun u : ℝ => 2 * gram u * iteratedDeriv 2 gram u)
+      =o[atTop] (fun u : ℝ => 2 * (iteratedDeriv 1 gram u) ^ 2) := by
+  -- Reassociate the LHS and strip the common constant `2`.
+  have hLHS_assoc :
+      (fun u : ℝ => 2 * gram u * iteratedDeriv 2 gram u)
+        = (fun u : ℝ => 2 * (gram u * iteratedDeriv 2 gram u)) := by
+    funext u; ring
+  rw [hLHS_assoc,
+      Asymptotics.isLittleO_const_mul_left_iff (by norm_num : (2 : ℝ) ≠ 0),
+      Asymptotics.isLittleO_const_mul_right_iff (by norm_num : (2 : ℝ) ≠ 0)]
+  -- Now: `(gram · gram'') =o (gram')²`.
+  -- (A) `gram · gram'' ~ (2π·u/log u) · (−2π/(u·log²u))`.
+  have h_mul_eqv : IsEquivalent atTop
+      (fun u : ℝ => gram u * iteratedDeriv 2 gram u)
+      (fun u : ℝ => (2 * Real.pi * u / Real.log u)
+                      * (-(2 * Real.pi) / (u * Real.log u ^ 2))) :=
+    gram_isEquivalent.mul iteratedDeriv_two_gram_isEquivalent
+  -- (B) `(gram')² ~ (2π/log u)²`.
+  have h_sq_eqv : IsEquivalent atTop
+      (fun u : ℝ => (iteratedDeriv 1 gram u) ^ 2)
+      (fun u : ℝ => (2 * Real.pi / Real.log u) ^ 2) :=
+    iteratedDeriv_one_gram_isEquivalent.pow 2
+  -- (C) Simplify the LHS shape to `(−(1/log u)) · (2π/log u)²` eventually.
+  have hShape_eq :
+      (fun u : ℝ => (2 * Real.pi * u / Real.log u)
+                      * (-(2 * Real.pi) / (u * Real.log u ^ 2)))
+        =ᶠ[atTop]
+        (fun u : ℝ => (-(1 / Real.log u)) * (2 * Real.pi / Real.log u) ^ 2) := by
+    filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu1
+    have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
+    have hlogne : Real.log u ≠ 0 := hlog.ne'
+    have huNe : (u : ℝ) ≠ 0 := by linarith
+    field_simp
+  -- (D) `(−(1/log u)) · (2π/log u)² =o (2π/log u)²`.
+  have hShape_lo :
+      (fun u : ℝ => (-(1 / Real.log u)) * (2 * Real.pi / Real.log u) ^ 2)
+        =o[atTop] (fun u : ℝ => (2 * Real.pi / Real.log u) ^ 2) := by
+    have h_inv_to : Tendsto (fun u : ℝ => (Real.log u)⁻¹) atTop (𝓝 0) :=
+      tendsto_inv_atTop_zero.comp Real.tendsto_log_atTop
+    have h_one_div_to :
+        Tendsto (fun u : ℝ => -(1 / Real.log u)) atTop (𝓝 0) := by
+      have := h_inv_to.neg
+      simpa [one_div] using this
+    have h_small :
+        (fun u : ℝ => -(1 / Real.log u)) =o[atTop] (fun _ : ℝ => (1 : ℝ)) :=
+      (Asymptotics.isLittleO_one_iff ℝ).mpr h_one_div_to
+    have h_prod := h_small.mul_isBigO
+      (Asymptotics.isBigO_refl (fun u : ℝ => (2 * Real.pi / Real.log u) ^ 2) atTop)
+    refine h_prod.trans_eventuallyEq ?_
+    filter_upwards with u
+    simp
+  -- Compose: gram·gram'' ~ LHS-shape =ᶠ simpler-shape =o RHS-shape ~ (gram')².
+  exact ((h_mul_eqv.trans_eventuallyEq hShape_eq).trans_isLittleO hShape_lo).trans_isEquivalent
+    h_sq_eqv.symm
+
+/-- **Smoke test, `n = 2`**: `iteratedDeriv 2 (gramPow 2) ~ 2! · (2π/log u)²`.
+
+Mirrors `iteratedDeriv_one_gramPow_one_isEquivalent` and serves the same role: a working
+`n = 2` instance of the §3 magnitude axiom, derived from `Theorem3.lean`'s public asymp
+exports via the binary Leibniz identity (`iteratedDeriv_two_gramPow_two_eventually_eq`),
+the leading equivalent (`iteratedDeriv_two_gramPow_two_leading_isEquivalent`), and the
+remainder little-o (`iteratedDeriv_two_gramPow_two_remainder_isLittleO`). -/
+lemma iteratedDeriv_two_gramPow_two_isEquivalent :
+    IsEquivalent atTop
+      (fun u : ℝ => iteratedDeriv 2 (gramPow 2) u)
+      (fun u : ℝ => ((2 : ℕ).factorial : ℝ) * (2 * Real.pi / Real.log u) ^ 2) := by
+  have hLead := iteratedDeriv_two_gramPow_two_leading_isEquivalent
+  have hRem_o :
+      (fun u : ℝ => 2 * gram u * iteratedDeriv 2 gram u)
+        =o[atTop] (fun u : ℝ => 2 * (2 * Real.pi / Real.log u) ^ 2) :=
+    iteratedDeriv_two_gramPow_two_remainder_isLittleO.trans_isEquivalent hLead
+  -- Combine: 2·gram·gram'' + 2·(gram')² ~ 2·(2π/log u)².
+  -- Term order matches `iteratedDeriv_two_gramPow_two_eventually_eq`.
+  have h_sum := hRem_o.add_isEquivalent hLead
+  -- Transport across the pointwise identity.
+  have h_eqv : IsEquivalent atTop
+      (fun u : ℝ => iteratedDeriv 2 (gramPow 2) u)
+      (fun u : ℝ => 2 * (2 * Real.pi / Real.log u) ^ 2) :=
+    iteratedDeriv_two_gramPow_two_eventually_eq.trans_isEquivalent h_sum
+  -- Identify `2 = ((2 : ℕ).factorial : ℝ)`.
+  have hTarget :
+      (fun u : ℝ => 2 * (2 * Real.pi / Real.log u) ^ 2)
+        = (fun u : ℝ => ((2 : ℕ).factorial : ℝ)
+                          * (2 * Real.pi / Real.log u) ^ 2) := by
+    funext u; simp
+  rw [← hTarget]
+  exact h_eqv
 
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
