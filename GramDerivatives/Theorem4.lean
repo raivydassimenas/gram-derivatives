@@ -381,27 +381,37 @@ over `OrderedFinpartition n`.  The atomic partition (all parts of size `1`) give
 the leading term `n!·(gram'(u))^n`; every other partition has a part of size `≥ 2`
 and contributes `o` of the leading term by Theorem 3. -/
 
-/-- **Faà di Bruno expansion** of `(gram^n)^(n)` at `u > gramThreshold`:
+/-- **Faà di Bruno expansion, general order**: at `u > gramThreshold`,
 
-    `iteratedDeriv n (gramPow n) u
-       = ∑ c : OrderedFinpartition n,
+    `iteratedDeriv m (gramPow n) u
+       = ∑ c : OrderedFinpartition m,
            n.descFactorial c.length · (gram u)^(n − c.length)
              · ∏ j, iteratedDeriv (c.partSize j) gram u`.
 
-Mirrors `faadi_bruno_gram` from `Theorem3.lean`, with the outer function `(·^n)`
-in place of `θ` and `iteratedDeriv_pow` supplying the monomial derivatives. -/
-private lemma faadi_bruno_gramPow (n : ℕ) (u : ℝ) (hu : gramThreshold < u) :
-    iteratedDeriv n (gramPow n) u
-      = ∑ c : OrderedFinpartition n,
+The derivative order `m` is independent of the power `n`; the §3 magnitude
+lemma uses `m = n`, the §3d sign analysis `m = n + 1`.  Terms with
+`c.length > n` vanish because `n.descFactorial c.length = 0` there. -/
+private lemma faadi_bruno_pow_gram (n m : ℕ) (u : ℝ) (hu : gramThreshold < u) :
+    iteratedDeriv m (gramPow n) u
+      = ∑ c : OrderedFinpartition m,
           (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
             * ∏ j, iteratedDeriv (c.partSize j) gram u := by
   have hcomp_fun : (gramPow n : ℝ → ℝ) = (fun x : ℝ => x ^ n) ∘ gram := by
     funext x; rfl
-  have hg : ContDiffAt ℝ n (fun x : ℝ => x ^ n) (gram u) := contDiffAt_id.pow n
-  have hf : ContDiffAt ℝ n gram u := contDiffAt_gram n hu
+  have hg : ContDiffAt ℝ m (fun x : ℝ => x ^ n) (gram u) := contDiffAt_id.pow n
+  have hf : ContDiffAt ℝ m gram u := contDiffAt_gram m hu
   rw [hcomp_fun, iteratedDeriv_comp_eq_sum_orderedFinpartition hg hf le_rfl]
   refine Finset.sum_congr rfl (fun c _ => ?_)
   rw [iteratedDeriv_pow]
+
+/-- **Faà di Bruno expansion** of `(gram^n)^(n)` at `u > gramThreshold`:
+the `m = n` instance of `faadi_bruno_pow_gram`. -/
+private lemma faadi_bruno_gramPow (n : ℕ) (u : ℝ) (hu : gramThreshold < u) :
+    iteratedDeriv n (gramPow n) u
+      = ∑ c : OrderedFinpartition n,
+          (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u :=
+  faadi_bruno_pow_gram n n u hu
 
 /-- Eventually-true filter form of `faadi_bruno_gramPow`. -/
 private lemma faadi_bruno_gramPow_eventually (n : ℕ) :
@@ -469,6 +479,27 @@ private lemma iteratedDeriv_gram_isBigO_weak (s : ℕ) (hs : 1 ≤ s) :
     refine (isBigO_const_mul_self (2 * Real.pi) (fun u : ℝ => (Real.log u)⁻¹) atTop).congr_left ?_
     intro u; rw [div_eq_mul_inv]
   · exact (iteratedDeriv_gram_isLittleO_weak s hs2).isBigO
+
+/-- **Sharp big-part O-bound, `s ≥ 2`**:
+`iteratedDeriv s gram =O[atTop] (u⁻¹)^(s−1) · ((log u)⁻¹)²`.
+
+Strengthens `iteratedDeriv_gram_isBigO_weak` by the true second log factor of
+Theorem 3.  At order `n` (§3c) the single-log weak bound suffices, but at
+order `n + 1` (§3d) the subdominant classes are only one log below the
+dominant one, so the sharp form is needed. -/
+private lemma iteratedDeriv_gram_isBigO_sharp (s : ℕ) (hs : 2 ≤ s) :
+    (fun u : ℝ => iteratedDeriv s gram u)
+      =O[atTop] (fun u : ℝ => (u⁻¹) ^ (s - 1) * ((Real.log u)⁻¹) ^ 2) := by
+  refine (iteratedDeriv_n_gram_isEquivalent s hs).isBigO.trans ?_
+  have heq :
+      (fun u : ℝ => (-1 : ℝ) ^ (s + 1) * (2 * Real.pi) * ((s - 2).factorial : ℝ)
+          / (u ^ (s - 1) * Real.log u ^ 2))
+        = fun u : ℝ => ((-1 : ℝ) ^ (s + 1) * (2 * Real.pi) * ((s - 2).factorial : ℝ))
+            * ((u⁻¹) ^ (s - 1) * ((Real.log u)⁻¹) ^ 2) := by
+    funext u
+    rw [div_eq_mul_inv, mul_inv, ← inv_pow, ← inv_pow]
+  rw [heq]
+  exact isBigO_const_mul_self _ _ atTop
 
 /-! ### §3c.1  Combinatorial facts about `OrderedFinpartition` -/
 
