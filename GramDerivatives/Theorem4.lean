@@ -21,25 +21,27 @@
   like `u^(1-j) / log² u` and is therefore negligible.
 
   ─── Status ────────────────────────────────────────────────────────────
-  Skeleton: complete, no `sorry`.
+  Complete, no `sorry`.
   Proved:  `contDiffAt_gramPow`, `eventually_contDiffAt_gramPow`,
            `iteratedDeriv_n_gramPow_n_isEquivalent` (§3 magnitude, ALL `n`;
              Faà di Bruno on `(·^n) ∘ gram` + Theorem 3 — see §3c),
+           `iteratedDeriv_succ_gramPow_isEquivalent` (§3d sign asymptotic,
+             ALL `n`: `(gram^n)^{(n+1)} ~ −n·n!·(2π)^n/(u·log^{n+1}u)`;
+             order-`(n+1)` Faà di Bruno + `extendEquiv` signed count),
+           `iteratedDeriv_succ_n_gramPow_n_eventually_nonpos` (§4 sign,
+             formerly an axiom),
            `iteratedDeriv_n_gramPow_n_tendsto_zero`,
            `mul_iteratedDeriv_n_gramPow_n_tendsto_atTop`,
            `iteratedDeriv_n_gramPow_n_eventually_pos` (helper),
            `iteratedDeriv_n_gramPow_n_eventually_antitone` (§4),
            `iteratedDeriv_one_gramPow_one_isEquivalent` (§3a, n=1 smoke test),
            `iteratedDeriv_two_gramPow_two_isEquivalent` (§3b, n=2 smoke test),
+           `iteratedDeriv_two_gramPow_one_eventually_nonpos` (§3d.0, n=1),
+           `iteratedDeriv_three_gramPow_two_isEquivalent` (§3d.1, n=2),
            `theorem4` itself (one-line application of the K–N criterion).
   Axioms (this file):
     • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion
       (antitone variant).  Permanent: no UD-mod-1 theory in Mathlib.
-    • `iteratedDeriv_succ_n_gramPow_n_eventually_nonpos` — the sign of
-      the `(n+1)`-th derivative of `(gram)^n` (used by §4 for eventual
-      antitonicity).  Deferred: needs an order-`(n+1)` Faà di Bruno pass
-      whose leading coefficient sign is `−n·n!·(2π)^n < 0`; not derivable
-      from the §3 magnitude asymp alone — see the docstring.
 -/
 
 import GramDerivatives.Theorem3
@@ -726,12 +728,13 @@ lemma iteratedDeriv_n_gramPow_n_isEquivalent (n : ℕ) (hn : 1 ≤ n) :
 
 /-! ### §3d  Sign of the `(n+1)`-th derivative of `gramPow n`
 
-Machinery for discharging the §4 sign axiom
-`iteratedDeriv_succ_n_gramPow_n_eventually_nonpos`.  Target equivalence:
+Machinery for the §4 sign lemma
+`iteratedDeriv_succ_n_gramPow_n_eventually_nonpos` (formerly an axiom).
+Main result (§3d.5):
 
     `iteratedDeriv (n+1) (gramPow n) u ~ −n·n!·(2π)^n / (u·(log u)^(n+1))`.
 
-Note (correcting the sketch in the §4 axiom docstring): in the order-`(n+1)`
+Note: in the order-`(n+1)`
 Faà di Bruno expansion of `(gram^n)^{(n+1)}`, *every* partition with exactly
 one part of size `s ≥ 2` (and singletons elsewhere) contributes at the same
 order `u⁻¹·(log u)^{−(n+1)}`, with alternating sign `(−1)^{s+1}`; the
@@ -744,7 +747,7 @@ function is the degree-`n` monomial (`descFactorial = 0`). -/
 /-! #### §3d.0  Sign-transfer helper and smoke tests (`n = 1`, `n = 2`) -/
 
 /-- If `f ~ g` along `atTop` and `g` is eventually negative, then `f` is
-eventually non-positive.  Sign-transfer helper: reduces the §4 sign axiom to
+eventually non-positive.  Sign-transfer helper: reduces the §4 sign lemma to
 the §3d leading-term equivalence. -/
 private lemma eventually_nonpos_of_isEquivalent {f g : ℝ → ℝ}
     (h : IsEquivalent atTop f g) (hg : ∀ᶠ u : ℝ in atTop, g u < 0) :
@@ -1511,34 +1514,167 @@ private lemma sum_sgnWeight_dominant (n : ℕ) :
   rw [Finset.sum_filter, ← sum_domWeight n]
   exact Finset.sum_congr rfl fun c _ => rfl
 
-/-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
+/-! #### §3d.5  The order-`(n+1)` equivalence, assembled -/
 
-/-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
+/-- **§3d main lemma.**  For every `n ≥ 1`,
+
+    `iteratedDeriv (n+1) (gramPow n) u ~ −n·n!·(2π)^n · u⁻¹·((log u)⁻¹)^{n+1}`
+    as `u → +∞`.
+
+Assembly: the order-`(n+1)` Faà di Bruno sum (`faadi_bruno_pow_gram`) splits
+into the vanishing class (`> n` parts), the dominant single-big-part class —
+whose terms are `(−1)^{s+1}·n!·(2π)^n·model` up to `o(model)` and whose signed
+count is `−n` (§3d.4) — and the `≥ 2`-big-part class, which is `o(model)`. -/
+lemma iteratedDeriv_succ_gramPow_isEquivalent (n : ℕ) (hn : 1 ≤ n) :
+    IsEquivalent atTop
+      (fun u : ℝ => iteratedDeriv (n + 1) (gramPow n) u)
+      (fun u : ℝ => (-(n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n)
+          * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1))) := by
+  classical
+  -- (0) Faà di Bruno at order `n+1`, filter form.
+  have hFdB : (fun u : ℝ => iteratedDeriv (n + 1) (gramPow n) u)
+      =ᶠ[atTop]
+      (fun u : ℝ => ∑ c : OrderedFinpartition (n + 1),
+          (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u) := by
+    filter_upwards [eventually_gt_atTop gramThreshold] with u hu
+    exact faadi_bruno_pow_gram n (n + 1) u hu
+  -- (1) The non-dominant classes are `o(model)`.
+  have hrem : (fun u : ℝ => ∑ c ∈ Finset.univ.filter
+        (fun c : OrderedFinpartition (n + 1) => ¬ bigCard c = 1),
+        (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u)
+      =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+    refine IsLittleO.sum ?_
+    intro c hc
+    rw [Finset.mem_filter] at hc
+    rcases Nat.lt_or_ge n c.length with hlen | hlen
+    · -- more parts than the power: the term vanishes identically.
+      have hzero : (fun u : ℝ => (n.descFactorial c.length : ℝ)
+          * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u) = fun _ : ℝ => (0 : ℝ) := by
+        funext u; exact term_eq_zero_of_length_gt c hlen u
+      rw [hzero]
+      exact Asymptotics.isLittleO_zero _ _
+    · -- `length ≤ n` forces a big part; `≠ 1` big parts means `≥ 2`.
+      have hb0 : bigCard c ≠ 0 := by
+        intro h0
+        have hatom := eq_atomic_of_bigCard_eq_zero c h0
+        rw [hatom, OrderedFinpartition.atomic_length] at hlen
+        omega
+      have hb2 : 2 ≤ bigCard c := by
+        have h1 := hc.2
+        omega
+      exact term_succ_isLittleO_of_two_big n c hlen hb2
+  -- (2) Dominant class: per-term difference against `sgnWeight c · n!(2π)^n`.
+  have hdom : (fun u : ℝ => ∑ c ∈ Finset.univ.filter
+        (fun c : OrderedFinpartition (n + 1) => bigCard c = 1),
+        ((n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u
+          - sgnWeight c * ((n.factorial : ℝ) * (2 * Real.pi) ^ n)
+              * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1))))
+      =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+    refine IsLittleO.sum ?_
+    intro c hc
+    rw [Finset.mem_filter] at hc
+    obtain ⟨j₀, hj₀, huniq⟩ := exists_unique_big_of_bigCard_eq_one c hc.2
+    have h := term_succ_dominant_sub_isLittleO n c j₀ hj₀ huniq
+    have heq : (fun u : ℝ => (n.descFactorial c.length : ℝ)
+          * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u
+        - ((-1 : ℝ) ^ (c.partSize j₀ + 1) * (n.factorial : ℝ)
+            * (2 * Real.pi) ^ n) * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)))
+        = (fun u : ℝ => (n.descFactorial c.length : ℝ)
+            * (gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u
+          - sgnWeight c * ((n.factorial : ℝ) * (2 * Real.pi) ^ n)
+              * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1))) := by
+      funext u
+      rw [sgnWeight_of_unique_big c j₀ hj₀ huniq]
+      ring
+    rw [heq] at h
+    exact h
+  -- (3) Reassemble the dominant sum via the §3d.4 signed count.
+  have hdom' : (fun u : ℝ => (∑ c ∈ Finset.univ.filter
+        (fun c : OrderedFinpartition (n + 1) => bigCard c = 1),
+        (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u)
+        + (n : ℝ) * ((n.factorial : ℝ) * (2 * Real.pi) ^ n)
+            * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)))
+      =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+    refine hdom.congr' ?_ Filter.EventuallyEq.rfl
+    filter_upwards with u
+    rw [Finset.sum_sub_distrib, ← Finset.sum_mul, ← Finset.sum_mul,
+      sum_sgnWeight_dominant n]
+    ring
+  -- (4) Total: difference of the full sum against the target.
+  have htotal : (fun u : ℝ => (∑ c : OrderedFinpartition (n + 1),
+        (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u)
+        - (-(n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n)
+            * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)))
+      =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+    have h := hdom'.add hrem
+    refine h.congr' ?_ Filter.EventuallyEq.rfl
+    filter_upwards with u
+    rw [← Finset.sum_filter_add_sum_filter_not Finset.univ
+      (fun c : OrderedFinpartition (n + 1) => bigCard c = 1)
+      (fun c => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+        * ∏ j, iteratedDeriv (c.partSize j) gram u)]
+    ring
+  -- (5) Conclude.
+  have h1 : (0 : ℝ) < (n : ℝ) := by exact_mod_cast hn
+  have h2 : (0 : ℝ) < (n.factorial : ℝ) := by exact_mod_cast n.factorial_pos
+  have h3 : (0 : ℝ) < (2 * Real.pi) ^ n := by positivity
+  have h4 : (0 : ℝ) < (n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n :=
+    mul_pos (mul_pos h1 h2) h3
+  have hconst_ne : (-(n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n) ≠ 0 := by
+    have hrw : -(n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n
+        = -((n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n) := by ring
+    rw [hrw]
+    exact neg_ne_zero.mpr h4.ne'
+  have hfinal : IsEquivalent atTop
+      (fun u : ℝ => ∑ c : OrderedFinpartition (n + 1),
+          (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => (-(n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n)
+          * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1))) :=
+    (Asymptotics.isLittleO_const_mul_right_iff hconst_ne).mpr htotal
+  exact hFdB.trans_isEquivalent hfinal
+
+/-! ## §4  Eventual antitone in absolute value (proved) -/
+
+/-- **Sign of the `(n+1)`-th derivative of `(gram)^n`** (formerly the last
+analytic axiom of this file; now proved via §3d).
 
 Eventually `iteratedDeriv (n+1) (gramPow n) u ≤ 0`.  This is the analytic
 ingredient that turns asymp-equivalence into pointwise antitone
 monotonicity: by `antitoneOn_of_deriv_nonpos`, a function with non-positive
 derivative is antitone.
 
-Sketch.  By Leibniz the leading term of `d^{n+1}/du^{n+1} (gram u)^n` is
-`n! · n · (gram'(u))^{n-1} · gram''(u)`, and from Theorem 3 at order 2,
-`gram''(u) ∼ −2π / (u · log² u) < 0` for `u` large.  Hence the leading
-term is negative, and the remainder is `o`-of-it, so the whole expression
-is eventually non-positive.
-
--- TODO (deferred): the Leibniz expansion + asymptotic match at order
--- `n + 1`.  Comparable in size to §3 (a separate Leibniz pass) but
--- isolated from §3 itself: the §3 asymp gives the order-`n` magnitude;
--- this axiom gives the order-`(n+1)` sign.
--- ASSUMPTION -/
-axiom iteratedDeriv_succ_n_gramPow_n_eventually_nonpos (n : ℕ) (_hn : 1 ≤ n) :
-    ∀ᶠ u : ℝ in atTop, iteratedDeriv (n + 1) (gramPow n) u ≤ 0
+By `iteratedDeriv_succ_gramPow_isEquivalent`, the `(n+1)`-th derivative is
+equivalent to `−n·n!·(2π)^n · u⁻¹·(log u)^{−(n+1)}`, which is negative for
+`u > 1`; eventual non-positivity follows by
+`eventually_nonpos_of_isEquivalent`. -/
+lemma iteratedDeriv_succ_n_gramPow_n_eventually_nonpos (n : ℕ) (hn : 1 ≤ n) :
+    ∀ᶠ u : ℝ in atTop, iteratedDeriv (n + 1) (gramPow n) u ≤ 0 := by
+  refine eventually_nonpos_of_isEquivalent
+    (iteratedDeriv_succ_gramPow_isEquivalent n hn) ?_
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu
+  have hlog : 0 < Real.log u := Real.log_pos hu
+  have hu0 : (0 : ℝ) < u := lt_trans one_pos hu
+  have hmodel : 0 < u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1) := by positivity
+  have h1 : (0 : ℝ) < (n : ℝ) := by exact_mod_cast hn
+  have h2 : (0 : ℝ) < (n.factorial : ℝ) := by exact_mod_cast n.factorial_pos
+  have h3 : (0 : ℝ) < (2 * Real.pi) ^ n := by positivity
+  have h4 : (0 : ℝ) < (n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n :=
+    mul_pos (mul_pos h1 h2) h3
+  have hC : -(n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n < 0 := by linarith
+  exact mul_neg_of_neg_of_pos hC hmodel
 
 /-- A small free corollary: `iteratedDeriv n (gramPow n) u > 0` eventually.
 Used by §4 to identify `|iteratedDeriv n …|` with `iteratedDeriv n …` on a
-tail, and by §6 to lower-bound the latter by half the §3-leading.  A
-witness that the §3 asymp axiom is "consistent with positivity" (which
-the §4 sign axiom also tacitly assumes). -/
+tail, and by §6 to lower-bound the latter by half the §3-leading. -/
 lemma iteratedDeriv_n_gramPow_n_eventually_pos (n : ℕ) (hn : 1 ≤ n) :
     ∀ᶠ u : ℝ in atTop, 0 < iteratedDeriv n (gramPow n) u := by
   have hLO : (fun u => iteratedDeriv n (gramPow n) u
@@ -1563,7 +1699,7 @@ absolute value: `|iteratedDeriv n (gramPow n) ·|` is decreasing on a tail.
 Proof.  On a sufficiently far tail `[x₀, ∞)`:
   • `iteratedDeriv n (gramPow n) u > 0` (`eventually_pos` from §3 asymp);
     so `|·| = iteratedDeriv n (gramPow n)` there.
-  • `iteratedDeriv (n+1) (gramPow n) u ≤ 0` (the sign axiom above);
+  • `iteratedDeriv (n+1) (gramPow n) u ≤ 0` (the §4 sign lemma above);
     this is `deriv (iteratedDeriv n (gramPow n)) u ≤ 0` by
     `iteratedDeriv_succ`.
   • `iteratedDeriv n (gramPow n)` is continuous and differentiable on the
