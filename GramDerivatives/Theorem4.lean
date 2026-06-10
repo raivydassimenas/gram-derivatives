@@ -1095,6 +1095,155 @@ private lemma term_succ_isLittleO_of_two_big (n : ℕ)
   rw [hgoal_eq]
   exact ((hgramO.mul hprodO).const_mul_left _).trans_isLittleO hQ_lo
 
+/-! #### §3d.3  The dominant class: single-big-part terms
+
+A partition of `n + 1` with exactly one part of size `s ≥ 2` (all others
+singletons) contributes
+
+    `term c ~ (−1)^{s+1} · n!·(2π)^n · u⁻¹·(log u)^{−(n+1)}`
+
+— the same order for *every* `s`, with alternating sign.  The factorial
+bookkeeping is `n.descFactorial ℓ · (s−2)! = n!` (where `ℓ = n+2−s`). -/
+
+/-- Pointwise algebra for the dominant-class shape: collects powers of `2π`,
+`u`, `log u` from the three asymptotic factors. -/
+private lemma dominant_shape_aux (k₁ k₂ : ℕ) (D A : ℝ) {u : ℝ} (hu : 1 < u) :
+    D * ((2 * Real.pi * u / Real.log u) ^ k₁
+        * ((2 * Real.pi / Real.log u) ^ k₂
+            * (A / (u ^ (k₁ + 1) * Real.log u ^ 2))))
+      = (D * A * (2 * Real.pi) ^ (k₁ + k₂))
+          * (u⁻¹ * ((Real.log u)⁻¹) ^ (k₁ + k₂ + 2)) := by
+  have hlog : 0 < Real.log u := Real.log_pos hu
+  have hu0 : (0 : ℝ) < u := lt_trans one_pos hu
+  have hune : (u : ℝ) ≠ 0 := hu0.ne'
+  have hlne : Real.log u ≠ 0 := hlog.ne'
+  rw [div_pow, div_pow, inv_pow]
+  field_simp
+  ring
+
+/-- **Dominant-class term asymptotic at order `n + 1`.**  If
+`c : OrderedFinpartition (n+1)` has exactly one big part `j₀` (of size
+`s := c.partSize j₀ ≥ 2`; all other parts singletons), then
+
+    `term c ~ (−1)^{s+1}·n!·(2π)^n · u⁻¹·((log u)⁻¹)^{n+1}`.
+
+Combines `gram ~ 2πu/log u` (power `n − ℓ = s − 2`), `g' ~ 2π/log u`
+(power `ℓ − 1 = n+1−s`), and Theorem 3 for `g^{(s)}`. -/
+private lemma term_succ_dominant_isEquivalent (n : ℕ)
+    (c : OrderedFinpartition (n + 1)) (j₀ : Fin c.length)
+    (hj₀ : 2 ≤ c.partSize j₀) (huniq : ∀ j, j ≠ j₀ → c.partSize j = 1) :
+    IsEquivalent atTop
+      (fun u : ℝ => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u)
+      (fun u : ℝ => ((-1 : ℝ) ^ (c.partSize j₀ + 1) * (n.factorial : ℝ)
+          * (2 * Real.pi) ^ n) * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1))) := by
+  classical
+  have hpos : 0 < c.length := c.length_pos (Nat.succ_pos n)
+  -- `ℓ + s = n + 2` from the part sizes summing to `n + 1`.
+  have hℓs : c.length + c.partSize j₀ = n + 2 := by
+    have hsum := orderedFinpartition_sum_partSize (n + 1) c
+    have hsplit : ∑ j, c.partSize j
+        = (∑ j ∈ Finset.univ.erase j₀, c.partSize j) + c.partSize j₀ :=
+      (Finset.sum_erase_add _ _ (Finset.mem_univ j₀)).symm
+    have hones : ∑ j ∈ Finset.univ.erase j₀, c.partSize j
+        = (Finset.univ.erase j₀).card := by
+      rw [Finset.sum_congr rfl (fun j hj => huniq j (Finset.ne_of_mem_erase hj)),
+        Finset.sum_const, smul_eq_mul, mul_one]
+    have hcard : (Finset.univ.erase j₀).card = c.length - 1 := by
+      rw [Finset.card_erase_of_mem (Finset.mem_univ j₀), Finset.card_univ,
+        Fintype.card_fin]
+    omega
+  -- Factorial bookkeeping: `(s−2)! · n.descFactorial ℓ = n!`.
+  have hfactN : (c.partSize j₀ - 2).factorial * n.descFactorial c.length
+      = n.factorial := by
+    have hk : c.length ≤ n := by omega
+    have hs2 : c.partSize j₀ - 2 = n - c.length := by omega
+    rw [hs2, Nat.factorial_mul_descFactorial hk]
+  have hcastR : ((c.partSize j₀ - 2).factorial : ℝ) * (n.descFactorial c.length : ℝ)
+      = (n.factorial : ℝ) := by exact_mod_cast hfactN
+  -- The product over parts collapses to `(g')^(ℓ−1) · g^{(s)}`.
+  have hterm_eq :
+      (fun u : ℝ => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u)
+        = fun u : ℝ => (n.descFactorial c.length : ℝ) * ((gram u) ^ (n - c.length)
+            * ((iteratedDeriv 1 gram u) ^ (c.length - 1)
+                * iteratedDeriv (c.partSize j₀) gram u)) := by
+    funext u
+    have hprod : ∏ j, iteratedDeriv (c.partSize j) gram u
+        = (iteratedDeriv 1 gram u) ^ (c.length - 1)
+            * iteratedDeriv (c.partSize j₀) gram u := by
+      rw [← Finset.prod_erase_mul Finset.univ _ (Finset.mem_univ j₀)]
+      congr 1
+      rw [Finset.prod_congr rfl
+          (fun j hj => by rw [huniq j (Finset.ne_of_mem_erase hj)]),
+        Finset.prod_const, Finset.card_erase_of_mem (Finset.mem_univ j₀),
+        Finset.card_univ, Fintype.card_fin]
+    rw [hprod]; ring
+  -- Asymptotic equivalents for the three factors, then trans to closed form.
+  have hA := gram_isEquivalent.pow (n - c.length)
+  have hB := iteratedDeriv_one_gram_isEquivalent.pow (c.length - 1)
+  have hC := iteratedDeriv_n_gram_isEquivalent (c.partSize j₀) hj₀
+  have hD : IsEquivalent atTop (fun _ : ℝ => (n.descFactorial c.length : ℝ))
+      (fun _ : ℝ => (n.descFactorial c.length : ℝ)) := IsEquivalent.refl
+  have h := hD.mul (hA.mul (hB.mul hC))
+  have hLeftEq : ((fun _ : ℝ => (n.descFactorial c.length : ℝ))
+      * (gram ^ (n - c.length)
+          * ((fun u : ℝ => iteratedDeriv 1 gram u) ^ (c.length - 1)
+              * iteratedDeriv (c.partSize j₀) gram)) : ℝ → ℝ)
+      = fun u : ℝ => (n.descFactorial c.length : ℝ) * ((gram u) ^ (n - c.length)
+          * ((iteratedDeriv 1 gram u) ^ (c.length - 1)
+              * iteratedDeriv (c.partSize j₀) gram u)) := by
+    funext u; simp [Pi.mul_apply, Pi.pow_apply]
+  have hRightEq : ((fun _ : ℝ => (n.descFactorial c.length : ℝ))
+      * ((fun u : ℝ => 2 * Real.pi * u / Real.log u) ^ (n - c.length)
+          * ((fun u : ℝ => 2 * Real.pi / Real.log u) ^ (c.length - 1)
+              * fun u : ℝ => (-1 : ℝ) ^ (c.partSize j₀ + 1) * (2 * Real.pi)
+                  * (((c.partSize j₀ : ℕ) - 2).factorial : ℝ)
+                  / (u ^ (c.partSize j₀ - 1) * Real.log u ^ 2))) : ℝ → ℝ)
+      = fun u : ℝ => (n.descFactorial c.length : ℝ)
+          * ((2 * Real.pi * u / Real.log u) ^ (n - c.length)
+              * ((2 * Real.pi / Real.log u) ^ (c.length - 1)
+                  * ((-1 : ℝ) ^ (c.partSize j₀ + 1) * (2 * Real.pi)
+                      * (((c.partSize j₀ : ℕ) - 2).factorial : ℝ)
+                      / (u ^ (c.partSize j₀ - 1) * Real.log u ^ 2)))) := by
+    funext u; simp [Pi.mul_apply, Pi.pow_apply]
+  rw [hLeftEq, hRightEq] at h
+  rw [hterm_eq]
+  refine h.trans_eventuallyEq ?_
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu1
+  have hs1 : c.partSize j₀ - 1 = (n - c.length) + 1 := by omega
+  rw [hs1,
+    dominant_shape_aux (n - c.length) (c.length - 1) _ _ hu1,
+    show (n - c.length) + (c.length - 1) = n - 1 from by omega,
+    show (n - 1) + 2 = n + 1 from by omega,
+    show (2 * Real.pi) ^ n = (2 * Real.pi) ^ (n - 1) * (2 * Real.pi) from by
+      rw [← pow_succ]; congr 1; omega,
+    ← hcastR]
+  ring
+
+/-- Difference form of `term_succ_dominant_isEquivalent`, ready for summation
+over the dominant class:
+`term c − ε_c·model =o[atTop] model` with
+`ε_c = (−1)^{s+1}·n!·(2π)^n` and `model = u⁻¹·((log u)⁻¹)^{n+1}`. -/
+private lemma term_succ_dominant_sub_isLittleO (n : ℕ)
+    (c : OrderedFinpartition (n + 1)) (j₀ : Fin c.length)
+    (hj₀ : 2 ≤ c.partSize j₀) (huniq : ∀ j, j ≠ j₀ → c.partSize j = 1) :
+    (fun u : ℝ => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u
+        - ((-1 : ℝ) ^ (c.partSize j₀ + 1) * (n.factorial : ℝ)
+            * (2 * Real.pi) ^ n) * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)))
+      =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+  have h := (term_succ_dominant_isEquivalent n c j₀ hj₀ huniq).isLittleO
+  have hε : ((-1 : ℝ) ^ (c.partSize j₀ + 1) * (n.factorial : ℝ)
+      * (2 * Real.pi) ^ n) ≠ 0 := by
+    have h1 : ((-1 : ℝ) ^ (c.partSize j₀ + 1)) ≠ 0 :=
+      pow_ne_zero _ (by norm_num)
+    have h2 : (n.factorial : ℝ) ≠ 0 := by exact_mod_cast n.factorial_pos.ne'
+    have h3 : ((2 : ℝ) * Real.pi) ^ n ≠ 0 := pow_ne_zero _ (by positivity)
+    exact mul_ne_zero (mul_ne_zero h1 h2) h3
+  rw [Asymptotics.isLittleO_const_mul_right_iff hε] at h
+  exact h
+
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
 /-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
