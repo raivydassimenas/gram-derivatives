@@ -693,6 +693,76 @@ lemma iteratedDeriv_n_gramPow_n_isEquivalent (n : ℕ) (hn : 1 ≤ n) :
       rw [hsplit]; exact hrem.add_isEquivalent hatom
     exact (faadi_bruno_gramPow_eventually n).trans_isEquivalent hres
 
+/-! ### §3d  Sign of the `(n+1)`-th derivative of `gramPow n`
+
+Machinery for discharging the §4 sign axiom
+`iteratedDeriv_succ_n_gramPow_n_eventually_nonpos`.  Target equivalence:
+
+    `iteratedDeriv (n+1) (gramPow n) u ~ −n·n!·(2π)^n / (u·(log u)^(n+1))`.
+
+Note (correcting the sketch in the §4 axiom docstring): in the order-`(n+1)`
+Faà di Bruno expansion of `(gram^n)^{(n+1)}`, *every* partition with exactly
+one part of size `s ≥ 2` (and singletons elsewhere) contributes at the same
+order `u⁻¹·(log u)^{−(n+1)}`, with alternating sign `(−1)^{s+1}`; the
+`u`-exponent is `−1` for every non-vanishing partition.  The aggregate
+constant is `n!·(2π)^n · ∑_{s=2}^{n+1} (−1)^{s+1}·C(n+1,s) = −n·n!·(2π)^n`,
+negative as required.  Partitions with `≥ 2` big parts decay one log faster
+and are negligible; partitions with `> n` parts vanish because the outer
+function is the degree-`n` monomial (`descFactorial = 0`). -/
+
+/-! #### §3d.0  Sign-transfer helper and smoke tests (`n = 1`, `n = 2`) -/
+
+/-- If `f ~ g` along `atTop` and `g` is eventually negative, then `f` is
+eventually non-positive.  Sign-transfer helper: reduces the §4 sign axiom to
+the §3d leading-term equivalence. -/
+private lemma eventually_nonpos_of_isEquivalent {f g : ℝ → ℝ}
+    (h : IsEquivalent atTop f g) (hg : ∀ᶠ u : ℝ in atTop, g u < 0) :
+    ∀ᶠ u : ℝ in atTop, f u ≤ 0 := by
+  have hBound := h.isLittleO.def (c := (1 / 2 : ℝ)) (by norm_num)
+  filter_upwards [hBound, hg] with u hu hgu
+  rw [Pi.sub_apply, Real.norm_eq_abs, Real.norm_eq_abs, abs_of_neg hgu] at hu
+  have := abs_sub_le_iff.mp hu
+  linarith [this.1, this.2]
+
+/-- **Sign smoke test, `n = 1`**: `iteratedDeriv 2 (gramPow 1) ~ −2π/(u·log²u)`.
+Direct from `iteratedDeriv_two_gram_isEquivalent` since `gramPow 1 = gram`. -/
+lemma iteratedDeriv_two_gramPow_one_isEquivalent :
+    IsEquivalent atTop
+      (fun u : ℝ => iteratedDeriv 2 (gramPow 1) u)
+      (fun u : ℝ => -(2 * Real.pi) / (u * Real.log u ^ 2)) := by
+  have h : (fun u : ℝ => iteratedDeriv 2 (gramPow 1) u)
+      = fun u : ℝ => iteratedDeriv 2 gram u := by
+    rw [gramPow_one_eq_gram]
+  rw [h]
+  exact iteratedDeriv_two_gram_isEquivalent
+
+/-- The model function `−n·n!·(2π)^n / (u·(log u)^(n+1))` is eventually
+negative. -/
+private lemma signModel_eventually_neg (n : ℕ) (hn : 1 ≤ n) :
+    ∀ᶠ u : ℝ in atTop,
+      -(n * (n.factorial : ℝ) * (2 * Real.pi) ^ n)
+        / (u * Real.log u ^ (n + 1)) < 0 := by
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu
+  have hlog : 0 < Real.log u := Real.log_pos hu
+  have hden : 0 < u * Real.log u ^ (n + 1) := by positivity
+  have hnum : 0 < (n : ℝ) * (n.factorial : ℝ) * (2 * Real.pi) ^ n := by
+    have hn0 : 0 < (n : ℝ) := by exact_mod_cast hn
+    have hfac : 0 < (n.factorial : ℝ) := by exact_mod_cast n.factorial_pos
+    positivity
+  exact div_neg_of_neg_of_pos (neg_lt_zero.mpr hnum) hden
+
+/-- **`n = 1` instance of the §4 sign axiom**, derived without it: eventually
+`iteratedDeriv 2 (gramPow 1) u ≤ 0`. -/
+lemma iteratedDeriv_two_gramPow_one_eventually_nonpos :
+    ∀ᶠ u : ℝ in atTop, iteratedDeriv 2 (gramPow 1) u ≤ 0 := by
+  refine eventually_nonpos_of_isEquivalent
+    iteratedDeriv_two_gramPow_one_isEquivalent ?_
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu
+  have hlog : 0 < Real.log u := Real.log_pos hu
+  have hden : 0 < u * Real.log u ^ 2 := by positivity
+  have h2pi : (0 : ℝ) < 2 * Real.pi := by positivity
+  exact div_neg_of_neg_of_pos (neg_lt_zero.mpr h2pi) hden
+
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
 /-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
