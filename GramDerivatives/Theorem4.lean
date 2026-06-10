@@ -763,6 +763,163 @@ lemma iteratedDeriv_two_gramPow_one_eventually_nonpos :
   have h2pi : (0 : ℝ) < 2 * Real.pi := by positivity
   exact div_neg_of_neg_of_pos (neg_lt_zero.mpr h2pi) hden
 
+/-! #### §3d.1  Smoke test `n = 2`: order-3 binary Leibniz
+
+For `n = 2` the order-3 expansion has **two** same-order contributions:
+`6·g'·g'' ~ −24π²/(u·log³u)` and `2·g·g''' ~ +8π²/(u·log³u)`.  Neither is
+negligible against the other — only their *sum* `−16π²/(u·log³u)` (matching
+the §3d model `−n·n!·(2π)^n` at `n = 2`) determines the sign.  This
+validates the alternating-sum phenomenon described in the §3d header before
+the general machinery is built. -/
+
+/-- **Binary Leibniz at order 3**: at any `u > gramThreshold`,
+`(gramPow 2)'''(u) = 2·g·g''' + 6·g'·g''`. -/
+private lemma iteratedDeriv_three_gramPow_two_eq (u : ℝ) (hu : gramThreshold < u) :
+    iteratedDeriv 3 (gramPow 2) u
+      = 2 * (gram u * iteratedDeriv 3 gram u)
+        + 6 * (iteratedDeriv 1 gram u * iteratedDeriv 2 gram u) := by
+  have hContDiff : ContDiffAt ℝ 3 gram u := contDiffAt_gram 3 hu
+  rw [gramPow_two_eq_mul]
+  rw [iteratedDeriv_fun_mul hContDiff hContDiff]
+  rw [Finset.sum_range_succ, Finset.sum_range_succ, Finset.sum_range_succ,
+      Finset.sum_range_succ, Finset.sum_range_zero]
+  simp [iteratedDeriv_zero, Nat.choose]
+  ring
+
+/-- Eventually-true filter form of `iteratedDeriv_three_gramPow_two_eq`. -/
+private lemma iteratedDeriv_three_gramPow_two_eventually_eq :
+    (fun u : ℝ => iteratedDeriv 3 (gramPow 2) u)
+      =ᶠ[atTop]
+      (fun u : ℝ =>
+        2 * (gram u * iteratedDeriv 3 gram u)
+          + 6 * (iteratedDeriv 1 gram u * iteratedDeriv 2 gram u)) := by
+  filter_upwards [eventually_gt_atTop gramThreshold] with u hu
+  exact iteratedDeriv_three_gramPow_two_eq u hu
+
+/-- If `f ~ a·m` and `g ~ b·m` along `atTop` with `a`, `b`, `a + b` all
+nonzero, then `f + g ~ (a+b)·m`.  Used to sum same-order Faà di Bruno
+contributions whose constants partially (but not fully) cancel. -/
+private lemma isEquivalent_add_same_scale {f g m : ℝ → ℝ} {a b : ℝ}
+    (hf : IsEquivalent atTop f (fun u => a * m u))
+    (hg : IsEquivalent atTop g (fun u => b * m u))
+    (ha : a ≠ 0) (hb : b ≠ 0) (hab : a + b ≠ 0) :
+    IsEquivalent atTop (fun u => f u + g u) (fun u => (a + b) * m u) := by
+  have hf' : (f - fun u => a * m u) =o[atTop] m := by
+    have h := hf.isLittleO
+    rwa [Asymptotics.isLittleO_const_mul_right_iff ha] at h
+  have hg' : (g - fun u => b * m u) =o[atTop] m := by
+    have h := hg.isLittleO
+    rwa [Asymptotics.isLittleO_const_mul_right_iff hb] at h
+  have hsum := hf'.add hg'
+  have heq : (fun x : ℝ => (f - fun u => a * m u) x + (g - fun u => b * m u) x)
+      = ((fun u : ℝ => f u + g u) - fun u : ℝ => (a + b) * m u) := by
+    funext u
+    simp only [Pi.sub_apply]
+    ring
+  rw [heq] at hsum
+  exact (Asymptotics.isLittleO_const_mul_right_iff hab).mpr hsum
+
+/-- `6·g'·g'' ~ −24π² / (u·log³u)`: the size-`2` big-part class at `n = 2`. -/
+private lemma three_gramPow_two_sixTerm_isEquivalent :
+    IsEquivalent atTop
+      (fun u : ℝ => 6 * (iteratedDeriv 1 gram u * iteratedDeriv 2 gram u))
+      (fun u : ℝ => -(24 * Real.pi ^ 2) * (u * Real.log u ^ 3)⁻¹) := by
+  have hMul := iteratedDeriv_one_gram_isEquivalent.mul iteratedDeriv_two_gram_isEquivalent
+  have hConst : IsEquivalent atTop (fun _ : ℝ => (6 : ℝ)) (fun _ : ℝ => (6 : ℝ)) :=
+    IsEquivalent.refl
+  have h := hConst.mul hMul
+  have hLeftEq :
+      ((fun _ : ℝ => (6 : ℝ))
+          * ((fun u : ℝ => iteratedDeriv 1 gram u) * iteratedDeriv 2 gram) : ℝ → ℝ)
+        = fun u : ℝ => 6 * (iteratedDeriv 1 gram u * iteratedDeriv 2 gram u) := by
+    funext u; simp [Pi.mul_apply]
+  have hRightEq :
+      ((fun _ : ℝ => (6 : ℝ))
+          * ((fun u : ℝ => 2 * Real.pi / Real.log u)
+              * fun u : ℝ => -(2 * Real.pi) / (u * Real.log u ^ 2)) : ℝ → ℝ)
+        = fun u : ℝ => 6 * ((2 * Real.pi / Real.log u)
+            * (-(2 * Real.pi) / (u * Real.log u ^ 2))) := by
+    funext u; simp [Pi.mul_apply]
+  rw [hLeftEq, hRightEq] at h
+  refine h.trans_eventuallyEq ?_
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu1
+  have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
+  have hune : (u : ℝ) ≠ 0 := by linarith
+  have hlne : Real.log u ≠ 0 := hlog.ne'
+  field_simp
+  ring
+
+/-- `2·g·g''' ~ +8π² / (u·log³u)`: the size-`3` big-part class at `n = 2`.
+Same order as the size-`2` class, opposite sign. -/
+private lemma three_gramPow_two_twoTerm_isEquivalent :
+    IsEquivalent atTop
+      (fun u : ℝ => 2 * (gram u * iteratedDeriv 3 gram u))
+      (fun u : ℝ => (8 * Real.pi ^ 2) * (u * Real.log u ^ 3)⁻¹) := by
+  have h3 := iteratedDeriv_n_gram_isEquivalent 3 (by norm_num)
+  have hMul := gram_isEquivalent.mul h3
+  have hConst : IsEquivalent atTop (fun _ : ℝ => (2 : ℝ)) (fun _ : ℝ => (2 : ℝ)) :=
+    IsEquivalent.refl
+  have h := hConst.mul hMul
+  have hLeftEq :
+      ((fun _ : ℝ => (2 : ℝ)) * (gram * iteratedDeriv 3 gram) : ℝ → ℝ)
+        = fun u : ℝ => 2 * (gram u * iteratedDeriv 3 gram u) := by
+    funext u; simp [Pi.mul_apply]
+  have hRightEq :
+      ((fun _ : ℝ => (2 : ℝ))
+          * ((fun u : ℝ => 2 * Real.pi * u / Real.log u)
+              * fun u : ℝ => (-1 : ℝ) ^ (3 + 1) * (2 * Real.pi)
+                  * (((3 : ℕ) - 2).factorial : ℝ)
+                  / (u ^ (3 - 1) * Real.log u ^ 2)) : ℝ → ℝ)
+        = fun u : ℝ => 2 * ((2 * Real.pi * u / Real.log u)
+            * ((-1 : ℝ) ^ (3 + 1) * (2 * Real.pi) * (((3 : ℕ) - 2).factorial : ℝ)
+                / (u ^ (3 - 1) * Real.log u ^ 2))) := by
+    funext u; simp [Pi.mul_apply]
+  rw [hLeftEq, hRightEq] at h
+  refine h.trans_eventuallyEq ?_
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu1
+  have hlog : (0 : ℝ) < Real.log u := Real.log_pos hu1
+  have hune : (u : ℝ) ≠ 0 := by linarith
+  have hlne : Real.log u ≠ 0 := hlog.ne'
+  norm_num [Nat.factorial]
+  field_simp
+  ring
+
+/-- **Smoke test, `n = 2`** (order-3 sign):
+`iteratedDeriv 3 (gramPow 2) ~ −16π²/(u·log³u)`.  The constant matches the
+§3d model: `−n·n!·(2π)^n = −2·2!·(2π)² = −16π²`. -/
+lemma iteratedDeriv_three_gramPow_two_isEquivalent :
+    IsEquivalent atTop
+      (fun u : ℝ => iteratedDeriv 3 (gramPow 2) u)
+      (fun u : ℝ => -(16 * Real.pi ^ 2) * (u * Real.log u ^ 3)⁻¹) := by
+  have hpi : (0 : ℝ) < Real.pi := Real.pi_pos
+  have hsum := isEquivalent_add_same_scale
+    three_gramPow_two_twoTerm_isEquivalent
+    three_gramPow_two_sixTerm_isEquivalent
+    (by positivity)
+    (by simp only [neg_ne_zero]; positivity)
+    (by nlinarith)
+  have hconst :
+      (fun u : ℝ => (8 * Real.pi ^ 2 + -(24 * Real.pi ^ 2)) * (u * Real.log u ^ 3)⁻¹)
+        = fun u : ℝ => -(16 * Real.pi ^ 2) * (u * Real.log u ^ 3)⁻¹ := by
+    funext u; ring
+  rw [hconst] at hsum
+  exact iteratedDeriv_three_gramPow_two_eventually_eq.trans_isEquivalent hsum
+
+/-- **`n = 2` instance of the §4 sign axiom**, derived without it: eventually
+`iteratedDeriv 3 (gramPow 2) u ≤ 0`. -/
+lemma iteratedDeriv_three_gramPow_two_eventually_nonpos :
+    ∀ᶠ u : ℝ in atTop, iteratedDeriv 3 (gramPow 2) u ≤ 0 := by
+  refine eventually_nonpos_of_isEquivalent
+    iteratedDeriv_three_gramPow_two_isEquivalent ?_
+  filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu
+  have hlog : 0 < Real.log u := Real.log_pos hu
+  have hu0 : (0 : ℝ) < u := by linarith
+  have hposInv : 0 < (u * Real.log u ^ 3)⁻¹ := by positivity
+  have hneg : -(16 * Real.pi ^ 2) < 0 := by
+    have : (0 : ℝ) < 16 * Real.pi ^ 2 := by positivity
+    linarith
+  exact mul_neg_of_neg_of_pos hneg hposInv
+
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
 /-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
