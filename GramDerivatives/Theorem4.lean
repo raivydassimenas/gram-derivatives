@@ -951,6 +951,150 @@ lemma iteratedDeriv_three_gramPow_two_eventually_nonpos :
     linarith
   exact mul_neg_of_neg_of_pos hneg hposInv
 
+/-! #### §3d.2  Subdominant classes at order `n + 1`
+
+In the order-`(n+1)` expansion of `gramPow n`, partitions with more than `n`
+parts vanish (the outer monomial has degree `n`), and partitions with at
+least two parts of size `≥ 2` decay one full log below the dominant
+single-big-part class. -/
+
+/-- A Faà di Bruno term whose partition has more parts than the power `n`
+vanishes identically: the outer monomial `(·)^n` has zero `c.length`-th
+derivative, i.e. `n.descFactorial c.length = 0`. -/
+private lemma term_eq_zero_of_length_gt {n m : ℕ} (c : OrderedFinpartition m)
+    (hc : n < c.length) (u : ℝ) :
+    (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+      * ∏ j, iteratedDeriv (c.partSize j) gram u = 0 := by
+  rw [Nat.descFactorial_eq_zero_iff_lt.mpr hc]
+  simp
+
+/-- **Two-big-part terms are negligible at order `n + 1`.**  If
+`c : OrderedFinpartition (n+1)` has `c.length ≤ n` and at least two parts of
+size `≥ 2`, its Faà di Bruno term is `o(u⁻¹·((log u)⁻¹)^(n+1))`.
+
+Bookkeeping: the `u`-powers cancel exactly as in §3c.2 (every surviving term
+is `Θ(u⁻¹·…)`), and each big part contributes `(log u)⁻²` by the sharp bound,
+for a total of `(log u)^{-(n+B.card)}` — at least one log below the dominant
+`(log u)^{-(n+1)}`. -/
+private lemma term_succ_isLittleO_of_two_big (n : ℕ)
+    (c : OrderedFinpartition (n + 1)) (hlen : c.length ≤ n)
+    (hb : 2 ≤ (Finset.univ.filter fun j => 2 ≤ c.partSize j).card) :
+    (fun u : ℝ => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+        * ∏ j, iteratedDeriv (c.partSize j) gram u)
+      =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+  classical
+  set B : Finset (Fin c.length) :=
+    Finset.univ.filter (fun j => 2 ≤ c.partSize j) with hB
+  -- Exponent bookkeeping: `∑ (sⱼ − 1) = (n+1) − ℓ` and `∑ eⱼ = ℓ + B.card`.
+  have hsumsub : ∑ j, (c.partSize j - 1) = (n + 1) - c.length := by
+    have hsum := orderedFinpartition_sum_partSize (n + 1) c
+    have e1 : ∑ i, ((c.partSize i - 1) + 1) = ∑ i, c.partSize i :=
+      Finset.sum_congr rfl (fun i _ => Nat.sub_add_cancel (c.partSize_pos i))
+    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+      smul_eq_mul, mul_one, hsum] at e1
+    omega
+  have hesum : ∑ j, (if 2 ≤ c.partSize j then 2 else 1) = c.length + B.card := by
+    have hsplit : ∀ j : Fin c.length,
+        (if 2 ≤ c.partSize j then 2 else 1)
+          = 1 + (if 2 ≤ c.partSize j then 1 else 0) := by
+      intro j; by_cases h : 2 ≤ c.partSize j <;> simp [h]
+    rw [Finset.sum_congr rfl (fun j _ => hsplit j), Finset.sum_add_distrib,
+      Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul, mul_one,
+      hB, Finset.card_filter]
+  -- Per-factor O-bounds: sharp (two logs) for big parts, weak otherwise.
+  have hfac : ∀ j : Fin c.length,
+      (fun u : ℝ => iteratedDeriv (c.partSize j) gram u)
+        =O[atTop] (fun u : ℝ => (u⁻¹) ^ (c.partSize j - 1)
+            * ((Real.log u)⁻¹) ^ (if 2 ≤ c.partSize j then 2 else 1)) := by
+    intro j
+    by_cases h : 2 ≤ c.partSize j
+    · simpa [h] using iteratedDeriv_gram_isBigO_sharp (c.partSize j) h
+    · have h1 : c.partSize j = 1 := by have := c.partSize_pos j; omega
+      simpa [h, h1] using
+        iteratedDeriv_gram_isBigO_weak (c.partSize j) (c.partSize_pos j)
+  have hprodO : (fun u : ℝ => ∏ j, iteratedDeriv (c.partSize j) gram u)
+      =O[atTop] (fun u : ℝ => ∏ j, ((u⁻¹) ^ (c.partSize j - 1)
+          * ((Real.log u)⁻¹) ^ (if 2 ≤ c.partSize j then 2 else 1))) :=
+    IsBigO.finsetProd (fun j _ => hfac j)
+  have hgramO : (fun u : ℝ => (gram u) ^ (n - c.length))
+      =O[atTop] (fun u : ℝ => (2 * Real.pi * u / Real.log u) ^ (n - c.length)) :=
+    (gram_isEquivalent.pow (n - c.length)).isBigO
+  -- The comparison product is `o(model)`: one spare log from `B.card ≥ 2`.
+  have hk1 : (n + 1) - c.length = (n - c.length) + 1 := by omega
+  have hQ_lo :
+      (fun u : ℝ => (2 * Real.pi * u / Real.log u) ^ (n - c.length)
+          * ∏ j, ((u⁻¹) ^ (c.partSize j - 1)
+              * ((Real.log u)⁻¹) ^ (if 2 ≤ c.partSize j then 2 else 1)))
+        =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+    have hQeq :
+        (fun u : ℝ => (2 * Real.pi * u / Real.log u) ^ (n - c.length)
+            * ∏ j, ((u⁻¹) ^ (c.partSize j - 1)
+                * ((Real.log u)⁻¹) ^ (if 2 ≤ c.partSize j then 2 else 1)))
+          =ᶠ[atTop]
+          (fun u : ℝ => (2 * Real.pi) ^ (n - c.length)
+              * (((Real.log u)⁻¹) ^ (B.card - 1)
+                  * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)))) := by
+      filter_upwards [eventually_gt_atTop (1 : ℝ)] with u hu1
+      have hlog : 0 < Real.log u := Real.log_pos hu1
+      have hune : (u : ℝ) ≠ 0 := by linarith
+      have hlne : Real.log u ≠ 0 := hlog.ne'
+      have hbase : (2 * Real.pi * u / Real.log u) * u⁻¹
+          = 2 * Real.pi * (Real.log u)⁻¹ := by field_simp
+      have hstep : (2 * Real.pi * u / Real.log u) ^ (n - c.length)
+            * (u⁻¹) ^ (n - c.length)
+          = (2 * Real.pi) ^ (n - c.length) * ((Real.log u)⁻¹) ^ (n - c.length) := by
+        rw [← mul_pow, hbase, mul_pow]
+      calc (2 * Real.pi * u / Real.log u) ^ (n - c.length)
+              * ∏ j, ((u⁻¹) ^ (c.partSize j - 1)
+                  * ((Real.log u)⁻¹) ^ (if 2 ≤ c.partSize j then 2 else 1))
+          = (2 * Real.pi * u / Real.log u) ^ (n - c.length)
+              * ((u⁻¹) ^ ((n + 1) - c.length)
+                  * ((Real.log u)⁻¹) ^ (c.length + B.card)) := by
+            rw [Finset.prod_mul_distrib, Finset.prod_pow_eq_pow_sum,
+              Finset.prod_pow_eq_pow_sum, hsumsub, hesum]
+        _ = ((2 * Real.pi * u / Real.log u) ^ (n - c.length)
+                * (u⁻¹) ^ (n - c.length))
+              * (u⁻¹ * ((Real.log u)⁻¹) ^ (c.length + B.card)) := by
+            rw [hk1, pow_succ]; ring
+        _ = ((2 * Real.pi) ^ (n - c.length) * ((Real.log u)⁻¹) ^ (n - c.length))
+              * (u⁻¹ * ((Real.log u)⁻¹) ^ (c.length + B.card)) := by rw [hstep]
+        _ = (2 * Real.pi) ^ (n - c.length)
+              * (((Real.log u)⁻¹) ^ (B.card - 1)
+                  * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1))) := by
+            have hexp : (n - c.length) + (c.length + B.card)
+                = (B.card - 1) + (n + 1) := by omega
+            calc ((2 * Real.pi) ^ (n - c.length) * ((Real.log u)⁻¹) ^ (n - c.length))
+                  * (u⁻¹ * ((Real.log u)⁻¹) ^ (c.length + B.card))
+                = (2 * Real.pi) ^ (n - c.length)
+                  * (((Real.log u)⁻¹) ^ ((n - c.length) + (c.length + B.card)) * u⁻¹) := by
+                  rw [pow_add]; ring
+              _ = (2 * Real.pi) ^ (n - c.length)
+                  * (((Real.log u)⁻¹) ^ (B.card - 1)
+                      * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1))) := by
+                  rw [hexp, pow_add]; ring
+    have hsmall : (fun u : ℝ => ((Real.log u)⁻¹) ^ (B.card - 1))
+        =o[atTop] (fun _ : ℝ => (1 : ℝ)) := by
+      have h0 : Tendsto (fun u : ℝ => ((Real.log u)⁻¹) ^ (B.card - 1)) atTop (𝓝 0) := by
+        have h := tendsto_inv_log_atTop_zero.pow (B.card - 1)
+        simpa [zero_pow (by omega : B.card - 1 ≠ 0)] using h
+      exact (Asymptotics.isLittleO_one_iff ℝ).mpr h0
+    have hQo : (fun u : ℝ => ((Real.log u)⁻¹) ^ (B.card - 1)
+          * (u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)))
+        =o[atTop] (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) := by
+      have h := hsmall.mul_isBigO (Asymptotics.isBigO_refl
+        (fun u : ℝ => u⁻¹ * ((Real.log u)⁻¹) ^ (n + 1)) atTop)
+      simpa using h
+    exact hQeq.trans_isLittleO (hQo.const_mul_left _)
+  -- Assemble: term =O comparison =o model.
+  have hgoal_eq :
+      (fun u : ℝ => (n.descFactorial c.length : ℝ) * (gram u) ^ (n - c.length)
+          * ∏ j, iteratedDeriv (c.partSize j) gram u)
+        = (fun u : ℝ => (n.descFactorial c.length : ℝ) * ((gram u) ^ (n - c.length)
+            * ∏ j, iteratedDeriv (c.partSize j) gram u)) := by
+    funext u; ring
+  rw [hgoal_eq]
+  exact ((hgramO.mul hprodO).const_mul_left _).trans_isLittleO hQ_lo
+
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
 /-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
