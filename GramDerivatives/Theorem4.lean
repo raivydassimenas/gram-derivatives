@@ -1244,6 +1244,273 @@ private lemma term_succ_dominant_sub_isLittleO (n : ℕ)
   rw [Asymptotics.isLittleO_const_mul_right_iff hε] at h
   exact h
 
+/-! #### §3d.4  Signed count over the dominant class
+
+The aggregate sign constant requires `∑_{c dominant} (−1)^{s_c+1} = −n`,
+summing over all single-big-part partitions of `n+1`.  Instead of a bijection
+with subsets, we compute the sum by Mathlib's recursion
+`OrderedFinpartition.extendEquiv`: every partition of `n+1` is uniquely
+`c.extendLeft` (new singleton part) or `c.extendMiddle k` (grow part `k`) for
+`c : OrderedFinpartition n`.  Fibre-by-fibre:
+
+  * `c` atomic: the `n` middle extensions each create a fresh size-2 part,
+    contributing `n · (−1)^{2+1} = −n`; `extendLeft` stays atomic.
+  * `c` dominant with big size `s`: `extendLeft` keeps `s`, `extendMiddle` at
+    the big part bumps it to `s+1` — the two contributions cancel; all other
+    extensions create a second big part.
+  * `c` with `≥ 2` big parts: every extension still has `≥ 2` big parts.
+
+Total: `−n`. -/
+
+/-- Number of "big" parts (size `≥ 2`) of an ordered finpartition. -/
+private def bigCard {m : ℕ} (c : OrderedFinpartition m) : ℕ :=
+  (Finset.univ.filter fun j => 2 ≤ c.partSize j).card
+
+/-- `bigCard` as an indicator sum. -/
+private lemma bigCard_eq_sum {m : ℕ} (c : OrderedFinpartition m) :
+    bigCard c = ∑ j, if 2 ≤ c.partSize j then 1 else 0 :=
+  Finset.card_filter _ _
+
+/-- Signed weight `∑_{big parts} (−1)^{size+1}`; on the dominant class this
+is `(−1)^{s+1}` for the unique big size `s`. -/
+private noncomputable def sgnWeight {m : ℕ} (c : OrderedFinpartition m) : ℝ :=
+  ∑ j, if 2 ≤ c.partSize j then (-1 : ℝ) ^ (c.partSize j + 1) else 0
+
+/-- Dominant-class indicator weight: `sgnWeight` on single-big-part
+partitions, `0` elsewhere. -/
+private noncomputable def domWeight {m : ℕ} (c : OrderedFinpartition m) : ℝ :=
+  if bigCard c = 1 then sgnWeight c else 0
+
+private lemma bigCard_atomic (m : ℕ) :
+    bigCard (OrderedFinpartition.atomic m) = 0 := by
+  rw [bigCard_eq_sum]
+  simp
+
+private lemma sgnWeight_atomic (m : ℕ) :
+    sgnWeight (OrderedFinpartition.atomic m) = 0 := by
+  unfold sgnWeight
+  simp
+
+/-- Adding a new singleton part does not change the big parts. -/
+private lemma bigCard_extendLeft {m : ℕ} (c : OrderedFinpartition m) :
+    bigCard c.extendLeft = bigCard c := by
+  rw [bigCard_eq_sum, bigCard_eq_sum]
+  change (∑ j : Fin (c.length + 1),
+      if 2 ≤ c.extendLeft.partSize j then (1 : ℕ) else 0) = _
+  rw [Fin.sum_univ_succ]
+  simp [OrderedFinpartition.extendLeft_partSize]
+
+/-- Adding a new singleton part does not change the signed weight. -/
+private lemma sgnWeight_extendLeft {m : ℕ} (c : OrderedFinpartition m) :
+    sgnWeight c.extendLeft = sgnWeight c := by
+  change (∑ j : Fin (c.length + 1),
+      if 2 ≤ c.extendLeft.partSize j
+      then (-1 : ℝ) ^ (c.extendLeft.partSize j + 1) else 0) = _
+  rw [Fin.sum_univ_succ]
+  simp [OrderedFinpartition.extendLeft_partSize, sgnWeight]
+
+/-- Growing part `k` creates a new big part exactly when `k` was a
+singleton. -/
+private lemma bigCard_extendMiddle {m : ℕ} (c : OrderedFinpartition m)
+    (k : Fin c.length) :
+    bigCard (c.extendMiddle k)
+      = bigCard c + (if 2 ≤ c.partSize k then 0 else 1) := by
+  rw [bigCard_eq_sum, bigCard_eq_sum]
+  change (∑ j : Fin c.length,
+      if 2 ≤ (c.extendMiddle k).partSize j then (1 : ℕ) else 0) = _
+  have hupdate : ∀ j : Fin c.length, (c.extendMiddle k).partSize j
+      = Function.update c.partSize k (c.partSize k + 1) j := fun _ => rfl
+  rw [Finset.sum_congr rfl (fun j _ => by rw [hupdate j]),
+    ← Finset.sum_erase_add _ _ (Finset.mem_univ k),
+    ← Finset.sum_erase_add _ _ (Finset.mem_univ k)]
+  have herase : ∑ j ∈ Finset.univ.erase k,
+      (if 2 ≤ Function.update c.partSize k (c.partSize k + 1) j then (1 : ℕ) else 0)
+      = ∑ j ∈ Finset.univ.erase k, (if 2 ≤ c.partSize j then 1 else 0) :=
+    Finset.sum_congr rfl fun j hj => by
+      rw [Function.update_of_ne (Finset.ne_of_mem_erase hj)]
+  rw [herase, Function.update_self]
+  have h2 : 2 ≤ c.partSize k + 1 := by have := c.partSize_pos k; omega
+  by_cases h : 2 ≤ c.partSize k <;> simp [h, h2]
+
+/-- Effect of growing part `k` on the signed weight: the `k`-term becomes
+`(−1)^{(s_k+1)+1}` (the grown part is always big), replacing the old
+`k`-term. -/
+private lemma sgnWeight_extendMiddle {m : ℕ} (c : OrderedFinpartition m)
+    (k : Fin c.length) :
+    sgnWeight (c.extendMiddle k)
+      = sgnWeight c + (-1 : ℝ) ^ (c.partSize k + 2)
+        - (if 2 ≤ c.partSize k then (-1 : ℝ) ^ (c.partSize k + 1) else 0) := by
+  change (∑ j : Fin c.length,
+      if 2 ≤ (c.extendMiddle k).partSize j
+      then (-1 : ℝ) ^ ((c.extendMiddle k).partSize j + 1) else 0) = _
+  have hupdate : ∀ j : Fin c.length, (c.extendMiddle k).partSize j
+      = Function.update c.partSize k (c.partSize k + 1) j := fun _ => rfl
+  rw [Finset.sum_congr rfl (fun j _ => by rw [hupdate j]), sgnWeight,
+    ← Finset.sum_erase_add _ _ (Finset.mem_univ k),
+    ← Finset.sum_erase_add _ _ (Finset.mem_univ k)]
+  have herase : ∑ j ∈ Finset.univ.erase k,
+      (if 2 ≤ Function.update c.partSize k (c.partSize k + 1) j
+        then (-1 : ℝ) ^ (Function.update c.partSize k (c.partSize k + 1) j + 1) else 0)
+      = ∑ j ∈ Finset.univ.erase k,
+          (if 2 ≤ c.partSize j then (-1 : ℝ) ^ (c.partSize j + 1) else 0) :=
+    Finset.sum_congr rfl fun j hj => by
+      rw [Function.update_of_ne (Finset.ne_of_mem_erase hj)]
+  rw [herase, Function.update_self]
+  have h2 : 2 ≤ c.partSize k + 1 := by have := c.partSize_pos k; omega
+  rw [if_pos h2, show c.partSize k + 1 + 1 = c.partSize k + 2 from rfl]
+  by_cases h : 2 ≤ c.partSize k
+  · simp only [if_pos h]
+    ring
+  · simp [h]
+
+/-- A partition with no big part is atomic. -/
+private lemma eq_atomic_of_bigCard_eq_zero {m : ℕ} (c : OrderedFinpartition m)
+    (h : bigCard c = 0) : c = OrderedFinpartition.atomic m := by
+  have hempty := Finset.card_eq_zero.mp h
+  have hps1 : ∀ j, c.partSize j = 1 := by
+    intro j
+    by_contra hne
+    have h2 : 2 ≤ c.partSize j := by have := c.partSize_pos j; omega
+    have hmem : j ∈ Finset.univ.filter (fun j => 2 ≤ c.partSize j) :=
+      Finset.mem_filter.mpr ⟨Finset.mem_univ j, h2⟩
+    rw [hempty] at hmem
+    exact absurd hmem (by simp)
+  have hlen : c.length = m := by
+    have hsum := orderedFinpartition_sum_partSize m c
+    have hcl : ∑ i, c.partSize i = c.length := by
+      rw [Finset.sum_congr rfl (fun i _ => hps1 i), Finset.sum_const,
+        Finset.card_univ, Fintype.card_fin, smul_eq_mul, mul_one]
+    omega
+  exact orderedFinpartition_eq_atomic_of_length m c hlen
+
+/-- Extract the unique big part from a dominant partition. -/
+private lemma exists_unique_big_of_bigCard_eq_one {m : ℕ}
+    (c : OrderedFinpartition m) (h : bigCard c = 1) :
+    ∃ j₀, 2 ≤ c.partSize j₀ ∧ ∀ j, j ≠ j₀ → c.partSize j = 1 := by
+  obtain ⟨j₀, hj₀⟩ := Finset.card_eq_one.mp h
+  refine ⟨j₀, ?_, ?_⟩
+  · have hmem : j₀ ∈ Finset.univ.filter (fun j => 2 ≤ c.partSize j) := by
+      rw [hj₀]; exact Finset.mem_singleton_self j₀
+    exact (Finset.mem_filter.mp hmem).2
+  · intro j hj
+    have hnot : j ∉ Finset.univ.filter (fun j => 2 ≤ c.partSize j) := by
+      rw [hj₀]; simpa using hj
+    have h2 : ¬ 2 ≤ c.partSize j := fun h2 =>
+      hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ j, h2⟩)
+    have := c.partSize_pos j
+    omega
+
+/-- On a dominant partition the signed weight is the single big term. -/
+private lemma sgnWeight_of_unique_big {m : ℕ} (c : OrderedFinpartition m)
+    (j₀ : Fin c.length) (hj₀ : 2 ≤ c.partSize j₀)
+    (huniq : ∀ j, j ≠ j₀ → c.partSize j = 1) :
+    sgnWeight c = (-1 : ℝ) ^ (c.partSize j₀ + 1) := by
+  unfold sgnWeight
+  rw [Finset.sum_eq_single j₀]
+  · rw [if_pos hj₀]
+  · intro j _ hj
+    rw [huniq j hj]
+    simp
+  · intro h; exact absurd (Finset.mem_univ j₀) h
+
+/-- **Fibre contribution of `extendEquiv`**: only the atomic fibre survives. -/
+private lemma extend_fibre_contribution {m : ℕ} (c : OrderedFinpartition m) :
+    (domWeight c.extendLeft + ∑ k, domWeight (c.extendMiddle k))
+      = if c = OrderedFinpartition.atomic m then -(m : ℝ) else 0 := by
+  rcases Nat.lt_or_ge (bigCard c) 1 with h0 | h1
+  · -- `bigCard c = 0` ⇒ atomic: each middle extension contributes `−1`.
+    have h0' : bigCard c = 0 := by omega
+    have hc := eq_atomic_of_bigCard_eq_zero c h0'
+    subst hc
+    rw [if_pos rfl]
+    have hL : domWeight (OrderedFinpartition.atomic m).extendLeft = 0 := by
+      unfold domWeight
+      rw [bigCard_extendLeft, bigCard_atomic]
+      norm_num
+    have hM : ∀ k : Fin (OrderedFinpartition.atomic m).length,
+        domWeight ((OrderedFinpartition.atomic m).extendMiddle k) = -1 := by
+      intro k
+      unfold domWeight
+      rw [bigCard_extendMiddle, bigCard_atomic, sgnWeight_extendMiddle,
+        sgnWeight_atomic]
+      norm_num
+    rw [hL, Finset.sum_congr rfl (fun k _ => hM k), Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, OrderedFinpartition.atomic_length]
+    simp
+  · rcases Nat.lt_or_ge (bigCard c) 2 with h1' | h2
+    · -- `bigCard c = 1`: `extendLeft` and `extendMiddle j₀` cancel.
+      have h1'' : bigCard c = 1 := by omega
+      obtain ⟨j₀, hj₀, huniq⟩ := exists_unique_big_of_bigCard_eq_one c h1''
+      have hne : c ≠ OrderedFinpartition.atomic m := by
+        intro hc
+        rw [hc, bigCard_atomic] at h1''
+        omega
+      rw [if_neg hne]
+      have hsgn := sgnWeight_of_unique_big c j₀ hj₀ huniq
+      have hL : domWeight c.extendLeft = (-1 : ℝ) ^ (c.partSize j₀ + 1) := by
+        unfold domWeight
+        rw [bigCard_extendLeft, if_pos h1'', sgnWeight_extendLeft, hsgn]
+      have hM : ∀ k, domWeight (c.extendMiddle k)
+          = if k = j₀ then -((-1 : ℝ) ^ (c.partSize j₀ + 1)) else 0 := by
+        intro k
+        rcases eq_or_ne k j₀ with rfl | hk
+        · unfold domWeight
+          rw [bigCard_extendMiddle, h1'', if_pos hj₀, if_pos rfl, if_pos rfl,
+            sgnWeight_extendMiddle, hsgn, if_pos hj₀,
+            show c.partSize k + 2 = (c.partSize k + 1) + 1 from rfl, pow_succ]
+          ring
+        · unfold domWeight
+          have hk1 : c.partSize k = 1 := huniq k hk
+          rw [bigCard_extendMiddle, h1'', hk1, if_neg hk]
+          norm_num
+      rw [hL, Finset.sum_congr rfl (fun k _ => hM k), Finset.sum_ite_eq']
+      simp
+    · -- `bigCard c ≥ 2`: every extension still has `≥ 2` big parts.
+      have hne : c ≠ OrderedFinpartition.atomic m := by
+        intro hc; rw [hc, bigCard_atomic] at h2; omega
+      rw [if_neg hne]
+      have hL : domWeight c.extendLeft = 0 := by
+        unfold domWeight
+        rw [bigCard_extendLeft, if_neg (by omega)]
+      have hM : ∀ k, domWeight (c.extendMiddle k) = 0 := by
+        intro k
+        unfold domWeight
+        rw [bigCard_extendMiddle,
+          if_neg (by by_cases h : 2 ≤ c.partSize k <;> simp [h] <;> omega)]
+      rw [hL, Finset.sum_congr rfl (fun k _ => hM k), Finset.sum_const, smul_zero]
+      simp
+
+/-- **Signed count over the dominant class**: summing `domWeight` over all
+ordered finpartitions of `n + 1` gives `−n`. -/
+private lemma sum_domWeight (n : ℕ) :
+    ∑ C : OrderedFinpartition (n + 1), domWeight C = -(n : ℝ) := by
+  classical
+  calc ∑ C : OrderedFinpartition (n + 1), domWeight C
+      = ∑ p : (c : OrderedFinpartition n) × Option (Fin c.length),
+          domWeight (p.1.extend p.2) :=
+        (Fintype.sum_equiv (OrderedFinpartition.extendEquiv n) _ _ fun _ => rfl).symm
+    _ = ∑ c : OrderedFinpartition n, ∑ o : Option (Fin c.length),
+          domWeight (c.extend o) := Fintype.sum_sigma _
+    _ = ∑ c : OrderedFinpartition n,
+          (if c = OrderedFinpartition.atomic n then -(n : ℝ) else 0) := by
+        refine Finset.sum_congr rfl fun c _ => ?_
+        rw [Fintype.sum_option]
+        simp only [OrderedFinpartition.extend_none, OrderedFinpartition.extend_some]
+        exact extend_fibre_contribution c
+    _ = -(n : ℝ) := by
+        rw [Finset.sum_ite_eq' Finset.univ (OrderedFinpartition.atomic n)
+          (fun _ => -(n : ℝ))]
+        simp
+
+/-- The signed count in the filtered form used by the §3d assembly:
+`∑_{c dominant} sgnWeight c = −n`. -/
+private lemma sum_sgnWeight_dominant (n : ℕ) :
+    ∑ c ∈ Finset.univ.filter
+        (fun c : OrderedFinpartition (n + 1) => bigCard c = 1),
+      sgnWeight c = -(n : ℝ) := by
+  rw [Finset.sum_filter, ← sum_domWeight n]
+  exact Finset.sum_congr rfl fun c _ => rfl
+
 /-! ## §4  Eventual antitone in absolute value (proved, via §4-aux sign axiom) -/
 
 /-- **Sign of the `(n+1)`-th derivative of `(gram)^n`.**
