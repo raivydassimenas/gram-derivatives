@@ -18,17 +18,17 @@ Lean 4 / Mathlib formalization of theorems from the paper *Higher derivatives of
 ## Architecture
 
 ```
-GramDerivatives.lean              # root — currently only imports Basic
+GramDerivatives.lean              # root — re-exports the five proof modules
 GramDerivatives/
-  Basic.lean                      # placeholder
-  GramDerOverview.lean            # high-level statement of all 5 results (spec)
   Theorem1.lean                   # detailed proof of Theorem 1
   Corollary2.lean                 # detailed proof of Corollary 2 (θ^(n) asymptotic)
-  Theorem3.lean                   # planned — t_u^(n) asymptotic (depends on Corollary2)
-  Corollary5.lean                 # Theorem 4 + Corollary 5 (uniform distribution)
+  Theorem3.lean                   # detailed proof of Theorem 3 (t_u^(n) asymptotic; depends on Corollary2)
+  Theorem4.lean                   # detailed proof of Theorem 4 (uniform distribution of {t_k^n})
+  Corollary5.lean                 # Corollary 5 (continuous uniform distribution; depends on Theorem4)
+  UDModOne.lean                   # honest UD/CUD-mod-1 definitions used by Theorem4/Corollary5
 ```
 
-Note: the root `GramDerivatives.lean` does **not** re-export the proof modules — they must be opened or built directly (e.g. `lake build GramDerivatives.Theorem1`).
+Note: the root `GramDerivatives.lean` imports all five proof modules, so a plain `lake build` (default target `GramDerivatives`) compiles the whole project. `Axioms.md` records the full `#print axioms` dependency of every top-level result; regenerate it with `lake build GramDerivatives.AxiomAudit`.
 
 ### Proof strategy
 
