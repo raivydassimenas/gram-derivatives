@@ -121,7 +121,7 @@ Weyl-exponential Cesàro and time averages), not opaque `Prop` wrappers.
 
 ## Reproducing this audit
 
-`GramDerivatives/AxiomAudit.lean` imports the five proof modules and runs
-`#print axioms` on each top-level result. It is a scratch/diagnostic module and
-is intentionally **not** imported by the root `GramDerivatives.lean`; build it
-explicitly when re-auditing.
+`GramDerivatives/AxiomAudit.lean` imports the root `GramDerivatives` (which
+re-exports all five proof modules) and runs `#print axioms` on each top-level
+result. It is a scratch/diagnostic module and is intentionally **not** imported
+by the root library; build it explicitly when re-auditing.

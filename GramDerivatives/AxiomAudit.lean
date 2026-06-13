@@ -1,8 +1,21 @@
-import GramDerivatives.Theorem1
-import GramDerivatives.Corollary2
-import GramDerivatives.Theorem3
-import GramDerivatives.Theorem4
-import GramDerivatives.Corollary5
+import GramDerivatives
+
+/-!
+# Axiom audit
+
+Diagnostic module: runs `#print axioms` on every top-level result so the full
+transitive axiom dependency can be inspected. Importing `GramDerivatives` (the
+root) pulls in all five proof modules.
+
+Run with:
+```bash
+lake build GramDerivatives.AxiomAudit
+```
+
+The output is recorded and discussed in `Axioms.md` at the repo root. This
+module is intentionally not imported by the root library; build it explicitly
+when re-auditing.
+-/
 
 #print axioms theorem1
 #print axioms corollary2
