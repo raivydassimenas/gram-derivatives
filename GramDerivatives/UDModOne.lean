@@ -10,7 +10,7 @@ real sequences and real functions, expressed via Fourier exponentials
 periodicity of the complex exponential.
 
 These replace the opaque `Prop` wrappers previously used in
-`GramDerivatives.Corollary5` and `GramDerivatives.GramDerOverview`. The deep
+`GramDerivatives.Corollary5`. The deep
 analytic theorems consumed downstream (Weyl's equivalence, derivative-decay ⇒
 UD) remain as `-- ASSUMPTION` axioms in the consuming files; only the
 definitions of UD/CUD themselves are made honest here.
