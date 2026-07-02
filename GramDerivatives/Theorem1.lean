@@ -16,17 +16,18 @@
   with
     • φ(t) = −t/(2π)·log(t/(2π)) + t/(2π) − 7/8   (smooth main term),
     • δ(t) = α_part(t) − (t/2)·j(t)               (smooth error term),
-    • N_step                                       (any piecewise-constant
+    • N_step(t) = ⌊t⌋                              (a concrete
+                                                    piecewise-constant
                                                     function).
   Then φ^(n)(t) supplies the leading term and δ^(n)(t) = O(t^(−n−1)).
-  `S` may be any function of this form and `N_step` any locally constant
-  function: the proof uses no Riemann ζ, no Karatsuba–Korolev result, and
-  no facts about zeros of ζ.
+  `S` may be any function of this form: the proof uses only local
+  constancy of `N_step` off its jump set — no Riemann ζ, no
+  Karatsuba–Korolev result, and no facts about zeros of ζ.
 
   ─── File layout ───────────────────────────────────────────────────────
     §0  Notation and asymptotic infrastructure.
     §1  Definitions  (`φ`, `δ`, `α_part`, `ρ`, `j`).
-    §2  Assumptions  (the sole axiom: the piecewise-constant `N_step`).
+    §2  The step function `N_step` (floor) and its regular-point lemmas.
     §3  Smoothness lemmas (derived from §2 + elementary Mathlib calculus).
     §4  Iterated derivatives of `φ`              (main term).
     §5  Iterated derivatives of `α_part`         (algebraic error).
@@ -35,18 +36,16 @@
     §8  Statement and proof of Theorem 1.
 
   ─── What's axiomatised ────────────────────────────────────────────────
-  Four axioms describe `N_step`:
-    • `N_step` itself — an opaque constant for an arbitrary
-      piecewise-constant function on `(0, ∞)`.
-    • `JumpSet` — the (opaque) set of jump points of `N_step`, possibly
-      countably infinite (the motivating instance being the ordinates of
-      ζ-zeros).
-    • `contDiffAt_N_step` — `N_step` is smooth at every point of
-      `(0, ∞) \ JumpSet` (a regular point).
+  Nothing.  This file contains **zero axioms**.  `N_step` is *defined*
+  as the floor function `t ↦ ⌊t⌋` (a concrete piecewise-constant
+  function) and `JumpSet` as its set of discontinuities, the integers.
+  The former axioms about `N_step` are now theorems:
+    • `contDiffAt_N_step` — `N_step` is smooth at every point off
+      `JumpSet` (a regular point), being locally constant there.
     • `N_step_iteratedDeriv_eq_zero` — every positive-order iterated
       derivative of `N_step` vanishes at regular points.
 
-  Theorem 1's conclusion is consequently relativized to the filter
+  Theorem 1's conclusion is relativized to the filter
   `𝓝∞₀ = 𝓝∞ ⊓ principal JumpSetᶜ` — going to `+∞` through regular
   points only.  This is mathematically necessary: at a jump point of
   `N_step`, the function `S = φ − (1/π)·δ + N_step` jumps too, so
@@ -55,9 +54,9 @@
 
   `S` is an ordinary `def` and `S_eq_φ_sub_δ_add_N` holds by `rfl`.  No
   Riemann ζ, Riemann–Siegel θ, or Karatsuba–Korolev input is assumed;
-  the motivating instance `S(t) = (1/π)·arg ζ(1/2 + it)` merely explains
-  where the decomposition comes from.  Every axiom is tagged
-  `-- ASSUMPTION` and carries a docstring.
+  the motivating instance `S(t) = (1/π)·arg ζ(1/2 + it)` — with `N_step`
+  the ζ-zero counting step `N(γ+0)` — merely explains where the
+  decomposition comes from.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
   None.  `Theorem1.lean` builds with zero `sorry`.  `jK_isO` (§6) is
@@ -187,22 +186,25 @@ noncomputable def j (t : ℝ) : ℝ :=
   ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
 
 /-!
-  ## §2  Assumptions
+  ## §2  The step function `N_step`
 
-  Three axioms describe the step function `N_step`:
+  `N_step` and its jump set are concrete definitions (no axioms):
 
-    • Opaque step function:  `N_step`  (any piecewise-constant function
-      on `(0, ∞)`, with a possibly-countable set of jump points — the
-      motivating instance being `N(γ+0)`, the right-continuous Riemann ζ
-      zero-counting function whose jumps occur at the imaginary parts of
-      ζ's nontrivial zeros).
-    • The jump set:  `JumpSet`  (an opaque `Set ℝ` recording where
-      `N_step` is discontinuous).
+    • Step function:  `N_step t = ⌊t⌋`, the floor function — a genuine
+      piecewise-constant function with jumps at the integers.  It stands
+      in for the motivating instance `N(γ+0)`, the right-continuous
+      Riemann ζ zero-counting function whose jumps occur at the imaginary
+      parts of ζ's nontrivial zeros; the proof of Theorem 1 uses only
+      local constancy off the jump set, so any piecewise-constant
+      function would serve.
+    • The jump set:  `JumpSet = Set.range (Int.cast : ℤ → ℝ)`, recording
+      where `N_step` is discontinuous.
     • Regular-point properties:  `contDiffAt_N_step` and
-      `N_step_iteratedDeriv_eq_zero` both require the input to lie *off*
-      `JumpSet`.  This faithfully models the motivating instance, where
-      `N(γ+0)` is locally constant — and so smooth, with vanishing
-      positive-order derivatives — exactly at non-jump points.
+      `N_step_iteratedDeriv_eq_zero` (formerly axioms, now theorems)
+      require the input to lie *off* `JumpSet`.  This faithfully models
+      the motivating instance, where `N(γ+0)` is locally constant — and
+      so smooth, with vanishing positive-order derivatives — exactly at
+      non-jump points.
 
   `S` is *defined* by the decomposition `S = φ − (1/π)·δ + N_step`, so
   `S_eq_φ_sub_δ_add_N` holds by `rfl` and is no longer an axiom.  Note:
@@ -218,29 +220,54 @@ noncomputable def j (t : ℝ) : ℝ :=
   joint induction `contDiffOn_jK`) plus elementary Mathlib calculus.
 -/
 
-/-- The step function in the decomposition of `S`.  Any piecewise-constant
-    function on `(0, ∞)`, possibly with countably many jumps; opaque
-    otherwise.  The motivating instance is the integer-valued counting
-    step `N(γ+0)` from the Karatsuba–Korolev expansion. -/
-axiom N_step : ℝ → ℝ -- ASSUMPTION
+/-- The step function in the decomposition of `S`: the floor function
+    `N_step t = ⌊t⌋`, a concrete integer-valued piecewise-constant function
+    with jumps exactly at the integers.  Formerly an opaque axiom.  The
+    proof of Theorem 1 uses only that `N_step` is locally constant off its
+    jump set — any piecewise-constant function would serve; the motivating
+    instance is the counting step `N(γ+0)` from the Karatsuba–Korolev
+    expansion, whose jumps occur at the ordinates of ζ's nontrivial
+    zeros. -/
+noncomputable def N_step : ℝ → ℝ := fun t => (⌊t⌋ : ℝ)
 
-/-- ASSUMPTION: the set of jump (discontinuity) points of `N_step` in
-    `(0, ∞)`.  Opaque; for the motivating instance, this is the set of
-    ordinates of the nontrivial Riemann ζ-zeros, a countable subset of
-    `(0, ∞)`.  Outside `JumpSet`, `N_step` is locally constant. -/
-axiom JumpSet : Set ℝ -- ASSUMPTION
+/-- The set of jump (discontinuity) points of `N_step`: the integers,
+    viewed as a subset of `ℝ`.  Formerly an opaque axiom; for the
+    motivating instance this is the set of ordinates of the nontrivial
+    Riemann ζ-zeros, a countable subset of `(0, ∞)`.  Outside `JumpSet`,
+    `N_step` is locally constant. -/
+def JumpSet : Set ℝ := Set.range ((↑) : ℤ → ℝ)
 
-/-- ASSUMPTION: at every *regular* point `s ∈ (0, ∞) \ JumpSet`,
-    `N_step` is smooth (in fact locally constant). -/
-axiom contDiffAt_N_step (n : ℕ) {s : ℝ} (hs : 0 < s) (h_reg : s ∉ JumpSet) :
-    ContDiffAt ℝ n N_step s
+/-- Off `JumpSet`, `N_step` is locally constant: near a non-integer `s`,
+    `N_step` agrees with the constant `⌊s⌋` on the whole open interval
+    `(⌊s⌋, ⌊s⌋ + 1)`, which is a neighbourhood of `s`. -/
+private lemma N_step_eventuallyEq_const {s : ℝ} (h_reg : s ∉ JumpSet) :
+    N_step =ᶠ[nhds s] fun _ => N_step s := by
+  have h_ne : (⌊s⌋ : ℝ) ≠ s := fun h => h_reg ⟨⌊s⌋, h⟩
+  have h_mem : s ∈ Set.Ioo ((⌊s⌋ : ℝ)) ((⌊s⌋ : ℝ) + 1) :=
+    ⟨lt_of_le_of_ne (Int.floor_le s) h_ne, Int.lt_floor_add_one s⟩
+  filter_upwards [isOpen_Ioo.mem_nhds h_mem] with x hx
+  have h_floor : ⌊x⌋ = ⌊s⌋ := Int.floor_eq_iff.mpr ⟨hx.1.le, hx.2⟩
+  unfold N_step
+  exact_mod_cast h_floor
 
-/-- ASSUMPTION: at every regular point `t ∈ (0, ∞) \ JumpSet`, all
-    positive-order iterated derivatives of `N_step` vanish (because
-    `N_step` is locally constant near such a `t`). -/
-axiom N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < t)
+/-- At every *regular* point `s ∉ JumpSet`, `N_step` is smooth (being
+    locally constant there).  Formerly an axiom; now proved from the
+    definition of `N_step`.  The positivity hypothesis is kept for
+    interface stability. -/
+theorem contDiffAt_N_step (n : ℕ) {s : ℝ} (_hs : 0 < s) (h_reg : s ∉ JumpSet) :
+    ContDiffAt ℝ n N_step s :=
+  contDiffAt_const.congr_of_eventuallyEq (N_step_eventuallyEq_const h_reg)
+
+/-- At every regular point `t ∉ JumpSet`, all positive-order iterated
+    derivatives of `N_step` vanish (because `N_step` is locally constant
+    near such a `t`).  Formerly an axiom; now proved from the definition
+    of `N_step`.  The positivity hypothesis is kept for interface
+    stability. -/
+theorem N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (_ht : 0 < t)
     (h_reg : t ∉ JumpSet)
-    : iteratedDeriv n N_step t = 0
+    : iteratedDeriv n N_step t = 0 := by
+  rw [(N_step_eventuallyEq_const h_reg).iteratedDeriv_eq n, iteratedDeriv_const]
+  exact if_neg (by omega)
 
 /-- The relativized "neighbourhood of `+∞`" filter: tend to `+∞` through
     regular points only (i.e., points not in `JumpSet`).  This is the

@@ -11,7 +11,7 @@ Regenerate at any time with the scratch module
 lake build GramDerivatives.AxiomAudit   # prints the axiom list for each theorem
 ```
 
-Last audited: 2026-06-13, against `lean4:v4.30.0-rc2` + matching Mathlib.
+Last audited: 2026-07-02, against `lean4:v4.30.0-rc2` + matching Mathlib.
 
 ## Method
 
@@ -39,7 +39,7 @@ discussion of custom assumptions below.
 
 | Theorem | Location | Custom axioms it depends on |
 |---|---|---|
-| `theorem1` | `Theorem1.lean:3590` | `N_step`, `JumpSet`, `contDiffAt_N_step`, `N_step_iteratedDeriv_eq_zero` |
+| `theorem1` | `Theorem1.lean:3617` | **none** (only the three standard Lean axioms) |
 | `corollary2` | `Corollary2.lean:204` | **none** (only the three standard Lean axioms) |
 | `theorem3` | `Theorem3.lean:3103` | `gram`, `gram_spec`, `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp` |
 | `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | the 5 `gram*` axioms above **+** `isUDModOne_of_iteratedDeriv_decay` |
@@ -47,15 +47,17 @@ discussion of custom assumptions below.
 
 ### Notable findings
 
+- **`theorem1` is axiom-free of custom assumptions.** `N_step` is *defined* as
+  the floor function `t ↦ ⌊t⌋` (a concrete piecewise-constant function) and
+  `JumpSet` as its discontinuity set, the integers. The former axioms
+  `contDiffAt_N_step` and `N_step_iteratedDeriv_eq_zero` are now **theorems**,
+  proved from local constancy of `⌊·⌋` off the integers. `Theorem1.lean`
+  contains zero `axiom` declarations.
 - **`corollary2` is axiom-free of custom assumptions.** The axiom-light path was
   taken: `theta` is *defined* as `δ − π·φ − π` (not axiomatized), so
   `riemann_vonMangoldt` and `contDiffAt_theta` are **theorems**, and the proof
   reduces `θ^(n)` directly to `iteratedDeriv n δ`. It never touches `S`,
-  `N_step`, or `JumpSet`, so none of Theorem 1's axioms propagate into it.
-- **`theorem1` does *not* depend on any smoothness axiom for `S`, `δ`, `φ`, or
-  `j`.** Those (`contDiffAt_S`, `contDiffAt_δ`, `contDiffAt_φ`, `contDiffAt_j`,
-  …) are all proved lemmas now. The only assumptions left are the four about the
-  opaque piecewise-constant `N_step`.
+  `N_step`, or `JumpSet`.
 - **The dependencies are strictly cumulative** down the chain
   Theorem 3 → Theorem 4 → Corollary 5, with each step adding exactly the
   equidistribution axioms it needs.
@@ -64,17 +66,15 @@ discussion of custom assumptions below.
 
 ### `Theorem1.lean` — the abstract decomposition of `S`
 
-`N_step` is treated abstractly as *any* locally-constant function on `(0, ∞)`;
-the proof uses only the four facts below. The motivating instance is the
-Riemann ζ zero-counting step `N(γ+0)`, whose jumps are the ordinates of the
-nontrivial ζ-zeros — but Theorem 1 does **not** depend on that interpretation.
-
-| Axiom | Signature | Meaning |
-|---|---|---|
-| `N_step` | `ℝ → ℝ` | the step function in `S = φ − (1/π)·δ + N_step` |
-| `JumpSet` | `Set ℝ` | the discontinuity points of `N_step` in `(0, ∞)` |
-| `contDiffAt_N_step` | `(n : ℕ) {s} (hs : 0 < s) (h_reg : s ∉ JumpSet) → ContDiffAt ℝ n N_step s` | `N_step` is smooth at every regular point |
-| `N_step_iteratedDeriv_eq_zero` | `(n : ℕ) (hn : 1 ≤ n) (t) (ht : 0 < t) (h_reg : t ∉ JumpSet) → iteratedDeriv n N_step t = 0` | all positive-order derivatives vanish at regular points (local constancy) |
+**No custom axioms.** `N_step` is a `def` (the floor function `t ↦ ⌊t⌋`) and
+`JumpSet` is a `def` (`Set.range (Int.cast : ℤ → ℝ)`, its discontinuity set).
+The regular-point properties `contDiffAt_N_step` and
+`N_step_iteratedDeriv_eq_zero` are theorems derived from local constancy of the
+floor function off the integers. The proof of Theorem 1 uses only those two
+local-constancy facts, so any piecewise-constant function would serve in place
+of `⌊·⌋`; the motivating instance is the Riemann ζ zero-counting step `N(γ+0)`,
+whose jumps are the ordinates of the nontrivial ζ-zeros — but Theorem 1 does
+**not** depend on that interpretation.
 
 `S` is a `def` (`S = φ − (1/π)·δ + N_step`) and `S_eq_φ_sub_δ_add_N` holds by
 `rfl`, so the Karatsuba–Korolev decomposition is *not* an axiom here.
