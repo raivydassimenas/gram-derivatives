@@ -49,6 +49,10 @@
   function on `(0, ∞)` is informal — it is the content of the
   Karatsuba–Korolev representation.
 
+  §5 additionally proves `theta_tendsto_atTop` (θ → +∞ at +∞), the
+  existence input that lets `Theorem3.lean` *define* the Gram function
+  as an inverse of `theta` instead of axiomatising it.
+
   Builds with zero `sorry`.
 -/
 
@@ -240,3 +244,107 @@ theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
     filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
     exact h_clean t ht
   exact h_evEq.trans_isBigO h_bd
+
+/-!
+  ## §5  `θ` tends to `+∞`
+
+  `theta = δ − π·φ − π` grows without bound as `t → +∞`: the main term
+  `−π·φ(t) − π = (t/2)·(log(t/(2π)) − 1) + 7π/8 − π` tends to `+∞`,
+  while the error term `δ = α_part − (t/2)·j` is eventually bounded
+  below (`α_part ≥ 0` elementarily and `(t/2)·j(t) = O(t⁻¹)` from
+  `iteratedDeriv_j_isO` at order `0`).
+
+  This is the existence input that lets `Theorem3.lean` *define* the
+  Gram function as an inverse of `theta` on `[7, ∞)` (via the
+  intermediate value theorem) instead of axiomatising it.
+-/
+
+/-- The Riemann–Siegel theta function tends to `+∞` at `+∞`.  Proved
+    from the concrete definition `theta = δ − π·φ − π`: the `φ`-part
+    contributes `(t/2)·(log(t/(2π)) − 1) → +∞` and `δ` is eventually
+    bounded below by `−1`. -/
+theorem theta_tendsto_atTop : Filter.Tendsto theta 𝓝∞ 𝓝∞ := by
+  -- (1) The integral part: `|t/2 · j t| ≤ 1` eventually, since `j = O(t⁻²)`.
+  have h_j : IsO j (fun t => t ^ (-(0 : ℝ) - 2)) 𝓝∞ := by
+    simpa [iteratedDeriv_zero] using iteratedDeriv_j_isO 0
+  have h_tj : ∀ᶠ t in (𝓝∞ : Filter ℝ), |t / 2 * j t| ≤ 1 := by
+    obtain ⟨C, hC⟩ := h_j.bound
+    filter_upwards [hC, Filter.eventually_ge_atTop (1 : ℝ),
+        Filter.eventually_ge_atTop (max C 1)] with t hCt h1 hmax
+    have ht0 : (0 : ℝ) < t := lt_of_lt_of_le one_pos h1
+    have h_pow : t ^ (-(0 : ℝ) - 2) = (t ^ 2)⁻¹ := by
+      rw [show -(0 : ℝ) - 2 = ((-2 : ℤ) : ℝ) by norm_num, Real.rpow_intCast]
+      rw [zpow_neg, zpow_two]
+      ring
+    have hj_le : |j t| ≤ C * (t ^ 2)⁻¹ := by
+      have h := hCt
+      rw [Real.norm_eq_abs, Real.norm_eq_abs, h_pow,
+          abs_of_pos (by positivity : (0 : ℝ) < (t ^ 2)⁻¹)] at h
+      exact h
+    have hC_le_t : C ≤ t := le_trans (le_max_left _ _) hmax
+    rw [abs_mul, abs_of_pos (by positivity : (0 : ℝ) < t / 2)]
+    have h_step : t / 2 * |j t| ≤ t / 2 * (C * (t ^ 2)⁻¹) :=
+      mul_le_mul_of_nonneg_left hj_le (by positivity)
+    have h_simp : t / 2 * (C * (t ^ 2)⁻¹) = C / (2 * t) := by
+      field_simp
+    rw [h_simp] at h_step
+    have h_frac : C / (2 * t) ≤ 1 / 2 := by
+      rw [div_le_iff₀ (by positivity : (0 : ℝ) < 2 * t)]
+      linarith
+    linarith
+  -- (2) The algebraic part: `α_part t ≥ 0` for `t > 0`.
+  have h_α : ∀ᶠ t in (𝓝∞ : Filter ℝ), 0 ≤ α_part t := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    unfold α_part
+    have h_inv : 0 ≤ 1 / (4 * t ^ 2) := by positivity
+    have h_log : 0 ≤ Real.log (1 + 1 / (4 * t ^ 2)) :=
+      Real.log_nonneg (by linarith)
+    have h_arctan : 0 ≤ Real.arctan (1 / (2 * t)) := by
+      have h := Real.arctan_mono (by positivity : (0 : ℝ) ≤ 1 / (2 * t))
+      simpa [Real.arctan_zero] using h
+    have h1 : 0 ≤ t / 4 * Real.log (1 + 1 / (4 * t ^ 2)) :=
+      mul_nonneg (by positivity) h_log
+    have h2 : 0 ≤ 1 / 4 * Real.arctan (1 / (2 * t)) :=
+      mul_nonneg (by norm_num) h_arctan
+    linarith
+  -- (3) Hence `δ t ≥ −1` eventually.
+  have h_δ : ∀ᶠ t in (𝓝∞ : Filter ℝ), -1 ≤ δ t := by
+    filter_upwards [h_tj, h_α, Filter.eventually_gt_atTop (0 : ℝ)] with t htj hα ht
+    rw [δ_eq t ht]
+    have := le_abs_self (t / 2 * j t)
+    linarith
+  -- (4) Eventual lower bound for `theta` by an explicit minorant.
+  have h_lower : ∀ᶠ t in (𝓝∞ : Filter ℝ),
+      t / 2 * Real.log (t / (2 * Real.pi)) - t / 2
+        + (7 * Real.pi / 8 - Real.pi - 1) ≤ theta t := by
+    filter_upwards [h_δ, Filter.eventually_gt_atTop (0 : ℝ)] with t hδt ht
+    have h_theta_eq : theta t
+        = δ t + t / 2 * Real.log (t / (2 * Real.pi)) - t / 2
+          + 7 * Real.pi / 8 - Real.pi := by
+      have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+      unfold theta φ
+      field_simp
+      ring
+    rw [h_theta_eq]
+    linarith
+  -- (5) The minorant tends to `+∞`.
+  have h_min : Filter.Tendsto
+      (fun t : ℝ => t / 2 * Real.log (t / (2 * Real.pi)) - t / 2
+        + (7 * Real.pi / 8 - Real.pi - 1)) 𝓝∞ 𝓝∞ := by
+    have h_log : Filter.Tendsto (fun t : ℝ => Real.log (t / (2 * Real.pi)) - 1)
+        𝓝∞ 𝓝∞ := by
+      have h_inner : Filter.Tendsto (fun t : ℝ => t / (2 * Real.pi)) 𝓝∞ 𝓝∞ :=
+        Filter.Tendsto.atTop_div_const (by positivity) Filter.tendsto_id
+      exact Filter.tendsto_atTop_add_const_right _ (-1)
+        (Real.tendsto_log_atTop.comp h_inner)
+    have h_half : Filter.Tendsto (fun t : ℝ => t / 2) 𝓝∞ 𝓝∞ :=
+      Filter.Tendsto.atTop_div_const (by norm_num) Filter.tendsto_id
+    have h_prod : Filter.Tendsto
+        (fun t : ℝ => t / 2 * (Real.log (t / (2 * Real.pi)) - 1)) 𝓝∞ 𝓝∞ :=
+      Filter.Tendsto.atTop_mul_atTop₀ h_half h_log
+    have h_shift := Filter.tendsto_atTop_add_const_right 𝓝∞
+      (7 * Real.pi / 8 - Real.pi - 1) h_prod
+    refine h_shift.congr fun t => ?_
+    ring
+  -- (6) Comparison.
+  exact Filter.tendsto_atTop_mono' 𝓝∞ h_lower h_min

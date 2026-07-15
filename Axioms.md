@@ -41,9 +41,9 @@ discussion of custom assumptions below.
 |---|---|---|
 | `theorem1` | `Theorem1.lean:3638` | **none** (only the three standard Lean axioms) |
 | `corollary2` | `Corollary2.lean:205` | **none** (only the three standard Lean axioms) |
-| `theorem3` | `Theorem3.lean:3103` | `gram`, `gram_spec`, `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp` |
-| `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | the 5 `gram*` axioms above **+** `isUDModOne_of_iteratedDeriv_decay` |
-| `Gram.corollary5` | `Corollary5.lean:40` | the 6 axioms above **+** `continuous_ud_criterion`, `IsUDModOne.shift` |
+| `theorem3` | `Theorem3.lean:3169` | `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp` |
+| `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | the 3 `gram*` axioms above **+** `isUDModOne_of_iteratedDeriv_decay` |
+| `Gram.corollary5` | `Corollary5.lean:40` | the 4 axioms above **+** `continuous_ud_criterion`, `IsUDModOne.shift` |
 
 ### Notable findings
 
@@ -61,6 +61,11 @@ discussion of custom assumptions below.
   `riemann_vonMangoldt` and `contDiffAt_theta` are **theorems**, and the proof
   reduces `θ^(n)` directly to `iteratedDeriv n δ`. It never touches `S` or
   any step function.
+- **`gram` and `gram_spec` are no longer axioms.** The Gram function is
+  *defined* (`Function.invFunOn theta (Set.Ici 7)`) and its defining relation
+  `θ(t_u) = (u − 1)π` is a *theorem*, proved by the intermediate value theorem
+  from the new `theta_tendsto_atTop` (`Corollary2.lean` §5). Theorem 3's
+  custom-axiom surface is down from five axioms to three.
 - **The dependencies are strictly cumulative** down the chain
   Theorem 3 → Theorem 4 → Corollary 5, with each step adding exactly the
   equidistribution axioms it needs.
@@ -88,17 +93,29 @@ that interpretation. Discreteness of the jump set enters only through
 
 ### `Theorem3.lean` — the Gram function and its base asymptotics
 
+**`gram` is a `def`, not an axiom.** It is defined as an inverse of `theta`
+on `[7, ∞)` via `Function.invFunOn`: `gram u` is a point `t ∈ [7, ∞)` with
+`theta t = (u − 1)·π`. The defining relation `gram_spec` (eq. (7) of the
+paper) and the range fact `gram_ge_seven` are **theorems**: for
+`u ≥ gramThreshold` such a preimage exists by the intermediate value theorem
+between `theta 7` and `theta_tendsto_atTop` — the latter a new theorem in
+`Corollary2.lean` §5, proved from the concrete `theta = δ − π·φ − π` (the
+`φ`-part tends to `+∞`; `δ` is eventually bounded below via `α_part ≥ 0`
+and `j = O(t⁻²)` from `iteratedDeriv_j_isO` at order 0).
+
 | Axiom | Signature | Provenance |
 |---|---|---|
-| `gram` | `ℝ → ℝ` | the Gram function `t_u`, inverse of `θ` on `[7, ∞)` |
-| `gram_spec` | `(u) (hu : gramThreshold ≤ u) → theta (gram u) = (u − 1)·π` | eq. (7) of the paper (defining relation) |
 | `contDiffAt_gram` | `(n) {u} (hu : gramThreshold < u) → ContDiffAt ℝ n gram u` | `C^∞` on the tail, by the inverse function theorem |
 | `gram_asymp` | `Iso (gram − L − L·ll/l) (L·ll/l) 𝓝∞`, `L = 2πu/log u` | eq. (8), Lavrik [14, Lemma 2] |
 | `gram_deriv_asymp` | `Iso (gram' − A − A·ll/l) (A·ll/l) 𝓝∞`, `A = 2π/log u` | eq. (9), Korolev [10, Lemma 1.1] |
 
-`gram_asymp` and `gram_deriv_asymp` are genuine number-theoretic asymptotics not
-formalizable from the `θ` axioms alone; they are the `n = 0, 1` baselines that
-Theorem 3 generalizes. The remaining consequences (`gram_tendsto_atTop`,
+All three remaining axioms are statements about the *defined* `gram`; they
+are true under the classical (unformalised) fact that `theta` is strictly
+increasing on `[7, ∞)`, which makes `Function.invFunOn theta (Ici 7)` the
+genuine monotone inverse there. `gram_asymp` and `gram_deriv_asymp` are
+genuine number-theoretic asymptotics not formalizable from the repo's
+analytic material alone; they are the `n = 0, 1` baselines that Theorem 3
+generalizes. The remaining consequences (`gram_tendsto_atTop`,
 `gram_isEquivalent_gramL`, …) are **derived** from these, no new axioms.
 
 ### `Theorem4.lean` — the higher-derivative equidistribution criterion

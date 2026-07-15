@@ -17,14 +17,18 @@
 
   ─── Strategy ──────────────────────────────────────────────────────────
   Setup (see CLAUDE.md, "Working on `Theorem3.lean`"):
-    • `gram`            = the Gram function `t_u` (axiomatised).
-    • `gram_spec`       = θ(t_u) = (u − 1)·π                  (eq. (7)).
+    • `gram`            = the Gram function `t_u`, *defined* as an
+                          inverse of `theta` on `[7, ∞)` via
+                          `Function.invFunOn`.
+    • `gram_spec`       = θ(t_u) = (u − 1)·π                  (eq. (7));
+                          a *theorem* (IVT + `theta_tendsto_atTop`).
     • `contDiffAt_gram` = smoothness on (θ(7)/π + π, ∞)
-                          (inverse function theorem applied to θ).
+                          (inverse function theorem applied to θ;
+                          axiomatised).
     • `gram_asymp`,
       `gram_deriv_asymp`
                         = base-case asymptotics (eqs. (8), (9), Lavrik
-                          [14] and Korolev [10]).
+                          [14] and Korolev [10]; axiomatised).
 
   Proof outline (paper §2):
     Induction on k ≥ 2 with inductive hypothesis
@@ -43,7 +47,9 @@
   the atomic-term asymptotic (`theorem3_atomic_term`, §2.4) with the
   cOther contribution bound (`cOther_contribution_isLittleO`, §2.5.4) via
   the Faà di Bruno solved form `iteratedDeriv_n_gram_solved_eventually`
-  (§2.3).  All remaining `-- ASSUMPTION` axioms are listed under §1.
+  (§2.3).  All remaining `-- ASSUMPTION` axioms are listed under §1;
+  `gram` itself and `gram_spec` are no longer axioms (a `def` and a
+  theorem respectively).
 -/
 
 import GramDerivatives.Corollary2
@@ -66,42 +72,99 @@ abbrev Iso (f g : ℝ → ℝ) (l : Filter ℝ) : Prop := Asymptotics.IsLittleO 
 /-!
   ## §1  The Gram function
 
-  We introduce `gram : ℝ → ℝ` as an opaque axiom together with the four
-  classical analytic facts the proof of Theorem 3 needs:
-    • the defining relation `θ(t_u) = (u − 1)π`         (`gram_spec`);
+  `gram : ℝ → ℝ` is a genuine *definition* — an inverse of `theta` on
+  `[7, ∞)`, chosen via `Function.invFunOn` — and its defining relation
+  `θ(t_u) = (u − 1)π` (`gram_spec`) is a *theorem*: for
+  `u ≥ gramThreshold` the value `(u − 1)π` is attained by `theta` on
+  `[7, ∞)`, by the intermediate value theorem between `theta 7` and
+  `theta_tendsto_atTop` (§5 of `Corollary2.lean`).
+
+  Three classical analytic facts remain axioms:
     • smoothness on the open half-line where `θ` is monotonic
                                                          (`contDiffAt_gram`);
     • the Lavrik asymptotic for `t_u` itself             (`gram_asymp`);
     • the Korolev asymptotic for the first derivative    (`gram_deriv_asymp`).
+  All three are statements about the *defined* `gram`; they are true
+  under the classical (unformalised) fact that `θ` is strictly
+  increasing on `[7, ∞)`, which makes `Function.invFunOn theta (Ici 7)`
+  the genuine monotone inverse there.
 -/
 
 /-- The threshold above which `θ` is monotonically increasing on `[7, ∞)`
     gets transported by `θ` to `u ≥ θ(7)/π + π`. -/
 noncomputable def gramThreshold : ℝ := theta 7 / Real.pi + Real.pi
 
-/-- ASSUMPTION: the Gram function `t_u : ℝ → ℝ`, the inverse of the
-    Riemann–Siegel theta function `θ` on the half-line `[7, ∞)` where
-    `θ` is monotonically increasing.  Defined on all of `ℝ` for
-    convenience; only values for `u > gramThreshold` are meaningful. -/
-axiom gram : ℝ → ℝ -- ASSUMPTION
+/-- The Gram function `t_u : ℝ → ℝ`: *defined* as an inverse of the
+    Riemann–Siegel theta function on `[7, ∞)` — `gram u` is a point
+    `t ∈ [7, ∞)` with `θ(t) = (u − 1)·π`, chosen via
+    `Function.invFunOn`.  For `u ≥ gramThreshold` such a point exists
+    (`gram_spec`, via IVT and `theta_tendsto_atTop`); since `θ` is
+    classically strictly increasing on `[7, ∞)`, it is unique, and
+    `gram` is *the* inverse.  Formerly an axiom.  Defined on all of `ℝ`
+    for convenience; only values for `u > gramThreshold` are
+    meaningful. -/
+noncomputable def gram (u : ℝ) : ℝ :=
+  Function.invFunOn theta (Set.Ici 7) ((u - 1) * Real.pi)
 
-/-- ASSUMPTION: the defining relation of the Gram function (equation (7)
-    of the paper):
+/-- For `u ≥ gramThreshold`, `theta` attains `(u − 1)π` on `[7, ∞)`:
+    `theta 7 ≤ (u − 1)π` by the threshold algebra, `(u − 1)π ≤ theta T`
+    for some `T ≥ 7` by `theta_tendsto_atTop`, and the intermediate
+    value theorem (continuity from `contDiffAt_theta`) bridges the
+    two. -/
+private lemma exists_gram_preimage (u : ℝ) (hu : gramThreshold ≤ u) :
+    ∃ t ∈ Set.Ici (7 : ℝ), theta t = (u - 1) * Real.pi := by
+  have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
+  -- (1) Lower endpoint: `theta 7 ≤ (u − 1)π`.
+  have h_lb : theta 7 ≤ (u - 1) * Real.pi := by
+    unfold gramThreshold at hu
+    have h_mul : (theta 7 / Real.pi + Real.pi) * Real.pi ≤ u * Real.pi :=
+      mul_le_mul_of_nonneg_right hu hπ.le
+    have h_expand : (theta 7 / Real.pi + Real.pi) * Real.pi
+        = theta 7 + Real.pi ^ 2 := by
+      field_simp
+    nlinarith [Real.pi_gt_three]
+  -- (2) Upper endpoint: some `T ≥ 7` with `(u − 1)π ≤ theta T`.
+  obtain ⟨T, hTval, hT7⟩ :=
+    ((theta_tendsto_atTop.eventually_ge_atTop ((u - 1) * Real.pi)).and
+      (Filter.eventually_ge_atTop (7 : ℝ))).exists
+  -- (3) `theta` is continuous on `[7, T]` (any point there is positive).
+  have hcont : ContinuousOn theta (Set.Icc 7 T) := fun t ht =>
+    ((contDiffAt_theta 0 (by linarith [ht.1] : (0 : ℝ) < t)).continuousAt).continuousWithinAt
+  -- (4) IVT.
+  obtain ⟨t, htIcc, htEq⟩ :=
+    intermediate_value_Icc hT7 hcont ⟨h_lb, hTval⟩
+  exact ⟨t, htIcc.1, htEq⟩
 
-        θ(t_u) = (u − 1) · π     for  u ≥ θ(7)/π + π. -/
-axiom gram_spec (u : ℝ) (hu : gramThreshold ≤ u) :
-    theta (gram u) = (u - 1) * Real.pi -- ASSUMPTION
+/-- The defining relation of the Gram function (equation (7) of the
+    paper):
+
+        θ(t_u) = (u − 1) · π     for  u ≥ θ(7)/π + π.
+
+    Formerly an axiom; now a theorem, by `Function.invFunOn_eq` applied
+    to `exists_gram_preimage`. -/
+theorem gram_spec (u : ℝ) (hu : gramThreshold ≤ u) :
+    theta (gram u) = (u - 1) * Real.pi :=
+  Function.invFunOn_eq (exists_gram_preimage u hu)
+
+/-- The chosen inverse lands in `[7, ∞)`. -/
+theorem gram_ge_seven (u : ℝ) (hu : gramThreshold ≤ u) : 7 ≤ gram u :=
+  Function.invFunOn_mem (exists_gram_preimage u hu)
 
 /-- ASSUMPTION: `gram` is `C^∞` on the open half-line `(θ(7)/π + π, ∞)`.
     Morally, this follows from the inverse function theorem applied to
-    `theta` (whose derivative does not vanish there). -/
+    `theta` (whose derivative does not vanish there).  A statement about
+    the *defined* `gram` above; true under the classical fact that `θ`
+    is strictly increasing on `[7, ∞)`. -/
 axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : gramThreshold < u) :
     ContDiffAt ℝ n gram u -- ASSUMPTION
 
 /-- ASSUMPTION: Lavrik's asymptotic for the Gram function (equation (8),
     [14, Lemma 2]):
 
-        t_u = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u). -/
+        t_u = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u).
+
+    A statement about the *defined* `gram`; true under the classical
+    fact that `θ` is strictly increasing on `[7, ∞)`. -/
 axiom gram_asymp :
     Iso
       (fun u : ℝ =>
@@ -117,7 +180,10 @@ axiom gram_asymp :
 /-- ASSUMPTION: Korolev's asymptotic for the first derivative of the
     Gram function (equation (9), [10, Lemma 1.1]):
 
-        t_u' = (2π / log u) · (1 + (1 + o(1)) · log log u / log u). -/
+        t_u' = (2π / log u) · (1 + (1 + o(1)) · log log u / log u).
+
+    A statement about the *defined* `gram`; true under the classical
+    fact that `θ` is strictly increasing on `[7, ∞)`. -/
 axiom gram_deriv_asymp :
     Iso
       (fun u : ℝ =>

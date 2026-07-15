@@ -196,18 +196,20 @@ t_u^(k) = (-1)^(k+1) · 2π · (k − 2)! / (u^(k-1) · log² u)
 When importing `GramDerivatives.Corollary2`:
 
 - **`theta`** is the Riemann–Siegel theta function (as fixed in `Corollary2.lean`), monotonically increasing for `t ≥ 7`.
-- **`gram : ℝ → ℝ`** — the Gram function, defined as the inverse of `theta` on `[θ(7), ∞)` (or equivalently the solution of `θ(t_u) = (u − 1)π`). Smoothness on `(θ(7)/π + π, ∞)` follows from the inverse function theorem applied to `theta` (which has nonvanishing derivative there).
+- **`gram : ℝ → ℝ`** — the Gram function, a genuine `def`: an inverse of `theta` on `[7, ∞)` chosen via `Function.invFunOn theta (Set.Ici 7)` (equivalently, a solution of `θ(t_u) = (u − 1)π` lying in `[7, ∞)`). Smoothness on `(θ(7)/π + π, ∞)` is the axiom `contDiffAt_gram`, morally the inverse function theorem applied to `theta` (which has nonvanishing derivative there).
 
 ### Axiom budget for `Theorem3.lean`
 
-Introduce the following new axioms (each tagged `-- ASSUMPTION`):
+**Not axioms** (definition + derived theorems):
 
-- `axiom gram : ℝ → ℝ` — the Gram function `t_u`.
-- `axiom gram_spec (u : ℝ) (hu : θ(7)/π + π ≤ u) : theta (gram u) = (u − 1) * Real.pi` — equation (7) of the paper.
+- `def gram (u : ℝ) : ℝ := Function.invFunOn theta (Set.Ici 7) ((u - 1) * Real.pi)` — the Gram function `t_u`.
+- `theorem gram_spec (u : ℝ) (hu : gramThreshold ≤ u) : theta (gram u) = (u − 1) * Real.pi` — equation (7) of the paper; proved via `Function.invFunOn_eq` from the existence of a preimage in `[7, ∞)`, which follows from the intermediate value theorem between `theta 7` and `theta_tendsto_atTop` (`Corollary2.lean` §5).
+- `theorem gram_ge_seven (u : ℝ) (hu : gramThreshold ≤ u) : 7 ≤ gram u` — the chosen inverse lands in `[7, ∞)`.
+
+Remaining axioms (each tagged `-- ASSUMPTION`); all three are statements about the *defined* `gram`, true under the classical (unformalised) fact that `theta` is strictly increasing on `[7, ∞)`, which makes `invFunOn` the genuine monotone inverse there:
+
 - `axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : θ(7)/π + π < u) : ContDiffAt ℝ n gram u` — smoothness on the open half-line, by the inverse function theorem.
-- `axiom gram_asymp` and `axiom gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'`.
-
-Alternative axiom-light path: define `gram` directly via Mathlib's inverse function constructions applied to `theta`, and prove `gram_spec` and `contDiffAt_gram` from `contDiffAt_theta` + monotonicity. Equations (8) and (9) likely remain as axioms (they are number-theoretic asymptotic results, not formalizable from the `theta` axioms alone).
+- `axiom gram_asymp` and `axiom gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'` (number-theoretic asymptotic results, not formalizable from the repo's analytic material alone).
 
 ### Final statement
 
@@ -254,14 +256,14 @@ is `C^∞` on `(0, ∞)`. Its n-th iterated derivative equals `(−1)^(n−1) ·
 
 **Analytic properties of the step function** — the step-function slot in the decomposition is the bundled structure `StepFunction` in `Theorem1.lean`: any function `ℝ → ℝ` locally constant off a discrete jump set (`jumpSet`); the proof only uses local constancy off `F.jumpSet`. Being locally constant at regular points, its n-th iterated derivative (`n ≥ 1`) vanishes there. Lemma names: `StepFunction.contDiffAt` and `StepFunction.iteratedDeriv_eq_zero` (theorems in `Theorem1.lean`, formerly axioms); `StepFunction.neBot_regularAtTop` shows the relativized filter `𝓝∞₀[F.jumpSet]` is nontrivial. When working in `Corollary2.lean`, the step function morally plays the role of the right-continuous Riemann ζ zero-counting function `N(γ+0)`, which is integer-valued and jumps only at the ordinates of nontrivial ζ-zeros.
 
-**Riemann–Siegel theta function `θ`** — `θ : ℝ → ℝ` is the continuous branch of `arg(π^(-s/2) Γ(s/2))` along the segment from `s = 1/2` to `s = 1/2 + it`. It is `C^∞` on `(0, ∞)` (no exceptional points) and monotonically increasing for `t ≥ 7`. Axiom names in `Corollary2.lean`: `theta` (the function), `contDiffAt_theta` (smoothness). May alternatively be *defined* as `theta t := δ t − π · φ t − π` (see "Working on `Corollary2.lean`"), in which case smoothness follows from `contDiffAt_δ` and `contDiffAt_φ`.
+**Riemann–Siegel theta function `θ`** — `θ : ℝ → ℝ` is the continuous branch of `arg(π^(-s/2) Γ(s/2))` along the segment from `s = 1/2` to `s = 1/2 + it`. It is `C^∞` on `(0, ∞)` (no exceptional points) and monotonically increasing for `t ≥ 7`. In `Corollary2.lean`, `theta` is *defined* as `theta t := δ t − π · φ t − π` (the axiom-light path; see "Working on `Corollary2.lean`"), so smoothness (`contDiffAt_theta`) follows from `contDiffAt_δ` and `contDiffAt_φ`, and `theta_tendsto_atTop` (θ → +∞ at +∞, §5) is proved from the concrete formula. Only the *identification* with the analytic Riemann–Siegel θ is informal.
 
 **Gram function `t_u`** — the inverse of `θ` on the half-line where `θ` is monotonic. For `u ≥ θ(7)/π + π`, `t_u` is the unique real satisfying `θ(t_u) = (u − 1)π` (equation (7) of the paper). It is `C^∞` on `(θ(7)/π + π, ∞)` by the inverse function theorem (since `θ'` does not vanish there). The base-case asymptotics
 ```
 t_u  = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 8, Lavrik [14])
 t_u' = (2π   / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 9, Korolev [10])
 ```
-are taken as established. Axiom names in `Theorem3.lean`: `gram`, `gram_spec`, `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp`. Used to derive Theorem 3.
+are taken as established. In `Theorem3.lean`, `gram` is a *`def`* (`Function.invFunOn theta (Set.Ici 7)` applied to `(u − 1)π`) and `gram_spec` / `gram_ge_seven` are *theorems* (intermediate value theorem + `theta_tendsto_atTop` from `Corollary2.lean`); the remaining axiom names are `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp` — statements about the defined `gram`, true under the unformalised strict monotonicity of `θ` on `[7, ∞)`. Used to derive Theorem 3.
 
 **Riemann–von Mangoldt formula** — the identity (equation (1) of the paper, [6])
 ```
