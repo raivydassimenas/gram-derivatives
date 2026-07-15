@@ -8,8 +8,10 @@ metadata:
 Constraints affecting refactoring decisions (from CLAUDE.md and task brief):
 
 - Never change the definitions of `φ` and `δ` in Theorem1.lean — fixed by paper §1.
-- Keep `N_step` and `S` abstract; do not specialize `N_step` to ζ-zero ordinates, do not
-  couple Theorem1.lean to Karatsuba–Korolev / Riemann ζ.
+- Keep the step function and `S` abstract; as of 2026-07-15 the step-function slot is the
+  bundled `structure StepFunction` (function + discrete `jumpSet` + local constancy off it)
+  and `S`/`theorem1` are parametrized over it. Do not specialize it to ζ-zero ordinates,
+  do not couple Theorem1.lean to Karatsuba–Korolev / Riemann ζ.
 - Axioms tagged `-- ASSUMPTION` are intentional gaps. The §0.5 sorry ledger lists
   `iteratedDeriv_α_part_isO`, `iteratedDeriv_j_isO`, `iteratedDeriv_tj_isO`, `δ_eq`.
   NOTE: as of 2026-05-22 the file header says it builds with zero `sorry`; the ledger

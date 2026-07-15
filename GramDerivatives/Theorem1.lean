@@ -11,23 +11,24 @@
       S^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1)).
 
   ─── Strategy ──────────────────────────────────────────────────────────
-  Abstract decomposition — `S` is *defined* by:
-        S(t) = φ(t) − (1/π)·δ(t) + N_step(t)
+  Abstract decomposition — for a step function `F` (any member of the
+  class `StepFunction`), `S F` is *defined* by:
+        S F (t) = φ(t) − (1/π)·δ(t) + F(t)
   with
     • φ(t) = −t/(2π)·log(t/(2π)) + t/(2π) − 7/8   (smooth main term),
     • δ(t) = α_part(t) − (t/2)·j(t)               (smooth error term),
-    • N_step(t) = ⌊t⌋                              (a concrete
-                                                    piecewise-constant
-                                                    function).
+    • F : StepFunction                             (any function locally
+                                                    constant off a discrete
+                                                    jump set `F.jumpSet`).
   Then φ^(n)(t) supplies the leading term and δ^(n)(t) = O(t^(−n−1)).
-  `S` may be any function of this form: the proof uses only local
-  constancy of `N_step` off its jump set — no Riemann ζ, no
+  Theorem 1 is proved for *every* such `F`: the proof uses only local
+  constancy of `F` off its jump set — no Riemann ζ, no
   Karatsuba–Korolev result, and no facts about zeros of ζ.
 
   ─── File layout ───────────────────────────────────────────────────────
     §0  Notation and asymptotic infrastructure.
     §1  Definitions  (`φ`, `δ`, `α_part`, `ρ`, `j`).
-    §2  The step function `N_step` (floor) and its regular-point lemmas.
+    §2  The class `StepFunction` and its regular-point lemmas.
     §3  Smoothness lemmas (derived from §2 + elementary Mathlib calculus).
     §4  Iterated derivatives of `φ`              (main term).
     §5  Iterated derivatives of `α_part`         (algebraic error).
@@ -36,25 +37,29 @@
     §8  Statement and proof of Theorem 1.
 
   ─── What's axiomatised ────────────────────────────────────────────────
-  Nothing.  This file contains **zero axioms**.  `N_step` is *defined*
-  as the floor function `t ↦ ⌊t⌋` (a concrete piecewise-constant
-  function) and `JumpSet` as its set of discontinuities, the integers.
-  The former axioms about `N_step` are now theorems:
-    • `contDiffAt_N_step` — `N_step` is smooth at every point off
-      `JumpSet` (a regular point), being locally constant there.
-    • `N_step_iteratedDeriv_eq_zero` — every positive-order iterated
-      derivative of `N_step` vanishes at regular points.
+  Nothing.  This file contains **zero axioms**.  `StepFunction` is a
+  bundled structure: a function `ℝ → ℝ` together with a discrete jump
+  set (`jumpSet`, every point of which is isolated in it) off which the
+  function is locally constant (`locallyConstant_off`).  The former
+  axioms about the step function are now theorems about the class:
+    • `StepFunction.contDiffAt` — a step function is smooth at every
+      point off its jump set (a regular point), being locally constant
+      there.
+    • `StepFunction.iteratedDeriv_eq_zero` — every positive-order
+      iterated derivative of a step function vanishes at regular points.
 
   Theorem 1's conclusion is relativized to the filter
-  `𝓝∞₀ = 𝓝∞ ⊓ principal JumpSetᶜ` — going to `+∞` through regular
-  points only.  This is mathematically necessary: at a jump point of
-  `N_step`, the function `S = φ − (1/π)·δ + N_step` jumps too, so
-  Mathlib's `iteratedDeriv n S` returns `0` there and the asymptotic
-  fails.
+  `𝓝∞₀[F.jumpSet] = 𝓝∞ ⊓ principal F.jumpSetᶜ` — going to `+∞` through
+  regular points only.  This is mathematically necessary: at a jump
+  point of `F`, the function `S F = φ − (1/π)·δ + F` jumps too, so
+  Mathlib's `iteratedDeriv n (S F)` returns `0` there and the asymptotic
+  fails.  Discreteness of the jump set guarantees this filter is
+  nontrivial (`StepFunction.neBot_regularAtTop`), so the theorem is never
+  vacuous.
 
   `S` is an ordinary `def` and `S_eq_φ_sub_δ_add_N` holds by `rfl`.  No
   Riemann ζ, Riemann–Siegel θ, or Karatsuba–Korolev input is assumed;
-  the motivating instance `S(t) = (1/π)·arg ζ(1/2 + it)` — with `N_step`
+  the motivating instance `S(t) = (1/π)·arg ζ(1/2 + it)` — with `F`
   the ζ-zero counting step `N(γ+0)` — merely explains where the
   decomposition comes from.
 
@@ -186,111 +191,125 @@ noncomputable def j (t : ℝ) : ℝ :=
   ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
 
 /-!
-  ## §2  The step function `N_step`
+  ## §2  The class `StepFunction`
 
-  `N_step` and its jump set are concrete definitions (no axioms):
+  The step-function slot of the decomposition is fully abstract (no
+  axioms): a `StepFunction` is any function `ℝ → ℝ` that is locally
+  constant off a prescribed *discrete* jump set.
 
-    • Step function:  `N_step t = ⌊t⌋`, the floor function — a genuine
-      piecewise-constant function with jumps at the integers.  It stands
-      in for the motivating instance `N(γ+0)`, the right-continuous
-      Riemann ζ zero-counting function whose jumps occur at the imaginary
-      parts of ζ's nontrivial zeros; the proof of Theorem 1 uses only
-      local constancy off the jump set, so any piecewise-constant
-      function would serve.
-    • The jump set:  `JumpSet = Set.range (Int.cast : ℤ → ℝ)`, recording
-      where `N_step` is discontinuous.
-    • Regular-point properties:  `contDiffAt_N_step` and
-      `N_step_iteratedDeriv_eq_zero` (formerly axioms, now theorems)
-      require the input to lie *off* `JumpSet`.  This faithfully models
-      the motivating instance, where `N(γ+0)` is locally constant — and
-      so smooth, with vanishing positive-order derivatives — exactly at
-      non-jump points.
+    • `jumpSet : Set ℝ` — an arbitrary discrete subset of `ℝ` (every
+      point of `jumpSet` is isolated in it), recording where the
+      function may jump.
+    • `locallyConstant_off` — off `jumpSet`, the function is locally
+      constant.  This is the *only* property of the step function that
+      the proof of Theorem 1 uses.
+    • Regular-point properties:  `StepFunction.contDiffAt` and
+      `StepFunction.iteratedDeriv_eq_zero` require the input to lie
+      *off* `jumpSet`.  This faithfully models the motivating instance
+      `N(γ+0)` — the right-continuous Riemann ζ zero-counting function,
+      whose jumps occur at the ordinates of ζ's nontrivial zeros — which
+      is locally constant, and so smooth with vanishing positive-order
+      derivatives, exactly at non-jump points.
 
-  `S` is *defined* by the decomposition `S = φ − (1/π)·δ + N_step`, so
-  `S_eq_φ_sub_δ_add_N` holds by `rfl` and is no longer an axiom.  Note:
-  `S` inherits `N_step`'s jumps, so `theorem1`'s conclusion is stated at
-  the relativized filter `𝓝∞₀ = 𝓝∞ ⊓ principal JumpSetᶜ` — going to
-  `+∞` through *regular* points only (see §8).  At a jump point of `S`,
-  Mathlib's `deriv` convention returns `0`, so the asymptotic genuinely
-  fails there; relativization is mathematically necessary, not a
-  formalism artefact.
+  `S F` is *defined* by the decomposition `S F = φ − (1/π)·δ + F`, so
+  `S_eq_φ_sub_δ_add_N` holds by `rfl` and is not an axiom.  Note:
+  `S F` inherits `F`'s jumps, so `theorem1`'s conclusion is stated at
+  the relativized filter `𝓝∞₀[F.jumpSet] = 𝓝∞ ⊓ principal F.jumpSetᶜ` —
+  going to `+∞` through *regular* points only (see §8).  At a jump point
+  of `S F`, Mathlib's `deriv` convention returns `0`, so the asymptotic
+  genuinely fails there; relativization is mathematically necessary, not
+  a formalism artefact.  Discreteness of `jumpSet` ensures the filter is
+  nontrivial (`StepFunction.neBot_regularAtTop`).
 
   Smoothness of `φ`, `α_part`, `δ`, and `t·j(t)` is *derived* in §3 from
   the §2.5 theorem `contDiffAt_j` (formerly an axiom; now built on the
   joint induction `contDiffOn_jK`) plus elementary Mathlib calculus.
 -/
 
-/-- The step function in the decomposition of `S`: the floor function
-    `N_step t = ⌊t⌋`, a concrete integer-valued piecewise-constant function
-    with jumps exactly at the integers.  Formerly an opaque axiom.  The
-    proof of Theorem 1 uses only that `N_step` is locally constant off its
-    jump set — any piecewise-constant function would serve; the motivating
-    instance is the counting step `N(γ+0)` from the Karatsuba–Korolev
-    expansion, whose jumps occur at the ordinates of ζ's nontrivial
-    zeros. -/
-noncomputable def N_step : ℝ → ℝ := fun t => (⌊t⌋ : ℝ)
+/-- A **step function**: a function `ℝ → ℝ` that is locally constant off
+    a prescribed discrete jump set.  Models any piecewise-constant
+    function; the proof of Theorem 1 uses only `locallyConstant_off`.
+    The motivating instance is the counting step `N(γ+0)` from the
+    Karatsuba–Korolev expansion, whose jumps occur at the ordinates of
+    ζ's nontrivial zeros. -/
+structure StepFunction where
+  /-- The underlying function. -/
+  toFun : ℝ → ℝ
+  /-- The set of points where the function may jump. -/
+  jumpSet : Set ℝ
+  /-- The jump set is discrete: every point of it is isolated in it. -/
+  jumpSet_discrete :
+    ∀ x ∈ jumpSet, ∃ ε > 0, ∀ y ∈ jumpSet, |y - x| < ε → y = x
+  /-- Off the jump set, the function is locally constant. -/
+  locallyConstant_off :
+    ∀ ⦃s : ℝ⦄, s ∉ jumpSet → toFun =ᶠ[nhds s] fun _ => toFun s
 
-/-- The set of jump (discontinuity) points of `N_step`: the integers,
-    viewed as a subset of `ℝ`.  Formerly an opaque axiom; for the
-    motivating instance this is the set of ordinates of the nontrivial
-    Riemann ζ-zeros, a countable subset of `(0, ∞)`.  Outside `JumpSet`,
-    `N_step` is locally constant. -/
-def JumpSet : Set ℝ := Set.range ((↑) : ℤ → ℝ)
+instance : CoeFun StepFunction (fun _ => ℝ → ℝ) := ⟨StepFunction.toFun⟩
 
-/-- Off `JumpSet`, `N_step` is locally constant: near a non-integer `s`,
-    `N_step` agrees with the constant `⌊s⌋` on the whole open interval
-    `(⌊s⌋, ⌊s⌋ + 1)`, which is a neighbourhood of `s`. -/
-private lemma N_step_eventuallyEq_const {s : ℝ} (h_reg : s ∉ JumpSet) :
-    N_step =ᶠ[nhds s] fun _ => N_step s := by
-  have h_ne : (⌊s⌋ : ℝ) ≠ s := fun h => h_reg ⟨⌊s⌋, h⟩
-  have h_mem : s ∈ Set.Ioo ((⌊s⌋ : ℝ)) ((⌊s⌋ : ℝ) + 1) :=
-    ⟨lt_of_le_of_ne (Int.floor_le s) h_ne, Int.lt_floor_add_one s⟩
-  filter_upwards [isOpen_Ioo.mem_nhds h_mem] with x hx
-  have h_floor : ⌊x⌋ = ⌊s⌋ := Int.floor_eq_iff.mpr ⟨hx.1.le, hx.2⟩
-  unfold N_step
-  exact_mod_cast h_floor
+namespace StepFunction
 
-/-- At every *regular* point `s ∉ JumpSet`, `N_step` is smooth (being
-    locally constant there).  Formerly an axiom; now proved from the
-    definition of `N_step`.  The positivity hypothesis is kept for
-    interface stability. -/
-theorem contDiffAt_N_step (n : ℕ) {s : ℝ} (_hs : 0 < s) (h_reg : s ∉ JumpSet) :
-    ContDiffAt ℝ n N_step s :=
-  contDiffAt_const.congr_of_eventuallyEq (N_step_eventuallyEq_const h_reg)
+/-- At every *regular* point `s ∉ F.jumpSet`, a step function is smooth
+    (being locally constant there). -/
+theorem contDiffAt (F : StepFunction) (n : ℕ) {s : ℝ}
+    (h_reg : s ∉ F.jumpSet) : ContDiffAt ℝ n F s :=
+  contDiffAt_const.congr_of_eventuallyEq (F.locallyConstant_off h_reg)
 
-/-- At every regular point `t ∉ JumpSet`, all positive-order iterated
-    derivatives of `N_step` vanish (because `N_step` is locally constant
-    near such a `t`).  Formerly an axiom; now proved from the definition
-    of `N_step`.  The positivity hypothesis is kept for interface
-    stability. -/
-theorem N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (_ht : 0 < t)
-    (h_reg : t ∉ JumpSet)
-    : iteratedDeriv n N_step t = 0 := by
-  rw [(N_step_eventuallyEq_const h_reg).iteratedDeriv_eq n, iteratedDeriv_const]
+/-- At every regular point `t ∉ F.jumpSet`, all positive-order iterated
+    derivatives of a step function vanish (because it is locally constant
+    near such a `t`). -/
+theorem iteratedDeriv_eq_zero (F : StepFunction) (n : ℕ) (hn : 1 ≤ n)
+    {t : ℝ} (h_reg : t ∉ F.jumpSet) : iteratedDeriv n F t = 0 := by
+  rw [(F.locallyConstant_off h_reg).iteratedDeriv_eq n, iteratedDeriv_const]
   exact if_neg (by omega)
 
+end StepFunction
+
 /-- The relativized "neighbourhood of `+∞`" filter: tend to `+∞` through
-    regular points only (i.e., points not in `JumpSet`).  This is the
-    filter at which `theorem1`'s asymptotic holds; at a jump point of
-    `N_step`, `S` has a jump too, so `iteratedDeriv n S` takes Mathlib's
-    default value of `0` there and the asymptotic genuinely fails. -/
-notation "𝓝∞₀" => Filter.atTop ⊓ Filter.principal (JumpSet : Set ℝ)ᶜ
+    regular points only (i.e., points not in the given jump set `J`).
+    This is the filter at which `theorem1`'s asymptotic holds; at a jump
+    point of `F`, `S F` has a jump too, so `iteratedDeriv n (S F)` takes
+    Mathlib's default value of `0` there and the asymptotic genuinely
+    fails. -/
+notation "𝓝∞₀[" J "]" => Filter.atTop ⊓ Filter.principal ((J : Set ℝ))ᶜ
+
+/-- Discreteness of the jump set makes the relativized filter
+    `𝓝∞₀[F.jumpSet]` nontrivial, so `theorem1` is never vacuous: every
+    ray `[a, ∞)` contains a regular point, since a discrete set cannot
+    contain a whole ray. -/
+theorem StepFunction.neBot_regularAtTop (F : StepFunction) :
+    (𝓝∞₀[F.jumpSet]).NeBot := by
+  rw [Filter.inf_principal_neBot_iff]
+  intro U hU
+  obtain ⟨a, ha⟩ := Filter.mem_atTop_sets.mp hU
+  -- It suffices to find a regular point in `[a, ∞)`.
+  by_cases h : a + 1 ∈ F.jumpSet
+  · -- `a + 1` jumps; by isolation, a slightly larger point is regular.
+    obtain ⟨ε, hε, h_iso⟩ := F.jumpSet_discrete (a + 1) h
+    have h2 : 0 < min ε 1 := lt_min hε one_pos
+    have h1 : min ε 1 ≤ ε := min_le_left _ _
+    refine ⟨a + 1 + min ε 1 / 2, ha _ (by linarith), fun h_mem => ?_⟩
+    have h_close : |a + 1 + min ε 1 / 2 - (a + 1)| < ε := by
+      rw [show a + 1 + min ε 1 / 2 - (a + 1) = min ε 1 / 2 by ring,
+          abs_of_pos (by linarith)]
+      linarith
+    linarith [h_iso _ h_mem h_close]
+  · exact ⟨a + 1, ha _ (by linarith), h⟩
 
 /-- The target function `S`, *defined* by the abstract decomposition
-    `S(t) = φ(t) − (1/π)·δ(t) + N_step(t)`.  `S` may be any function of this
-    form; Theorem 1's proof uses only this definition — no Riemann ζ and no
-    Karatsuba–Korolev input.  The motivating instance is
-    `(1/π)·arg ζ(1/2 + it)`, for which the decomposition is the
-    Karatsuba–Korolev representation. -/
-noncomputable def S (t : ℝ) : ℝ :=
-  φ t - (1 / Real.pi) * δ t + N_step t
+    `S F (t) = φ(t) − (1/π)·δ(t) + F(t)` for an arbitrary step function
+    `F`.  Theorem 1's proof uses only this definition and the
+    `StepFunction` fields — no Riemann ζ and no Karatsuba–Korolev input.
+    The motivating instance is `(1/π)·arg ζ(1/2 + it)`, for which the
+    decomposition is the Karatsuba–Korolev representation. -/
+noncomputable def S (F : StepFunction) (t : ℝ) : ℝ :=
+  φ t - (1 / Real.pi) * δ t + F t
 
 /-- The defining decomposition of `S` — true by definition (`rfl`); was an
     axiom while `S` was opaque.  For the motivating instance
     `S(t) = (1/π)·arg ζ(1/2 + it)` it is the Karatsuba–Korolev
     representation ([6, proof of Thm 2]). -/
-theorem S_eq_φ_sub_δ_add_N (t : ℝ) :
-    S t = φ t - (1 / Real.pi) * δ t + N_step t := rfl
+theorem S_eq_φ_sub_δ_add_N (F : StepFunction) (t : ℝ) :
+    S F t = φ t - (1 / Real.pi) * δ t + F t := rfl
 
 /-!
   ## §2.5  Parametric-integral infrastructure for `j`
@@ -3603,53 +3622,55 @@ end ErrorTermDelta
 
 /-- **Theorem 1** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
-    For n ≥ 2, the n-th derivative of S satisfies
+    For every step function `F` and n ≥ 2, the n-th derivative of `S F`
+    satisfies
 
-        S^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1))
+        (S F)^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1))
 
-    as t → +∞ *through regular points* (i.e., points not in `JumpSet`).
-    The conclusion is stated at the relativized filter `𝓝∞₀`, which is
-    the natural mathematical filter here: at a jump point of `N_step`
-    (and hence of `S`), `iteratedDeriv n S` returns `0` by Mathlib's
+    as t → +∞ *through regular points* (i.e., points not in `F.jumpSet`).
+    The conclusion is stated at the relativized filter `𝓝∞₀[F.jumpSet]`,
+    which is the natural mathematical filter here: at a jump point of `F`
+    (and hence of `S F`), `iteratedDeriv n (S F)` returns `0` by Mathlib's
     convention for non-differentiable points, so the asymptotic fails
     at such points by `O(t^(1-n))` — much larger than the claimed
-    `O(t^(-n-1))`. -/
-theorem theorem1 (n : ℕ) (hn : 2 ≤ n) :
+    `O(t^(-n-1))`.  The filter is nontrivial by
+    `StepFunction.neBot_regularAtTop`. -/
+theorem theorem1 (F : StepFunction) (n : ℕ) (hn : 2 ≤ n) :
     IsO
       (fun t =>
-        iteratedDeriv n S t
+        iteratedDeriv n (S F) t
         - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
            * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ))))
       (fun t => t ^ (-(n : ℝ) - 1))
-      𝓝∞₀ := by
+      𝓝∞₀[F.jumpSet] := by
   have hn1 : 1 ≤ n := by omega
-  -- (1) Pointwise rewrite of S on (0,∞), in addition-of-negation form so we can
-  -- use `iteratedDeriv_add` rather than `iteratedDeriv_sub`.
+  -- (1) Pointwise rewrite of S F on (0,∞), in addition-of-negation form so we
+  -- can use `iteratedDeriv_add` rather than `iteratedDeriv_sub`.
   have h_S_sum : ∀ s ∈ Set.Ioi (0 : ℝ),
-      S s = φ s + ((-(1 / Real.pi)) * δ s) + N_step s := by
-    intro s _; rw [S_eq_φ_sub_δ_add_N s]; ring
+      S F s = φ s + ((-(1 / Real.pi)) * δ s) + F s := by
+    intro s _; rw [S_eq_φ_sub_δ_add_N F s]; ring
   -- (2) Lift the pointwise equality to iteratedDeriv on the open set (0,∞).
   have h_iter_eq : ∀ t ∈ Set.Ioi (0 : ℝ),
-      iteratedDeriv n S t
+      iteratedDeriv n (S F) t
         = iteratedDeriv n
-            (fun s => φ s + ((-(1 / Real.pi)) * δ s) + N_step s) t :=
+            (fun s => φ s + ((-(1 / Real.pi)) * δ s) + F s) t :=
     iteratedDeriv_congr_of_nhds n isOpen_Ioi h_S_sum
   -- (3) Split the triple sum using local ContDiffAt — requires regularity
-  -- (`t ∉ JumpSet`) since `N_step` is only `ContDiffAt` away from its jumps.
-  have h_split : ∀ t, 0 < t → t ∉ JumpSet →
-      iteratedDeriv n (fun s => φ s + ((-(1 / Real.pi)) * δ s) + N_step s) t
+  -- (`t ∉ F.jumpSet`) since `F` is only `ContDiffAt` away from its jumps.
+  have h_split : ∀ t, 0 < t → t ∉ F.jumpSet →
+      iteratedDeriv n (fun s => φ s + ((-(1 / Real.pi)) * δ s) + F s) t
         = iteratedDeriv n φ t
           + (-(1 / Real.pi)) * iteratedDeriv n δ t
-          + iteratedDeriv n N_step t := by
+          + iteratedDeriv n F t := by
     intro t ht ht_reg
-    have hφ  : ContDiffAt ℝ n φ t       := contDiffAt_φ n ht
-    have hδ  : ContDiffAt ℝ n δ t       := contDiffAt_δ n ht
-    have hN  : ContDiffAt ℝ n N_step t  := contDiffAt_N_step n ht ht_reg
+    have hφ  : ContDiffAt ℝ n φ t  := contDiffAt_φ n ht
+    have hδ  : ContDiffAt ℝ n δ t  := contDiffAt_δ n ht
+    have hN  : ContDiffAt ℝ n F t  := F.contDiffAt n ht_reg
     have hcδ : ContDiffAt ℝ n (fun s => (-(1 / Real.pi)) * δ s) t :=
       contDiffAt_const.mul hδ
-    -- Outer split: (φ + c·δ) + N_step
+    -- Outer split: (φ + c·δ) + F
     change iteratedDeriv n
-              ((fun s => φ s + ((-(1 / Real.pi)) * δ s)) + N_step) t = _
+              ((fun s => φ s + ((-(1 / Real.pi)) * δ s)) + ⇑F) t = _
     rw [iteratedDeriv_add (hφ.add hcδ) hN]
     -- Inner split: φ + c·δ
     have h_inner :
@@ -3659,34 +3680,34 @@ theorem theorem1 (n : ℕ) (hn : 2 ≤ n) :
       change iteratedDeriv n (φ + fun s => (-(1 / Real.pi)) * δ s) t = _
       exact iteratedDeriv_add hφ hcδ
     rw [h_inner, iteratedDeriv_const_mul_field (-(1 / Real.pi)) δ]
-  -- (4) Substitute closed form for `φ` and the vanishing for `N_step` at
+  -- (4) Substitute closed form for `φ` and the vanishing for `F` at
   -- regular points.
-  have h_clean : ∀ t, 0 < t → t ∉ JumpSet →
-      iteratedDeriv n S t
+  have h_clean : ∀ t, 0 < t → t ∉ F.jumpSet →
+      iteratedDeriv n (S F) t
         - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
            * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ)))
         = (-(1 / Real.pi)) * iteratedDeriv n δ t := by
     intro t ht ht_reg
     rw [h_iter_eq t ht, h_split t ht ht_reg,
         iteratedDeriv_φ n hn t ht,
-        N_step_iteratedDeriv_eq_zero n hn1 t ht ht_reg]
+        F.iteratedDeriv_eq_zero n hn1 ht_reg]
     ring
   -- (5) The residual `c · iteratedDeriv n δ t` is O(t^(-n-1)) on `𝓝∞`; mono
-  -- to the smaller `𝓝∞₀`.
+  -- to the smaller `𝓝∞₀[F.jumpSet]`.
   have h_bd :
       IsO (fun t => (-(1 / Real.pi)) * iteratedDeriv n δ t)
-          (fun t => t ^ (-(n : ℝ) - 1)) 𝓝∞₀ :=
+          (fun t => t ^ (-(n : ℝ) - 1)) 𝓝∞₀[F.jumpSet] :=
     ((iteratedDeriv_δ_isO n hn1).const_mul_left (-(1 / Real.pi))).mono inf_le_left
-  -- (6) Stitch via eventual equality at `𝓝∞₀`.
+  -- (6) Stitch via eventual equality at `𝓝∞₀[F.jumpSet]`.
   have h_evEq :
-      (fun t => iteratedDeriv n S t
+      (fun t => iteratedDeriv n (S F) t
         - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
            * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ))))
-        =ᶠ[𝓝∞₀]
+        =ᶠ[𝓝∞₀[F.jumpSet]]
       (fun t => (-(1 / Real.pi)) * iteratedDeriv n δ t) := by
-    have h_pos : ∀ᶠ t in (𝓝∞₀ : Filter ℝ), 0 < t :=
+    have h_pos : ∀ᶠ t in (𝓝∞₀[F.jumpSet] : Filter ℝ), 0 < t :=
       (Filter.eventually_gt_atTop (0 : ℝ)).filter_mono inf_le_left
-    have h_reg : ∀ᶠ t in (𝓝∞₀ : Filter ℝ), t ∉ JumpSet :=
+    have h_reg : ∀ᶠ t in (𝓝∞₀[F.jumpSet] : Filter ℝ), t ∉ F.jumpSet :=
       Filter.eventually_inf_principal.mpr (Filter.Eventually.of_forall (fun _ h => h))
     filter_upwards [h_pos, h_reg] with t ht ht_reg
     exact h_clean t ht ht_reg

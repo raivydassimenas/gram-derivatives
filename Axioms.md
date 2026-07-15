@@ -11,7 +11,7 @@ Regenerate at any time with the scratch module
 lake build GramDerivatives.AxiomAudit   # prints the axiom list for each theorem
 ```
 
-Last audited: 2026-07-02, against `lean4:v4.30.0-rc2` + matching Mathlib.
+Last audited: 2026-07-15, against `lean4:v4.30.0-rc2` + matching Mathlib.
 
 ## Method
 
@@ -39,25 +39,28 @@ discussion of custom assumptions below.
 
 | Theorem | Location | Custom axioms it depends on |
 |---|---|---|
-| `theorem1` | `Theorem1.lean:3617` | **none** (only the three standard Lean axioms) |
-| `corollary2` | `Corollary2.lean:204` | **none** (only the three standard Lean axioms) |
+| `theorem1` | `Theorem1.lean:3638` | **none** (only the three standard Lean axioms) |
+| `corollary2` | `Corollary2.lean:205` | **none** (only the three standard Lean axioms) |
 | `theorem3` | `Theorem3.lean:3103` | `gram`, `gram_spec`, `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp` |
 | `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | the 5 `gram*` axioms above **+** `isUDModOne_of_iteratedDeriv_decay` |
 | `Gram.corollary5` | `Corollary5.lean:40` | the 6 axioms above **+** `continuous_ud_criterion`, `IsUDModOne.shift` |
 
 ### Notable findings
 
-- **`theorem1` is axiom-free of custom assumptions.** `N_step` is *defined* as
-  the floor function `t ↦ ⌊t⌋` (a concrete piecewise-constant function) and
-  `JumpSet` as its discontinuity set, the integers. The former axioms
-  `contDiffAt_N_step` and `N_step_iteratedDeriv_eq_zero` are now **theorems**,
-  proved from local constancy of `⌊·⌋` off the integers. `Theorem1.lean`
-  contains zero `axiom` declarations.
+- **`theorem1` is axiom-free of custom assumptions.** The step-function slot
+  is the bundled structure `StepFunction`: any function `ℝ → ℝ` that is
+  locally constant off a prescribed *discrete* jump set (`jumpSet`). The
+  former axioms are now **theorems about the class** —
+  `StepFunction.contDiffAt` and `StepFunction.iteratedDeriv_eq_zero`, proved
+  from the `locallyConstant_off` field — and `theorem1` is proved for *every*
+  `F : StepFunction`, at the relativized filter `𝓝∞₀[F.jumpSet]` (nontrivial
+  by `StepFunction.neBot_regularAtTop`, which uses discreteness of the jump
+  set). `Theorem1.lean` contains zero `axiom` declarations.
 - **`corollary2` is axiom-free of custom assumptions.** The axiom-light path was
   taken: `theta` is *defined* as `δ − π·φ − π` (not axiomatized), so
   `riemann_vonMangoldt` and `contDiffAt_theta` are **theorems**, and the proof
-  reduces `θ^(n)` directly to `iteratedDeriv n δ`. It never touches `S`,
-  `N_step`, or `JumpSet`.
+  reduces `θ^(n)` directly to `iteratedDeriv n δ`. It never touches `S` or
+  any step function.
 - **The dependencies are strictly cumulative** down the chain
   Theorem 3 → Theorem 4 → Corollary 5, with each step adding exactly the
   equidistribution axioms it needs.
@@ -66,17 +69,21 @@ discussion of custom assumptions below.
 
 ### `Theorem1.lean` — the abstract decomposition of `S`
 
-**No custom axioms.** `N_step` is a `def` (the floor function `t ↦ ⌊t⌋`) and
-`JumpSet` is a `def` (`Set.range (Int.cast : ℤ → ℝ)`, its discontinuity set).
-The regular-point properties `contDiffAt_N_step` and
-`N_step_iteratedDeriv_eq_zero` are theorems derived from local constancy of the
-floor function off the integers. The proof of Theorem 1 uses only those two
-local-constancy facts, so any piecewise-constant function would serve in place
-of `⌊·⌋`; the motivating instance is the Riemann ζ zero-counting step `N(γ+0)`,
-whose jumps are the ordinates of the nontrivial ζ-zeros — but Theorem 1 does
-**not** depend on that interpretation.
+**No custom axioms.** The step-function slot is the `structure StepFunction`:
+a function `toFun : ℝ → ℝ`, a jump set `jumpSet : Set ℝ` that is discrete
+(`jumpSet_discrete` — every point of it is isolated in it), and a proof
+`locallyConstant_off` that the function is locally constant off the jump set.
+The regular-point properties `StepFunction.contDiffAt` and
+`StepFunction.iteratedDeriv_eq_zero` are theorems derived from
+`locallyConstant_off`. The proof of Theorem 1 uses only those two
+local-constancy facts and holds for *every* `F : StepFunction`; the motivating
+instance is the Riemann ζ zero-counting step `N(γ+0)`, whose jumps are the
+ordinates of the nontrivial ζ-zeros — but Theorem 1 does **not** depend on
+that interpretation. Discreteness of the jump set enters only through
+`StepFunction.neBot_regularAtTop`, which shows the conclusion filter
+`𝓝∞₀[F.jumpSet]` is nontrivial (Theorem 1 is never vacuous).
 
-`S` is a `def` (`S = φ − (1/π)·δ + N_step`) and `S_eq_φ_sub_δ_add_N` holds by
+`S` is a `def` (`S F = φ − (1/π)·δ + F`) and `S_eq_φ_sub_δ_add_N` holds by
 `rfl`, so the Karatsuba–Korolev decomposition is *not* an axiom here.
 
 ### `Theorem3.lean` — the Gram function and its base asymptotics

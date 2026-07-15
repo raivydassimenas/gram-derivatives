@@ -14,12 +14,13 @@
 
   ─── Strategy ──────────────────────────────────────────────────────────
   We bypass `theorem1` entirely.  Theorem 1's conclusion is at the
-  relativized filter `𝓝∞₀` (= `Filter.atTop ⊓ principal JumpSetᶜ`),
-  because at a jump point of `N_step` the function `S` has a jump too
-  and the asymptotic for `iteratedDeriv n S` genuinely fails.  By
-  contrast, `theta := δ − π·φ − π` is *smooth on all of `(0, ∞)`* — it
-  doesn't involve `N_step` — so its asymptotic holds at the unrelativized
-  filter `𝓝∞`.
+  relativized filter `𝓝∞₀[F.jumpSet]` (= `Filter.atTop ⊓ principal
+  F.jumpSetᶜ`), because at a jump point of the step function `F` the
+  function `S F` has a jump too and the asymptotic for
+  `iteratedDeriv n (S F)` genuinely fails.  By contrast,
+  `theta := δ − π·φ − π` is *smooth on all of `(0, ∞)`* — it doesn't
+  involve any step function — so its asymptotic holds at the
+  unrelativized filter `𝓝∞`.
 
   Concretely, for `n ≥ 1` and `t > 0`:
 
@@ -40,9 +41,9 @@
 
   the closed form obtained by solving the Riemann–von Mangoldt identity
   `N(t) = (1/π)·θ(t) + 1 + S(t)` for θ and substituting
-  `S = φ − (1/π)·δ + N_step` (from `Theorem1.lean`); the `N_step` terms
-  cancel algebraically.  Smoothness (`contDiffAt_theta`) follows from
-  `contDiffAt_δ` and `contDiffAt_φ`.
+  `S F = φ − (1/π)·δ + F` (from `Theorem1.lean`); the step-function
+  terms cancel algebraically.  Smoothness (`contDiffAt_theta`) follows
+  from `contDiffAt_δ` and `contDiffAt_φ`.
 
   The agreement of this `theta` with the analytic Riemann–Siegel theta
   function on `(0, ∞)` is informal — it is the content of the
@@ -61,13 +62,13 @@ open scoped ContDiff
 
   `theta : ℝ → ℝ` is *defined* as `δ − π·φ − π`, the closed form obtained
   by solving the Riemann–von Mangoldt identity for θ and substituting
-  `S = φ − (1/π)·δ + N_step` from `Theorem1.lean`.  Under this definition:
+  `S F = φ − (1/π)·δ + F` from `Theorem1.lean`.  Under this definition:
 
     • `contDiffAt_theta`  is a derived theorem (from smoothness of `φ`
       and `δ`).
-    • `riemann_vonMangoldt` reduces to an algebraic identity in which
-      the `N_step` terms cancel between the two sides; the identity
-      then closes by `field_simp` + `ring`.
+    • `riemann_vonMangoldt` reduces, for every step function `F`, to an
+      algebraic identity in which the `F t` terms cancel between the two
+      sides; the identity then closes by `field_simp` + `ring`.
 
   The agreement of this `theta` with the analytic Riemann–Siegel theta
   function on `(0, ∞)` is the content of the Karatsuba–Korolev
@@ -76,7 +77,7 @@ open scoped ContDiff
 
 /-- The Riemann–Siegel theta function, defined as the closed form
     `θ(t) := δ(t) − π · φ(t) − π` obtained from the Karatsuba–Korolev /
-    Riemann–von Mangoldt identity combined with `S = φ − (1/π)·δ + N_step`
+    Riemann–von Mangoldt identity combined with `S F = φ − (1/π)·δ + F`
     (from `Theorem1.lean`).  Identifies on `(0, ∞)` with the continuous
     branch of `arg(π^(-s/2) · Γ(s/2))` along the segment from `s = 1/2`
     to `s = 1/2 + i t`. -/
@@ -96,12 +97,12 @@ theorem contDiffAt_theta (n : ℕ) {s : ℝ} (hs : 0 < s) :
         N(t) = (1/π) · θ(t) + 1 + S(t).
 
     Under the definitions `theta := δ − π·φ − π` and
-    `S := φ − (1/π)·δ + N_step` (from `Theorem1.lean`), this reduces to
-    a purely algebraic identity in `δ t`, `φ t`, `N_step t`, and `π`:
-    the `N_step t` terms cancel between the two sides.  No properties
-    of the opaque `N_step` are used. -/
-theorem riemann_vonMangoldt (t : ℝ) (_ht : 0 < t) :
-    N_step t = (1 / Real.pi) * theta t + 1 + S t := by
+    `S F := φ − (1/π)·δ + F` (from `Theorem1.lean`), this reduces to
+    a purely algebraic identity in `δ t`, `φ t`, `F t`, and `π`:
+    the `F t` terms cancel between the two sides.  It holds for *every*
+    step function `F` — no `StepFunction` field is used. -/
+theorem riemann_vonMangoldt (F : StepFunction) (t : ℝ) (_ht : 0 < t) :
+    F t = (1 / Real.pi) * theta t + 1 + S F t := by
   have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
   simp only [theta, S]
   field_simp
@@ -154,8 +155,8 @@ private lemma iteratedDeriv_const_mul' (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s 
 
       iteratedDeriv n theta t = iteratedDeriv n δ t − π · iteratedDeriv n φ t.
 
-  No N_step is involved — this is purely a Mathlib-calculus consequence
-  of the definition of `theta`.
+  No step function is involved — this is purely a Mathlib-calculus
+  consequence of the definition of `theta`.
 -/
 
 /-- For `n ≥ 1` and `t > 0`,
@@ -199,7 +200,7 @@ private lemma iteratedDeriv_theta_split (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht :
         θ^(n)(t) = (-1)^n · (n-2)! / 2 · t^(1-n) + O(t^(-n-1))
 
     as `t → +∞`.  Note: since `theta := δ − π·φ − π` is smooth on the
-    entire half-line `(0, ∞)` (no N_step), this conclusion is at the
+    entire half-line `(0, ∞)` (no step function), this conclusion is at the
     unrelativized filter `𝓝∞` — *not* at Theorem 1's `𝓝∞₀`. -/
 theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
     IsO

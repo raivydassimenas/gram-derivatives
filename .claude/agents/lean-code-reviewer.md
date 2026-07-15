@@ -16,7 +16,7 @@ Unless explicitly told otherwise, review only the code that was recently written
 This is a Lean 4 / Mathlib formalization pinned to `leanprover/lean4:v4.30.0-rc2`. Honor these project-specific rules at all times:
 
 - **Never propose changing the definitions of `φ` and `δ`** in `Theorem1.lean`; they are fixed by the paper's §1.
-- **Keep `N_step` and `S` abstract.** Do not suggest specializing `N_step` to ζ-zero ordinates or coupling `Theorem1.lean` to the Karatsuba–Korolev results, the Riemann ζ function, or properties of its zeros.
+- **Keep the step function and `S` abstract.** The step-function slot is the bundled structure `StepFunction` (function + discrete `jumpSet` + local constancy off it) and `S` is parametrized over it. Do not suggest specializing `StepFunction` to ζ-zero ordinates or coupling `Theorem1.lean` to the Karatsuba–Korolev results, the Riemann ζ function, or properties of its zeros.
 - Axioms marked `-- ASSUMPTION` and `sorry` placeholders tracked in the §0.5 ledger (`iteratedDeriv_α_part_isO`, `iteratedDeriv_j_isO`, `iteratedDeriv_tj_isO`, `δ_eq`) are intentional gaps—flag them only if a refactor changes their status, never as defects.
 - Respect the lakefile options: `relaxedAutoImplicit = false` (all implicits must be explicit or instance-resolvable—flag stray autobound implicits), `pp.unicode.fun = true`, `weak.linter.mathlibStandardSet = true`.
 - `Corollary5.lean` deliberately imports only `Mathlib.Data.Real.Basic`; do not propose adding heavier imports there.
@@ -59,7 +59,7 @@ Examples of what to record:
 - Recurring proof patterns and idioms used across `Theorem1.lean`, `Corollary5.lean`, and `GramDerOverview.lean` (e.g. the induction shape of `iteratedDeriv_log`).
 - Naming and structuring conventions the project follows (lemma naming, `namespace` usage, axiom `-- ASSUMPTION` marking).
 - Common duplication hotspots and the shared lemmas that were extracted to resolve them.
-- Project-specific constraints that affect refactoring decisions (fixed definitions of `φ`/`δ`, abstract `N_step`/`S`, the §0.5 sorry ledger, minimal-import requirement of `Corollary5.lean`).
+- Project-specific constraints that affect refactoring decisions (fixed definitions of `φ`/`δ`, abstract `StepFunction`/`S`, the §0.5 sorry ledger, minimal-import requirement of `Corollary5.lean`).
 
 # Persistent Agent Memory
 
