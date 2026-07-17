@@ -891,6 +891,39 @@ theorem contDiffAt_φ (n : ℕ) {s : ℝ} (hs : 0 < s) :
   unfold φ
   exact ((h_div.neg.mul h_log).add h_div).sub contDiffAt_const
 
+/-- First derivative of `φ`:  `φ'(t) = −(1/(2π)) · log(t/(2π))` for `t > 0`.
+    The `n = 1` companion of `iteratedDeriv_φ` (which starts at `n = 2`);
+    needed for the first-derivative asymptotic of `θ` in `Corollary2.lean`. -/
+theorem hasDerivAt_φ {t : ℝ} (ht : 0 < t) :
+    HasDerivAt φ (-(1 / (2 * Real.pi)) * Real.log (t / (2 * Real.pi))) t := by
+  have h2π_pos : (0 : ℝ) < 2 * Real.pi := by positivity
+  have hne : t / (2 * Real.pi) ≠ 0 := ne_of_gt (by positivity)
+  -- `s ↦ s/(2π)`.
+  have h_div : HasDerivAt (fun s : ℝ => s / (2 * Real.pi)) (1 / (2 * Real.pi)) t := by
+    simpa using (hasDerivAt_id t).div_const (2 * Real.pi)
+  -- `s ↦ log(s/(2π))`.
+  have h_log : HasDerivAt (fun s : ℝ => Real.log (s / (2 * Real.pi)))
+      ((1 / (2 * Real.pi)) / (t / (2 * Real.pi))) t := h_div.log hne
+  -- `s ↦ −(s/(2π)) · log(s/(2π))`.
+  have h_mul : HasDerivAt
+      (fun s : ℝ => -(s / (2 * Real.pi)) * Real.log (s / (2 * Real.pi)))
+      (-(1 / (2 * Real.pi)) * Real.log (t / (2 * Real.pi))
+        + -(t / (2 * Real.pi)) * ((1 / (2 * Real.pi)) / (t / (2 * Real.pi)))) t :=
+    h_div.neg.mul h_log
+  -- Assemble `φ` and clean up the derivative (the two `1/(2π)` terms cancel).
+  have h_sum := (h_mul.add h_div).sub_const (7 / 8)
+  have h_fun : (fun x : ℝ =>
+      ((fun s : ℝ => -(s / (2 * Real.pi)) * Real.log (s / (2 * Real.pi)))
+        + fun s : ℝ => s / (2 * Real.pi)) x - 7 / 8) = φ := by
+    funext s
+    simp only [Pi.add_apply]
+    unfold φ; ring
+  rw [h_fun] at h_sum
+  convert h_sum using 1
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  field_simp
+  ring
+
 /-- `α_part` is smooth on `(0, ∞)`. -/
 theorem contDiffAt_α_part (n : ℕ) {s : ℝ} (hs : 0 < s) :
     ContDiffAt ℝ n α_part s := by
@@ -3613,6 +3646,89 @@ lemma iteratedDeriv_δ_isO (n : ℕ) (hn : 1 ≤ n) :
     filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
     rw [← h_split t ht, ← h_iter_eq t ht]
   exact h_evEq.symm.trans_isBigO h_sum
+
+/-- `α_part` itself is `O(t⁻¹)` at `+∞` — the `n = 0` companion of
+    `iteratedDeriv_α_part_isO`.  Elementary:  `log(1+x) ≤ x` and
+    `arctan x ≤ x` for `x ≥ 0` give `0 ≤ α_part t ≤ 3/(16t)`. -/
+lemma α_part_isO : IsO α_part (fun t => t ^ (-1 : ℝ)) 𝓝∞ := by
+  refine IsBigO.of_bound (3 / 16) ?_
+  filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht
+  have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le one_pos ht
+  have h_inner_pos : (0 : ℝ) < 1 + 1 / (4 * t ^ 2) := by positivity
+  -- Elementary upper bounds for the two summands.
+  have h_log_le : Real.log (1 + 1 / (4 * t ^ 2)) ≤ 1 / (4 * t ^ 2) := by
+    have := Real.log_le_sub_one_of_pos h_inner_pos
+    linarith
+  have h_log_nn : 0 ≤ Real.log (1 + 1 / (4 * t ^ 2)) :=
+    Real.log_nonneg (by linarith [show (0:ℝ) ≤ 1 / (4 * t ^ 2) by positivity])
+  have h_arc_nn : 0 ≤ Real.arctan (1 / (2 * t)) :=
+    Real.arctan_nonneg.mpr (by positivity)
+  have h_arc_le : Real.arctan (1 / (2 * t)) ≤ 1 / (2 * t) := by
+    calc Real.arctan (1 / (2 * t))
+        ≤ Real.tan (Real.arctan (1 / (2 * t))) :=
+          Real.le_tan h_arc_nn (Real.arctan_lt_pi_div_two _)
+      _ = 1 / (2 * t) := Real.tan_arctan _
+  -- `0 ≤ α_part t ≤ 1/(16t) + 1/(8t) = (3/16) · t⁻¹`.
+  have h_b1 : t / 4 * Real.log (1 + 1 / (4 * t ^ 2)) ≤ 1 / (16 * t) := by
+    have h := mul_le_mul_of_nonneg_left h_log_le
+      (by positivity : (0 : ℝ) ≤ t / 4)
+    have h_eq : t / 4 * (1 / (4 * t ^ 2)) = 1 / (16 * t) := by
+      field_simp; ring
+    linarith [h_eq ▸ h]
+  have h_b2 : 1 / 4 * Real.arctan (1 / (2 * t)) ≤ 1 / (8 * t) := by
+    have h := mul_le_mul_of_nonneg_left h_arc_le
+      (by norm_num : (0 : ℝ) ≤ 1 / 4)
+    have h_eq : (1 : ℝ) / 4 * (1 / (2 * t)) = 1 / (8 * t) := by
+      field_simp; ring
+    linarith [h_eq ▸ h]
+  have h_nn : 0 ≤ α_part t := by
+    unfold α_part
+    have h1 : 0 ≤ t / 4 * Real.log (1 + 1 / (4 * t ^ 2)) :=
+      mul_nonneg (by positivity) h_log_nn
+    have h2 : 0 ≤ 1 / 4 * Real.arctan (1 / (2 * t)) :=
+      mul_nonneg (by norm_num) h_arc_nn
+    linarith
+  -- Normalize the `rpow` and conclude.
+  have h_pow : t ^ (-1 : ℝ) = t⁻¹ := by
+    have := rpow_neg_nat_eq_inv ht_pos 1
+    norm_num at this
+    simpa using this
+  rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_of_nonneg h_nn, h_pow,
+      abs_of_pos (by positivity : (0 : ℝ) < t⁻¹)]
+  have h_sum : α_part t ≤ 1 / (16 * t) + 1 / (8 * t) := by
+    unfold α_part; linarith
+  have h_total : 1 / (16 * t) + 1 / (8 * t) = 3 / 16 * t⁻¹ := by
+    field_simp; ring
+  linarith [h_total ▸ h_sum]
+
+/-- `δ` itself is `O(t⁻¹)` at `+∞` — the `n = 0` case of the paper's
+    `δ^(n)(t) = O(t^(−n−1))`.  This is the input for the leading-order
+    `θ`-asymptotic (fact (θ1) of the Gram-asymptotics blueprint) in
+    `Corollary2.lean`. -/
+lemma δ_isO : IsO δ (fun t => t ^ (-1 : ℝ)) 𝓝∞ := by
+  -- (1) `j = O(t⁻²)` — the `n = 0` case of `iteratedDeriv_j_isO`.
+  have h_j : IsO j (fun t => t ^ (-(0 : ℕ) - 2 : ℝ)) 𝓝∞ := by
+    have := iteratedDeriv_j_isO 0
+    simpa [iteratedDeriv_zero] using this
+  -- (2) `(t/2)·j = O(t · t⁻²) = O(t⁻¹)`.
+  have h_tj : IsO (fun t => t / 2 * j t) (fun t => t ^ (-1 : ℝ)) 𝓝∞ := by
+    have h_half : IsO (fun t : ℝ => t / 2) (fun t : ℝ => t) 𝓝∞ := by
+      have h := (Asymptotics.isBigO_refl (fun t : ℝ => t) 𝓝∞).const_mul_left (1 / 2)
+      exact h.congr_left fun t => by ring
+    have h_mul := h_half.mul h_j
+    refine h_mul.trans_eventuallyEq ?_
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    have h1 : t = t ^ (1 : ℝ) := (Real.rpow_one t).symm
+    rw [show (-(0 : ℕ) - 2 : ℝ) = -2 by norm_num]
+    calc t * t ^ (-2 : ℝ) = t ^ (1 : ℝ) * t ^ (-2 : ℝ) := by rw [← h1]
+      _ = t ^ ((1 : ℝ) + -2) := (Real.rpow_add ht 1 (-2)).symm
+      _ = t ^ (-1 : ℝ) := by norm_num
+  -- (3) Combine along `δ = α_part − (t/2)·j` (valid for `t > 0`).
+  have h_sub := α_part_isO.sub h_tj
+  have h_evEq : δ =ᶠ[Filter.atTop] (fun t => α_part t - t / 2 * j t) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    exact δ_eq t ht
+  exact h_evEq.trans_isBigO h_sub
 
 end ErrorTermDelta
 

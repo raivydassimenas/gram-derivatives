@@ -348,3 +348,92 @@ theorem theta_tendsto_atTop : Filter.Tendsto theta 𝓝∞ 𝓝∞ := by
     ring
   -- (6) Comparison.
   exact Filter.tendsto_atTop_mono' 𝓝∞ h_lower h_min
+
+/-!
+  ## §6  Leading-order asymptotics of `θ` and `θ'`
+
+  The two "input facts" of the Gram-asymptotics blueprint
+  (`Proof_Gram_fun_der.tex`), both immediate from `theta = δ − π·φ − π`:
+
+    (θ1)  θ(t)  = t/2 · log(t/(2π)) − t/2 − π/8 + O(1/t),
+    (θ2)  θ'(t) = 1/2 · log(t/(2π)) + O(1/t²),
+
+  as `t → +∞`.  Expanding `−π·φ(t) = (t/2)·log(t/(2π)) − t/2 + 7π/8`
+  shows the (θ1)-residual is *exactly* `δ(t)`, so (θ1) is `δ_isO`;
+  similarly the (θ2)-residual is exactly `δ'(t)`, which is
+  `iteratedDeriv_δ_isO` at order `1`.  These feed the derivation of the
+  Lavrik/Korolev asymptotics (8) and (9) in `Theorem3.lean`.
+-/
+
+/-- Closed form of `theta`: the definition `θ = δ − π·φ − π` expands to
+
+        θ(t) = t/2 · log(t/(2π)) − t/2 − π/8 + δ(t)
+
+    for every real `t` (pure field algebra using `π ≠ 0`). -/
+theorem theta_eq_main_add_δ (t : ℝ) :
+    theta t = t / 2 * Real.log (t / (2 * Real.pi)) - t / 2 - Real.pi / 8 + δ t := by
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  unfold theta φ
+  field_simp
+  ring
+
+/-- **(θ1)**  `θ(t) = t/2·log(t/(2π)) − t/2 − π/8 + O(1/t)` as `t → +∞`.
+    By `theta_eq_main_add_δ` the residual is exactly `δ`, so this is
+    `δ_isO`. -/
+theorem theta_asymp :
+    IsO
+      (fun t => theta t - (t / 2 * Real.log (t / (2 * Real.pi)) - t / 2 - Real.pi / 8))
+      (fun t => t ^ (-1 : ℝ))
+      𝓝∞ := by
+  have h_eq : (fun t => theta t
+      - (t / 2 * Real.log (t / (2 * Real.pi)) - t / 2 - Real.pi / 8)) = δ := by
+    funext t
+    rw [theta_eq_main_add_δ t]
+    ring
+  rw [h_eq]
+  exact δ_isO
+
+/-- First derivative of `theta`:  `θ'(t) = log(t/(2π))/2 + δ'(t)` for
+    `t > 0`.  From `theta = δ − π·φ − π` and
+    `φ'(t) = −(1/(2π))·log(t/(2π))` (`hasDerivAt_φ` in `Theorem1.lean`). -/
+theorem deriv_theta_eq {t : ℝ} (ht : 0 < t) :
+    deriv theta t = Real.log (t / (2 * Real.pi)) / 2 + deriv δ t := by
+  -- `δ` has some derivative at `t`.
+  have hδ_diff : DifferentiableAt ℝ δ t :=
+    (contDiffAt_δ 1 ht).differentiableAt (by norm_num)
+  have hδ : HasDerivAt δ (deriv δ t) t := hδ_diff.hasDerivAt
+  -- `π·φ` has derivative `−(1/2)·log(t/(2π))`.
+  have hφ := (hasDerivAt_φ ht).const_mul Real.pi
+  -- Assemble `theta = δ − π·φ − π`.
+  have h_theta : HasDerivAt theta
+      (deriv δ t - Real.pi * (-(1 / (2 * Real.pi)) * Real.log (t / (2 * Real.pi)))) t := by
+    have h := (hδ.sub hφ).sub_const Real.pi
+    exact h.congr_of_eventuallyEq (by
+      filter_upwards with s
+      unfold theta
+      simp only [Pi.sub_apply])
+  rw [h_theta.deriv]
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  field_simp
+  ring
+
+/-- **(θ2)**  `θ'(t) = log(t/(2π))/2 + O(1/t²)` as `t → +∞`.
+    By `deriv_theta_eq` the residual is exactly `δ'`, which is
+    `iteratedDeriv_δ_isO` at order `1`. -/
+theorem theta_deriv_asymp :
+    IsO
+      (fun t => deriv theta t - Real.log (t / (2 * Real.pi)) / 2)
+      (fun t => t ^ (-2 : ℝ))
+      𝓝∞ := by
+  -- The order-1 δ bound, with the exponent normalised to `-2`.
+  have h_δ' : IsO (fun t => deriv δ t) (fun t => t ^ (-2 : ℝ)) 𝓝∞ := by
+    have h := iteratedDeriv_δ_isO 1 le_rfl
+    have h_fun : (fun t : ℝ => iteratedDeriv 1 δ t) = fun t => deriv δ t := by
+      funext t; rw [iteratedDeriv_one]
+    have h_exp : (fun t : ℝ => t ^ (-((1 : ℕ) : ℝ) - 1)) = fun t : ℝ => t ^ (-2 : ℝ) := by
+      funext t; norm_num
+    rwa [h_fun, h_exp] at h
+  refine (Filter.EventuallyEq.trans_isBigO ?_ h_δ')
+  filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+  rw [deriv_theta_eq ht]
+  ring

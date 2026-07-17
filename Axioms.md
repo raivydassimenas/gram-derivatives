@@ -11,13 +11,13 @@ Regenerate at any time with the scratch module
 lake build GramDerivatives.AxiomAudit   # prints the axiom list for each theorem
 ```
 
-Last audited: 2026-07-15, against `lean4:v4.30.0-rc2` + matching Mathlib.
+Last audited: 2026-07-17, against `lean4:v4.30.0-rc2` + matching Mathlib.
 
 ## Method
 
 Every proof module builds with **zero `sorry`**. The deep analytic-number-theory
 input that Mathlib lacks (Riemann ζ, the Riemann–Siegel θ, Karatsuba–Korolev,
-Lavrik/Korolev Gram asymptotics, Kuipers–Niederreiter equidistribution) is
+Kuipers–Niederreiter equidistribution) is
 isolated into a small number of `axiom` declarations, each tagged `-- ASSUMPTION`
 in source. `#print axioms` walks the full transitive dependency graph, so the
 lists below are exhaustive: anything *not* listed is genuinely proved from
@@ -39,11 +39,11 @@ discussion of custom assumptions below.
 
 | Theorem | Location | Custom axioms it depends on |
 |---|---|---|
-| `theorem1` | `Theorem1.lean:3638` | **none** (only the three standard Lean axioms) |
-| `corollary2` | `Corollary2.lean:205` | **none** (only the three standard Lean axioms) |
-| `theorem3` | `Theorem3.lean:3169` | `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp` |
-| `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | the 3 `gram*` axioms above **+** `isUDModOne_of_iteratedDeriv_decay` |
-| `Gram.corollary5` | `Corollary5.lean:40` | the 4 axioms above **+** `continuous_ud_criterion`, `IsUDModOne.shift` |
+| `theorem1` | `Theorem1.lean:3754` | **none** (only the three standard Lean axioms) |
+| `corollary2` | `Corollary2.lean:209` | **none** (only the three standard Lean axioms) |
+| `theorem3` | `Theorem3.lean:3654` | `contDiffAt_gram` |
+| `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | `contDiffAt_gram` **+** `isUDModOne_of_iteratedDeriv_decay` |
+| `Gram.corollary5` | `Corollary5.lean:40` | the 2 axioms above **+** `continuous_ud_criterion`, `IsUDModOne.shift` |
 
 ### Notable findings
 
@@ -64,8 +64,14 @@ discussion of custom assumptions below.
 - **`gram` and `gram_spec` are no longer axioms.** The Gram function is
   *defined* (`Function.invFunOn theta (Set.Ici 7)`) and its defining relation
   `θ(t_u) = (u − 1)π` is a *theorem*, proved by the intermediate value theorem
-  from the new `theta_tendsto_atTop` (`Corollary2.lean` §5). Theorem 3's
-  custom-axiom surface is down from five axioms to three.
+  from the new `theta_tendsto_atTop` (`Corollary2.lean` §5).
+- **The Lavrik/Korolev base asymptotics (8) and (9) are no longer axioms.**
+  `gram_asymp` and `gram_deriv_asymp` are *derived* (`Theorem3.lean` §1.7a,
+  following the blueprint `Proof_Gram_fun_der.tex`) from `gram_spec` plus the
+  leading-order behaviour of `θ` and `θ'` (`theta_eq_main_add_δ`,
+  `theta_deriv_asymp` in `Corollary2.lean` §6, resting on the fully proved
+  `δ = O(1/t)` and `δ' = O(1/t²)` bounds of `Theorem1.lean`). Theorem 3's
+  custom-axiom surface is down to a single axiom, `contDiffAt_gram`.
 - **The dependencies are strictly cumulative** down the chain
   Theorem 3 → Theorem 4 → Corollary 5, with each step adding exactly the
   equidistribution axioms it needs.
@@ -106,17 +112,23 @@ and `j = O(t⁻²)` from `iteratedDeriv_j_isO` at order 0).
 | Axiom | Signature | Provenance |
 |---|---|---|
 | `contDiffAt_gram` | `(n) {u} (hu : gramThreshold < u) → ContDiffAt ℝ n gram u` | `C^∞` on the tail, by the inverse function theorem |
-| `gram_asymp` | `Iso (gram − L − L·ll/l) (L·ll/l) 𝓝∞`, `L = 2πu/log u` | eq. (8), Lavrik [14, Lemma 2] |
-| `gram_deriv_asymp` | `Iso (gram' − A − A·ll/l) (A·ll/l) 𝓝∞`, `A = 2π/log u` | eq. (9), Korolev [10, Lemma 1.1] |
 
-All three remaining axioms are statements about the *defined* `gram`; they
-are true under the classical (unformalised) fact that `theta` is strictly
+The single remaining axiom is a statement about the *defined* `gram`; it is
+true under the classical (unformalised) fact that `theta` is strictly
 increasing on `[7, ∞)`, which makes `Function.invFunOn theta (Ici 7)` the
-genuine monotone inverse there. `gram_asymp` and `gram_deriv_asymp` are
-genuine number-theoretic asymptotics not formalizable from the repo's
-analytic material alone; they are the `n = 0, 1` baselines that Theorem 3
-generalizes. The remaining consequences (`gram_tendsto_atTop`,
-`gram_isEquivalent_gramL`, …) are **derived** from these, no new axioms.
+genuine monotone inverse there.
+
+The Lavrik/Korolev baselines `gram_asymp` (eq. (8), [14, Lemma 2]) and
+`gram_deriv_asymp` (eq. (9), [10, Lemma 1.1]) — formerly axioms — are now
+**theorems** (§1.7a), derived from the implicit equation `θ(gram u) = (u−1)π`:
+`gram u → +∞` unconditionally (θ is bounded on compacts while `(u−1)π → ∞`),
+the star equation `gram u·(log(gram u) − log(2π) − 1) = 2πu + O(1)` from the
+closed form of `θ`, a logarithmic-scale sandwich
+`log(gram u) = log u − log log u + O(1)`, and a shared inversion lemma
+`1/D = (1/log u)·(1 + (1+o(1))·log log u/log u)` applied to the denominators
+of (8) and (9); for (9) the chain rule identity `θ'(gram u)·gram'(u) = π`
+converts the problem into the same inversion. All downstream consequences
+(`gram_tendsto_atTop`, `gram_isEquivalent_gramL`, …) follow as before.
 
 ### `Theorem4.lean` — the higher-derivative equidistribution criterion
 

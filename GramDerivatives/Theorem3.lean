@@ -158,44 +158,6 @@ theorem gram_ge_seven (u : ℝ) (hu : gramThreshold ≤ u) : 7 ≤ gram u :=
 axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : gramThreshold < u) :
     ContDiffAt ℝ n gram u -- ASSUMPTION
 
-/-- ASSUMPTION: Lavrik's asymptotic for the Gram function (equation (8),
-    [14, Lemma 2]):
-
-        t_u = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u).
-
-    A statement about the *defined* `gram`; true under the classical
-    fact that `θ` is strictly increasing on `[7, ∞)`. -/
-axiom gram_asymp :
-    Iso
-      (fun u : ℝ =>
-        gram u
-        - (2 * Real.pi * u / Real.log u)
-        - (2 * Real.pi * u / Real.log u)
-          * (Real.log (Real.log u) / Real.log u))
-      (fun u : ℝ =>
-        (2 * Real.pi * u / Real.log u)
-        * (Real.log (Real.log u) / Real.log u))
-      𝓝∞ -- ASSUMPTION
-
-/-- ASSUMPTION: Korolev's asymptotic for the first derivative of the
-    Gram function (equation (9), [10, Lemma 1.1]):
-
-        t_u' = (2π / log u) · (1 + (1 + o(1)) · log log u / log u).
-
-    A statement about the *defined* `gram`; true under the classical
-    fact that `θ` is strictly increasing on `[7, ∞)`. -/
-axiom gram_deriv_asymp :
-    Iso
-      (fun u : ℝ =>
-        iteratedDeriv 1 gram u
-        - (2 * Real.pi / Real.log u)
-        - (2 * Real.pi / Real.log u)
-          * (Real.log (Real.log u) / Real.log u))
-      (fun u : ℝ =>
-        (2 * Real.pi / Real.log u)
-        * (Real.log (Real.log u) / Real.log u))
-      𝓝∞ -- ASSUMPTION
-
 /-!
   ## §1.5  Local `iteratedDeriv` helpers
 
@@ -342,7 +304,573 @@ private lemma gramL_mul_loglog_isLittleO_gramL :
   have h := (Asymptotics.isBigO_refl gramL 𝓝∞).mul_isLittleO loglog_div_log_isLittleO_one
   simpa using h
 
-/-- `gram_asymp` rewritten as `(gram − L − L · (loglog/log)) =o[atTop] L`. -/
+/-!
+  ## §1.7a  The Lavrik–Korolev asymptotics (8) and (9), derived
+
+  This section *derives* the base-case asymptotics `gram_asymp`
+  (equation (8), Lavrik [14, Lemma 2]) and `gram_deriv_asymp`
+  (equation (9), Korolev [10, Lemma 1.1]) — formerly axioms — from the
+  implicit equation `θ(gram u) = (u−1)π` (`gram_spec`) together with
+  the leading-order behaviour of `θ` and `θ'` proved in
+  `Corollary2.lean` (`theta_eq_main_add_δ`, `deriv_theta_eq`,
+  `theta_deriv_asymp`), following the blueprint
+  `Proof_Gram_fun_der.tex` at the repository root.
+
+  Pipeline (blueprint section numbers in brackets):
+
+    1. `gram_tendsto_atTop`       — `gram u → +∞`, unconditionally:
+                                     `θ(gram u) = (u−1)π → +∞` while `θ`
+                                     is bounded on compacts `[7, M]`.
+    2. `gram_star_isBigO_one`     — the algebraic form (*) [§2]:
+                                     `gram u · (log(gram u) − c) = 2πu + O(1)`
+                                     with `c = log(2π) + 1`.
+    3. `log_gram_sub_isBigO_one`  — the logarithmic scale [§3]:
+                                     `log(gram u) = log u − log log u + O(1)`.
+    4. `one_div_denom_expansion`  — the inversion step [§4, §5]: any
+                                     `D = log u − log log u + O(1)` has
+                                     `1/D = (1/log u) · (1 + (1+o(1)) · loglog u / log u)`.
+    5. `gram_asymp`               — (8) [§4]: `gram = (2πu + O(1))/D₈`,
+                                     `D₈ = log(gram u) − c`.
+    6. `gram_deriv_asymp`         — (9) [§5]: `gram' = π/θ'(gram) = 2π/D₉`,
+                                     `D₉ = 2·θ'(gram u)`.
+-/
+
+/-- `gram u → +∞` as `u → +∞` — *unconditionally*, from the implicit
+    equation alone: `θ(gram u) = (u−1)π → +∞`, while `θ` is bounded on
+    every compact `[7, M]`; since `gram u ≥ 7`, eventually
+    `gram u > M`.  (No monotonicity of `θ` and no asymptotic input is
+    used.) -/
+private lemma gram_tendsto_atTop : Tendsto gram 𝓝∞ 𝓝∞ := by
+  rw [tendsto_atTop]
+  intro M
+  -- Bound `theta` from above on the compact `[7, max 7 M]`.
+  have hcont : ContinuousOn theta (Set.Icc 7 (max 7 M)) := fun t ht =>
+    ((contDiffAt_theta 0 (by linarith [ht.1] : (0 : ℝ) < t)).continuousAt).continuousWithinAt
+  obtain ⟨C, hC⟩ : ∃ C, ∀ t ∈ Set.Icc (7 : ℝ) (max 7 M), theta t ≤ C := by
+    rcases (isCompact_Icc.image_of_continuousOn hcont).bddAbove with ⟨C, hC⟩
+    exact ⟨C, fun t ht => hC (Set.mem_image_of_mem theta ht)⟩
+  filter_upwards [Filter.eventually_ge_atTop gramThreshold,
+      Filter.eventually_gt_atTop (C / Real.pi + 1)] with u hu h_big
+  have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
+  have h7 : 7 ≤ gram u := gram_ge_seven u hu
+  by_contra h_lt
+  rw [not_le] at h_lt
+  have h_mem : gram u ∈ Set.Icc (7 : ℝ) (max 7 M) :=
+    ⟨h7, le_trans h_lt.le (le_max_right 7 M)⟩
+  have h_le : theta (gram u) ≤ C := hC _ h_mem
+  rw [gram_spec u hu] at h_le
+  have h_gt : C < (u - 1) * Real.pi := by
+    have h1 : C / Real.pi < u - 1 := by linarith
+    calc C = C / Real.pi * Real.pi := by field_simp
+      _ < (u - 1) * Real.pi := mul_lt_mul_of_pos_right h1 hπ
+  linarith
+
+/-- Eventually `0 < gram u` as `u → +∞`. -/
+private lemma eventually_gram_pos :
+    ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < gram u :=
+  gram_tendsto_atTop.eventually_gt_atTop 0
+
+/-- `δ(gram u) → 0`:  `δ = O(t⁻¹)` (`δ_isO` in `Theorem1.lean`)
+    composed with `gram u → +∞`. -/
+private lemma δ_gram_tendsto_zero :
+    Tendsto (fun u : ℝ => δ (gram u)) 𝓝∞ (𝓝 0) := by
+  have h_δ : Tendsto δ 𝓝∞ (𝓝 0) :=
+    δ_isO.trans_tendsto (tendsto_rpow_neg_atTop one_pos)
+  exact h_δ.comp gram_tendsto_atTop
+
+/-- **The star equation (*)** (blueprint §2): with `c := log(2π) + 1`,
+
+        gram u · (log(gram u) − c) = 2πu + O(1).
+
+    Substituting the closed form
+    `θ(t) = t/2·log(t/(2π)) − t/2 − π/8 + δ(t)` into
+    `θ(gram u) = (u−1)π` shows the residual is exactly
+    `π/4 − 2π − 2·δ(gram u)`, which converges (to `π/4 − 2π`). -/
+private lemma gram_star_isBigO_one :
+    IsO
+      (fun u : ℝ => gram u * (Real.log (gram u) - (Real.log (2 * Real.pi) + 1))
+        - 2 * Real.pi * u)
+      (fun _ : ℝ => (1 : ℝ)) 𝓝∞ := by
+  have h_ev : (fun u : ℝ => gram u * (Real.log (gram u) - (Real.log (2 * Real.pi) + 1))
+        - 2 * Real.pi * u)
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => Real.pi / 4 - 2 * Real.pi - 2 * δ (gram u)) := by
+    filter_upwards [Filter.eventually_ge_atTop gramThreshold] with u hu
+    have h7 : (7 : ℝ) ≤ gram u := gram_ge_seven u hu
+    have hg_pos : (0 : ℝ) < gram u := by linarith
+    have h_theta := gram_spec u hu
+    rw [theta_eq_main_add_δ (gram u),
+        Real.log_div (ne_of_gt hg_pos) (by positivity : (2 * Real.pi : ℝ) ≠ 0)] at h_theta
+    linear_combination (2 : ℝ) * h_theta
+  have h_tendsto : Tendsto (fun u : ℝ => Real.pi / 4 - 2 * Real.pi - 2 * δ (gram u)) 𝓝∞
+      (𝓝 (Real.pi / 4 - 2 * Real.pi - 2 * 0)) :=
+    tendsto_const_nhds.sub (δ_gram_tendsto_zero.const_mul 2)
+  exact h_ev.trans_isBigO (h_tendsto.isBigO_one (F := ℝ))
+
+/-- **Logarithmic scale of the Gram function** (blueprint §3, Lemma
+    `logscale`):
+
+        log(gram u) = log u − log log u + O(1).
+
+    Proof: take logarithms in (*).  With `L := log(gram u)`,
+    `l := log u`, `c := log(2π) + 1` this yields the master equation
+    `L + log(L − c) = log(2π) + l + log q` with `q ∈ [1/2, 2]`
+    eventually; a two-sided sandwich first bounds `L` between
+    `(l − A + c + 1)/2` and `l + A` (`A := log(2π) + log 2`), then
+    squeezes `log(L − c)` between `log l − log 4` and `log l + log 2`. -/
+private lemma log_gram_sub_isBigO_one :
+    IsO (fun u : ℝ => Real.log (gram u) - (Real.log u - Real.log (Real.log u)))
+        (fun _ : ℝ => (1 : ℝ)) 𝓝∞ := by
+  obtain ⟨C, hC0⟩ := gram_star_isBigO_one.bound
+  have hC : ∀ᶠ u in (𝓝∞ : Filter ℝ),
+      |gram u * (Real.log (gram u) - (Real.log (2 * Real.pi) + 1)) - 2 * Real.pi * u| ≤ C := by
+    filter_upwards [hC0] with u hu
+    simpa [Real.norm_eq_abs] using hu
+  refine IsBigO.of_bound (Real.log (2 * Real.pi) + Real.log 2 + Real.log 4) ?_
+  have hL_ev : ∀ᶠ u in (𝓝∞ : Filter ℝ),
+      Real.log (2 * Real.pi) + 2 ≤ Real.log (gram u) :=
+    (Real.tendsto_log_atTop.comp gram_tendsto_atTop).eventually_ge_atTop _
+  have hl2_ev : ∀ᶠ u in (𝓝∞ : Filter ℝ),
+      2 * (Real.log (2 * Real.pi) + Real.log 2)
+        + 2 * (Real.log (2 * Real.pi) + 1) ≤ Real.log u :=
+    Real.tendsto_log_atTop.eventually_ge_atTop _
+  have hl1_ev : ∀ᶠ u in (𝓝∞ : Filter ℝ), 1 ≤ Real.log u :=
+    Real.tendsto_log_atTop.eventually_ge_atTop _
+  have huC_ev : ∀ᶠ u in (𝓝∞ : Filter ℝ), C ≤ Real.pi * u :=
+    (Filter.Tendsto.const_mul_atTop Real.pi_pos tendsto_id).eventually_ge_atTop C
+  filter_upwards [hC, hL_ev, hl2_ev, hl1_ev, huC_ev,
+      Filter.eventually_ge_atTop gramThreshold,
+      Filter.eventually_ge_atTop (1 : ℝ)] with u hE hL hl2 hl1 huC hthr hu1
+  have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
+  have h2π_pos : (0 : ℝ) < 2 * Real.pi := by positivity
+  have hlog2π_nn : 0 ≤ Real.log (2 * Real.pi) :=
+    Real.log_nonneg (by nlinarith [Real.pi_gt_three])
+  have hlog2_nn : 0 ≤ Real.log 2 := Real.log_nonneg one_le_two
+  have hlog2_le_one : Real.log 2 ≤ 1 := by
+    have := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    linarith
+  set g := gram u with hg_def
+  set L := Real.log (gram u) with hL_def
+  set l := Real.log u with hl_def
+  set c := Real.log (2 * Real.pi) + 1 with hc_def
+  have hg7 : (7 : ℝ) ≤ g := gram_ge_seven u hthr
+  have hg_pos : (0 : ℝ) < g := by linarith
+  have hLc1 : 1 ≤ L - c := by rw [hc_def]; linarith
+  have hLc_pos : (0 : ℝ) < L - c := by linarith
+  have hu_pos : (0 : ℝ) < u := by linarith
+  have hl_pos : (0 : ℝ) < l := by linarith
+  -- The star residual `E` and the exact product form.
+  set E := g * (L - c) - 2 * Real.pi * u with hE_def
+  have hE_lo : -C ≤ E := neg_le_of_abs_le hE
+  have hE_hi : E ≤ C := le_of_abs_le hE
+  have h2πu_pos : (0 : ℝ) < 2 * Real.pi * u := by positivity
+  have h_sum_pos : (0 : ℝ) < 2 * Real.pi * u + E := by nlinarith
+  have h_prod : g * (L - c) = 2 * Real.pi * u + E := by rw [hE_def]; ring
+  -- The ratio `q` and its two-sided bound.
+  set q := (2 * Real.pi * u + E) / (2 * Real.pi * u) with hq_def
+  have hq_ge : (1 : ℝ) / 2 ≤ q := by
+    rw [hq_def, le_div_iff₀ h2πu_pos]
+    nlinarith
+  have hq_le : q ≤ 2 := by
+    rw [hq_def, div_le_iff₀ h2πu_pos]
+    nlinarith
+  have hq_pos : (0 : ℝ) < q := by linarith
+  have h_logq_le : Real.log q ≤ Real.log 2 := Real.log_le_log hq_pos hq_le
+  have h_logq_ge : -Real.log 2 ≤ Real.log q := by
+    have h := Real.log_le_log (by norm_num : (0 : ℝ) < 1 / 2) hq_ge
+    rwa [show (1 : ℝ) / 2 = 2⁻¹ by norm_num, Real.log_inv] at h
+  -- The master equation `L + log(L − c) = log(2π) + l + log q`.
+  have h_log_2πu : Real.log (2 * Real.pi * u) = Real.log (2 * Real.pi) + l := by
+    rw [Real.log_mul (ne_of_gt h2π_pos) (ne_of_gt hu_pos)]
+  have h_logq : Real.log q
+      = Real.log (2 * Real.pi * u + E) - Real.log (2 * Real.pi * u) := by
+    rw [hq_def, Real.log_div (ne_of_gt h_sum_pos) (ne_of_gt h2πu_pos)]
+  have h_left : Real.log (g * (L - c)) = L + Real.log (L - c) := by
+    rw [Real.log_mul (ne_of_gt hg_pos) (ne_of_gt hLc_pos)]
+  have h_master : L + Real.log (L - c) = Real.log (2 * Real.pi) + l + Real.log q := by
+    have h_eq : Real.log (g * (L - c)) = Real.log (2 * Real.pi * u + E) := by
+      rw [h_prod]
+    rw [h_left] at h_eq
+    rw [h_logq, h_log_2πu]
+    linarith
+  -- Sandwich for `L`.
+  have h_logLc_nn : 0 ≤ Real.log (L - c) := Real.log_nonneg hLc1
+  have h_logLc_le : Real.log (L - c) ≤ L - c - 1 := by
+    have := Real.log_le_sub_one_of_pos hLc_pos
+    linarith
+  have hL_upper : L ≤ l + (Real.log (2 * Real.pi) + Real.log 2) := by linarith
+  have hL_lower : (l - (Real.log (2 * Real.pi) + Real.log 2) + c + 1) / 2 ≤ L := by
+    linarith
+  -- Sandwich for `log(L − c)`.
+  have hLc_le_2l : L - c ≤ 2 * l := by rw [hc_def] at *; linarith
+  have h_logLc_upper : Real.log (L - c) ≤ Real.log 2 + Real.log l := by
+    have h := Real.log_le_log hLc_pos hLc_le_2l
+    rwa [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (ne_of_gt hl_pos)] at h
+  have hLc_ge_l4 : l / 4 ≤ L - c := by rw [hc_def] at *; linarith
+  have h_logLc_lower : Real.log l - Real.log 4 ≤ Real.log (L - c) := by
+    have h := Real.log_le_log (by positivity : (0 : ℝ) < l / 4) hLc_ge_l4
+    rwa [Real.log_div (ne_of_gt hl_pos) (by norm_num : (4 : ℝ) ≠ 0)] at h
+  -- Conclusion.
+  have h_log4 : Real.log 4 = 2 * Real.log 2 := by
+    rw [show (4 : ℝ) = 2 ^ 2 by norm_num, Real.log_pow]
+    push_cast; ring
+  rw [Real.norm_eq_abs, norm_one, mul_one, abs_le]
+  constructor <;> linarith
+
+/-- Any `D = log u − log log u + O(1)` eventually dominates `log u / 4`
+    (in particular it is eventually positive). -/
+private lemma denom_eventually_ge {D : ℝ → ℝ}
+    (hD : IsO (fun u : ℝ => D u - (Real.log u - Real.log (Real.log u)))
+      (fun _ : ℝ => (1 : ℝ)) 𝓝∞) :
+    ∀ᶠ u in (𝓝∞ : Filter ℝ), Real.log u / 4 ≤ D u := by
+  obtain ⟨C, hC0⟩ := hD.bound
+  have hC : ∀ᶠ u in (𝓝∞ : Filter ℝ),
+      |D u - (Real.log u - Real.log (Real.log u))| ≤ C := by
+    filter_upwards [hC0] with u hu
+    simpa [Real.norm_eq_abs] using hu
+  have h_ll_le : ∀ᶠ u in (𝓝∞ : Filter ℝ),
+      Real.log (Real.log u) ≤ Real.log u / 2 := by
+    have h := loglog_isLittleO_log.def (by norm_num : (0 : ℝ) < 1 / 2)
+    filter_upwards [h, Real.tendsto_log_atTop.eventually_ge_atTop 0] with u hu hl0
+    rw [Real.norm_eq_abs, Real.norm_eq_abs] at hu
+    calc Real.log (Real.log u) ≤ |Real.log (Real.log u)| := le_abs_self _
+      _ ≤ 1 / 2 * |Real.log u| := hu
+      _ = Real.log u / 2 := by rw [abs_of_nonneg hl0]; ring
+  filter_upwards [hC, h_ll_le,
+      Real.tendsto_log_atTop.eventually_ge_atTop (4 * C)] with u hE hll hl4
+  have h1 : -C ≤ D u - (Real.log u - Real.log (Real.log u)) := neg_le_of_abs_le hE
+  linarith
+
+/-- **The inversion step** (blueprint §4/§5): if
+    `D(u) = log u − log log u + O(1)` then
+
+        1/D(u) = (1/log u) · (1 + (1 + o(1)) · log log u / log u),
+
+    encoded as
+    `1/D − 1/log u − (1/log u)·(loglog u/log u) = o((1/log u)·(loglog u/log u))`. -/
+private lemma one_div_denom_expansion {D : ℝ → ℝ}
+    (hD : IsO (fun u : ℝ => D u - (Real.log u - Real.log (Real.log u)))
+      (fun _ : ℝ => (1 : ℝ)) 𝓝∞) :
+    Iso
+      (fun u : ℝ => 1 / D u - 1 / Real.log u
+        - 1 / Real.log u * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ => 1 / Real.log u * (Real.log (Real.log u) / Real.log u))
+      𝓝∞ := by
+  obtain ⟨C, hC0⟩ := hD.bound
+  have hC : ∀ᶠ u in (𝓝∞ : Filter ℝ),
+      |D u - (Real.log u - Real.log (Real.log u))| ≤ C := by
+    filter_upwards [hC0] with u hu
+    simpa [Real.norm_eq_abs] using hu
+  have h_l : Tendsto (fun u : ℝ => Real.log u) 𝓝∞ 𝓝∞ := Real.tendsto_log_atTop
+  have h_ll : Tendsto (fun u : ℝ => Real.log (Real.log u)) 𝓝∞ 𝓝∞ :=
+    Real.tendsto_log_atTop.comp Real.tendsto_log_atTop
+  have h_D_ge := denom_eventually_ge hD
+  have h_D_pos : ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < D u := by
+    filter_upwards [h_D_ge, h_l.eventually_ge_atTop 1] with u h1 h2
+    linarith
+  have h_x_to_zero : Tendsto (fun u : ℝ => Real.log (Real.log u) / Real.log u) 𝓝∞ (𝓝 0) :=
+    (Asymptotics.isLittleO_one_iff ℝ).mp loglog_div_log_isLittleO_one
+  -- (t1)  `loglog u / D u → 0`.
+  have h_t1 : Tendsto (fun u : ℝ => Real.log (Real.log u) / D u) 𝓝∞ (𝓝 0) := by
+    apply squeeze_zero' (g := fun u : ℝ => 4 * (Real.log (Real.log u) / Real.log u))
+    · filter_upwards [h_D_pos, h_ll.eventually_ge_atTop 0] with u hD0 hll0
+      positivity
+    · filter_upwards [h_D_ge, h_D_pos, h_ll.eventually_ge_atTop 0,
+          h_l.eventually_gt_atTop 0] with u hD4 hD0 hll0 hl0
+      have h_step : Real.log (Real.log u) / D u
+          ≤ Real.log (Real.log u) / (Real.log u / 4) := by
+        gcongr
+      have h_eq : Real.log (Real.log u) / (Real.log u / 4)
+          = 4 * (Real.log (Real.log u) / Real.log u) := by
+        field_simp
+      linarith [h_eq ▸ h_step]
+    · simpa using h_x_to_zero.const_mul (4 : ℝ)
+  -- (t2)  `(D − (l − ll)) / ll → 0`.
+  have h_t2 : Tendsto
+      (fun u : ℝ => (D u - (Real.log u - Real.log (Real.log u))) / Real.log (Real.log u))
+      𝓝∞ (𝓝 0) := by
+    apply squeeze_zero_norm' (a := fun u : ℝ => C / Real.log (Real.log u))
+    · filter_upwards [hC, h_ll.eventually_gt_atTop 0] with u hE hll0
+      rw [Real.norm_eq_abs, abs_div, abs_of_pos hll0]
+      gcongr
+    · exact tendsto_const_nhds.div_atTop h_ll
+  -- (t3)  `(l + ll) / D → 1`.
+  have h_t3 : Tendsto
+      (fun u : ℝ => (Real.log u + Real.log (Real.log u)) / D u) 𝓝∞ (𝓝 1) := by
+    have h_diff : Tendsto
+        (fun u : ℝ => (Real.log u + Real.log (Real.log u)) / D u - 1) 𝓝∞ (𝓝 0) := by
+      apply squeeze_zero_norm'
+        (a := fun u : ℝ => 8 * (Real.log (Real.log u) / Real.log u) + 4 * C / Real.log u)
+      · filter_upwards [hC, h_D_ge, h_D_pos, h_ll.eventually_ge_atTop 0,
+            h_l.eventually_gt_atTop 0] with u hE hD4 hD0 hll0 hl0
+        have h_eq : (Real.log u + Real.log (Real.log u)) / D u - 1
+            = (2 * Real.log (Real.log u)
+                - (D u - (Real.log u - Real.log (Real.log u)))) / D u := by
+          field_simp
+          ring
+        rw [h_eq, Real.norm_eq_abs, abs_div, abs_of_pos hD0]
+        have hE_lo : -C ≤ D u - (Real.log u - Real.log (Real.log u)) :=
+          neg_le_of_abs_le hE
+        have hE_hi : D u - (Real.log u - Real.log (Real.log u)) ≤ C :=
+          le_of_abs_le hE
+        have h_num : |2 * Real.log (Real.log u)
+            - (D u - (Real.log u - Real.log (Real.log u)))|
+            ≤ 2 * Real.log (Real.log u) + C := by
+          rw [abs_le]
+          constructor <;> linarith
+        have h_step : |2 * Real.log (Real.log u)
+            - (D u - (Real.log u - Real.log (Real.log u)))| / D u
+            ≤ (2 * Real.log (Real.log u) + C) / (Real.log u / 4) := by
+          gcongr
+          linarith
+        have h_eq2 : (2 * Real.log (Real.log u) + C) / (Real.log u / 4)
+            = 8 * (Real.log (Real.log u) / Real.log u) + 4 * C / Real.log u := by
+          field_simp
+          ring
+        linarith [h_eq2 ▸ h_step]
+      · have h1 := h_x_to_zero.const_mul (8 : ℝ)
+        have h2 : Tendsto (fun u : ℝ => 4 * C / Real.log u) 𝓝∞ (𝓝 0) :=
+          tendsto_const_nhds.div_atTop h_l
+        simpa using h1.add h2
+    have := h_diff.add (tendsto_const_nhds (x := (1 : ℝ)))
+    simpa using this
+  -- Assemble via `isLittleO_iff_tendsto'`.
+  refine (Asymptotics.isLittleO_iff_tendsto' ?_).mpr ?_
+  · filter_upwards [h_l.eventually_gt_atTop 0, h_ll.eventually_gt_atTop 0] with u hl0 hll0
+    intro h0
+    exact absurd h0 (by positivity)
+  have h_expr : Tendsto (fun u : ℝ =>
+      Real.log (Real.log u) / D u
+      - (D u - (Real.log u - Real.log (Real.log u))) / Real.log (Real.log u)
+        * ((Real.log u + Real.log (Real.log u)) / D u)) 𝓝∞ (𝓝 0) := by
+    have h := h_t1.sub (h_t2.mul h_t3)
+    simpa using h
+  refine Tendsto.congr' ?_ h_expr
+  filter_upwards [h_l.eventually_gt_atTop 0, h_ll.eventually_gt_atTop 0, h_D_pos]
+    with u hl0 hll0 hD0
+  have h1 : Real.log u ≠ 0 := ne_of_gt hl0
+  have h2 : Real.log (Real.log u) ≠ 0 := ne_of_gt hll0
+  have h3 : D u ≠ 0 := ne_of_gt hD0
+  field_simp
+  ring
+
+/-- **Equation (8)** (Lavrik [14, Lemma 2]) — now a *theorem*, derived
+    from the implicit equation:  solving (*) for `gram` gives
+    `gram = (2πu + O(1))/D₈` with `D₈ := log(gram u) − c`; the
+    logarithmic-scale lemma qualifies `D₈` for the inversion step, and
+    the `O(1)/D₈` correction is absorbed into the little-o remainder. -/
+theorem gram_asymp :
+    Iso
+      (fun u : ℝ =>
+        gram u
+        - (2 * Real.pi * u / Real.log u)
+        - (2 * Real.pi * u / Real.log u)
+          * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ =>
+        (2 * Real.pi * u / Real.log u)
+        * (Real.log (Real.log u) / Real.log u))
+      𝓝∞ := by
+  -- `D₈` satisfies the inversion hypothesis.
+  have hD : IsO (fun u : ℝ =>
+      (Real.log (gram u) - (Real.log (2 * Real.pi) + 1))
+        - (Real.log u - Real.log (Real.log u)))
+      (fun _ : ℝ => (1 : ℝ)) 𝓝∞ := by
+    have h1 := log_gram_sub_isBigO_one
+    have h2 : IsO (fun _ : ℝ => Real.log (2 * Real.pi) + 1)
+        (fun _ : ℝ => (1 : ℝ)) 𝓝∞ :=
+      Asymptotics.isBigO_const_const _ one_ne_zero _
+    exact (h1.sub h2).congr_left fun u => by ring
+  have h_inv := one_div_denom_expansion hD
+  -- Piece 2 of the residual: `E/D₈ = O(1/log u) = o(target)`.
+  have h_l : Tendsto (fun u : ℝ => Real.log u) 𝓝∞ 𝓝∞ := Real.tendsto_log_atTop
+  have h_ll : Tendsto (fun u : ℝ => Real.log (Real.log u)) 𝓝∞ 𝓝∞ :=
+    Real.tendsto_log_atTop.comp Real.tendsto_log_atTop
+  have h_ED : IsO (fun u : ℝ =>
+      (gram u * (Real.log (gram u) - (Real.log (2 * Real.pi) + 1)) - 2 * Real.pi * u)
+        / (Real.log (gram u) - (Real.log (2 * Real.pi) + 1)))
+      (fun u : ℝ => 1 / Real.log u) 𝓝∞ := by
+    obtain ⟨C, hC0⟩ := gram_star_isBigO_one.bound
+    refine IsBigO.of_bound (4 * C) ?_
+    filter_upwards [hC0, denom_eventually_ge hD, h_l.eventually_gt_atTop 0] with u hE hD4 hl0
+    rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_div]
+    rw [Real.norm_eq_abs, norm_one, mul_one] at hE
+    have hD_pos : (0 : ℝ) < Real.log (gram u) - (Real.log (2 * Real.pi) + 1) := by
+      have : (0 : ℝ) < Real.log u / 4 := by positivity
+      linarith
+    rw [abs_of_pos hD_pos, abs_of_pos (by positivity : (0 : ℝ) < 1 / Real.log u)]
+    have hC_nn : 0 ≤ C := le_trans (abs_nonneg _) hE
+    calc |gram u * (Real.log (gram u) - (Real.log (2 * Real.pi) + 1)) - 2 * Real.pi * u|
+          / (Real.log (gram u) - (Real.log (2 * Real.pi) + 1))
+        ≤ C / (Real.log u / 4) := by
+          gcongr
+      _ = 4 * C * (1 / Real.log u) := by field_simp
+  have h_small : Iso (fun u : ℝ => 1 / Real.log u)
+      (fun u : ℝ =>
+        (2 * Real.pi * u / Real.log u) * (Real.log (Real.log u) / Real.log u)) 𝓝∞ := by
+    refine (Asymptotics.isLittleO_iff_tendsto' ?_).mpr ?_
+    · filter_upwards [h_l.eventually_gt_atTop 0, h_ll.eventually_gt_atTop 0,
+          Filter.eventually_gt_atTop (0 : ℝ)] with u hl0 hll0 hu0
+      intro h0
+      have : (0 : ℝ) < 2 * Real.pi * u / Real.log u * (Real.log (Real.log u) / Real.log u) := by
+        have hπ := Real.pi_pos
+        positivity
+      exact absurd h0 (ne_of_gt this)
+    have h_lim : Tendsto (fun u : ℝ =>
+        (1 / (2 * Real.pi)) * ((Real.log u / u) * (1 / Real.log (Real.log u)))) 𝓝∞ (𝓝 0) := by
+      have h1 : Tendsto (fun u : ℝ => Real.log u / u) 𝓝∞ (𝓝 0) :=
+        Real.isLittleO_log_id_atTop.tendsto_div_nhds_zero
+      have h2 : Tendsto (fun u : ℝ => 1 / Real.log (Real.log u)) 𝓝∞ (𝓝 0) :=
+        tendsto_const_nhds.div_atTop h_ll
+      have := (h1.mul h2).const_mul (1 / (2 * Real.pi))
+      simpa using this
+    refine Tendsto.congr' ?_ h_lim
+    filter_upwards [h_l.eventually_gt_atTop 0, h_ll.eventually_gt_atTop 0,
+        Filter.eventually_gt_atTop (0 : ℝ)] with u hl0 hll0 hu0
+    have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
+    field_simp
+  -- Residual decomposition and assembly.
+  have h_term1 : Iso (fun u : ℝ =>
+      (2 * Real.pi * u) *
+        (1 / (Real.log (gram u) - (Real.log (2 * Real.pi) + 1))
+          - 1 / Real.log u
+          - 1 / Real.log u * (Real.log (Real.log u) / Real.log u)))
+      (fun u : ℝ =>
+        (2 * Real.pi * u / Real.log u) * (Real.log (Real.log u) / Real.log u)) 𝓝∞ := by
+    have h := (Asymptotics.isBigO_refl (fun u : ℝ => 2 * Real.pi * u) 𝓝∞).mul_isLittleO h_inv
+    exact h.congr (fun u => rfl) (fun u => by ring)
+  have h_sum := h_term1.add (h_ED.trans_isLittleO h_small)
+  have h_ev : (fun u : ℝ =>
+      gram u - (2 * Real.pi * u / Real.log u)
+      - (2 * Real.pi * u / Real.log u) * (Real.log (Real.log u) / Real.log u))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ =>
+        (2 * Real.pi * u) *
+          (1 / (Real.log (gram u) - (Real.log (2 * Real.pi) + 1))
+            - 1 / Real.log u
+            - 1 / Real.log u * (Real.log (Real.log u) / Real.log u))
+        + (gram u * (Real.log (gram u) - (Real.log (2 * Real.pi) + 1)) - 2 * Real.pi * u)
+          / (Real.log (gram u) - (Real.log (2 * Real.pi) + 1))) := by
+    filter_upwards [denom_eventually_ge hD, h_l.eventually_gt_atTop 0] with u hD4 hl0
+    have hD_pos : (0 : ℝ) < Real.log (gram u) - (Real.log (2 * Real.pi) + 1) := by
+      have : (0 : ℝ) < Real.log u / 4 := by positivity
+      linarith
+    have h1 : Real.log u ≠ 0 := ne_of_gt hl0
+    have h2 : Real.log (gram u) - (Real.log (2 * Real.pi) + 1) ≠ 0 := ne_of_gt hD_pos
+    field_simp
+    ring
+  exact h_ev.trans_isLittleO h_sum
+
+/-- **Chain rule for `gram_spec` (first derivative).**
+
+    Differentiating `θ(gram u) = (u − 1)π` once via the chain rule
+    gives `θ'(gram u) · gram'(u) = π`.  Asymptotic-free; holds
+    pointwise whenever `u > gramThreshold` and `gram u > 0`. -/
+private lemma deriv_theta_gram_mul_deriv_gram (u : ℝ)
+    (hu : gramThreshold < u) (hgram : 0 < gram u) :
+    deriv theta (gram u) * deriv gram u = Real.pi := by
+  -- (1) Differentiability of `theta` at `gram u` and `gram` at `u`.
+  have hθ_diff : DifferentiableAt ℝ theta (gram u) :=
+    (contDiffAt_theta 1 hgram).differentiableAt (by norm_num)
+  have hg_diff : DifferentiableAt ℝ gram u :=
+    (contDiffAt_gram 1 hu).differentiableAt (by norm_num)
+  -- (2) Chain rule: `HasDerivAt (theta ∘ gram) (θ'(gram u) · gram'(u)) u`.
+  have h_comp : HasDerivAt (theta ∘ gram)
+      (deriv theta (gram u) * deriv gram u) u :=
+    hθ_diff.hasDerivAt.comp u hg_diff.hasDerivAt
+  -- (3) On `Ioi gramThreshold`, `theta ∘ gram` equals `s ↦ (s − 1)π`.
+  have h_evEq : (theta ∘ gram) =ᶠ[𝓝 u] (fun s : ℝ => (s - 1) * Real.pi) := by
+    have hIoi : Set.Ioi gramThreshold ∈ (𝓝 u : Filter ℝ) :=
+      isOpen_Ioi.mem_nhds hu
+    filter_upwards [hIoi] with s hs
+    simp [Function.comp_apply, gram_spec s hs.le]
+  -- (4) Compare with `HasDerivAt (· - 1) * π = π · 1 = π`.
+  have h_lin : HasDerivAt (fun s : ℝ => (s - 1) * Real.pi) Real.pi u := by
+    have h1 : HasDerivAt (fun s : ℝ => s - 1) 1 u := (hasDerivAt_id u).sub_const 1
+    simpa using h1.mul_const Real.pi
+  -- (5) Two `HasDerivAt`s for the same function ⟹ same derivative.
+  have h_comp' : HasDerivAt (theta ∘ gram) Real.pi u :=
+    h_lin.congr_of_eventuallyEq h_evEq
+  exact h_comp.unique h_comp'
+
+/-- **Equation (9)** (Korolev [10, Lemma 1.1]) — now a *theorem*,
+    derived from the implicit equation:  `gram' = π/θ'(gram) = 2π/D₉`
+    with `D₉ := 2·θ'(gram u)`; (θ2) plus the logarithmic-scale lemma
+    qualify `D₉` for the inversion step. -/
+theorem gram_deriv_asymp :
+    Iso
+      (fun u : ℝ =>
+        iteratedDeriv 1 gram u
+        - (2 * Real.pi / Real.log u)
+        - (2 * Real.pi / Real.log u)
+          * (Real.log (Real.log u) / Real.log u))
+      (fun u : ℝ =>
+        (2 * Real.pi / Real.log u)
+        * (Real.log (Real.log u) / Real.log u))
+      𝓝∞ := by
+  -- The (θ2) residual, transported along `gram u → +∞`, tends to `0`.
+  have h_r : Tendsto (fun u : ℝ =>
+      deriv theta (gram u) - Real.log (gram u / (2 * Real.pi)) / 2) 𝓝∞ (𝓝 0) := by
+    have h0 : Tendsto (fun t : ℝ =>
+        deriv theta t - Real.log (t / (2 * Real.pi)) / 2) 𝓝∞ (𝓝 0) :=
+      theta_deriv_asymp.trans_tendsto (tendsto_rpow_neg_atTop two_pos)
+    exact h0.comp gram_tendsto_atTop
+  -- `D₉ := 2·θ'(gram u)` satisfies the inversion hypothesis.
+  have hD : IsO (fun u : ℝ =>
+      2 * deriv theta (gram u) - (Real.log u - Real.log (Real.log u)))
+      (fun _ : ℝ => (1 : ℝ)) 𝓝∞ := by
+    have h_ev : (fun u : ℝ =>
+        2 * deriv theta (gram u) - (Real.log u - Real.log (Real.log u)))
+        =ᶠ[(𝓝∞ : Filter ℝ)]
+        (fun u : ℝ =>
+          2 * (deriv theta (gram u) - Real.log (gram u / (2 * Real.pi)) / 2)
+          + (Real.log (gram u) - (Real.log u - Real.log (Real.log u)))
+          - Real.log (2 * Real.pi)) := by
+      filter_upwards [Filter.eventually_ge_atTop gramThreshold] with u hu
+      have hg_pos : (0 : ℝ) < gram u :=
+        lt_of_lt_of_le (by norm_num) (gram_ge_seven u hu)
+      rw [Real.log_div (ne_of_gt hg_pos) (by positivity : (2 * Real.pi : ℝ) ≠ 0)]
+      ring
+    refine h_ev.trans_isBigO ?_
+    have h1 : IsO (fun u : ℝ =>
+        2 * (deriv theta (gram u) - Real.log (gram u / (2 * Real.pi)) / 2))
+        (fun _ : ℝ => (1 : ℝ)) 𝓝∞ := by
+      have := h_r.const_mul (2 : ℝ)
+      exact (this.isBigO_one (F := ℝ))
+    have h3 : IsO (fun _ : ℝ => Real.log (2 * Real.pi))
+        (fun _ : ℝ => (1 : ℝ)) 𝓝∞ :=
+      Asymptotics.isBigO_const_const _ one_ne_zero _
+    exact (h1.add log_gram_sub_isBigO_one).sub h3
+  have h_inv := one_div_denom_expansion hD
+  -- Eventual identity: `gram' = 2π · (1/D₉)`.
+  have h_ev_eq : (fun u : ℝ =>
+      iteratedDeriv 1 gram u - (2 * Real.pi / Real.log u)
+      - (2 * Real.pi / Real.log u) * (Real.log (Real.log u) / Real.log u))
+      =ᶠ[(𝓝∞ : Filter ℝ)]
+      (fun u : ℝ => (2 * Real.pi) *
+        (1 / (2 * deriv theta (gram u)) - 1 / Real.log u
+          - 1 / Real.log u * (Real.log (Real.log u) / Real.log u))) := by
+    filter_upwards [denom_eventually_ge hD,
+        Real.tendsto_log_atTop.eventually_gt_atTop 0,
+        Filter.eventually_gt_atTop gramThreshold] with u hD4 hl0 hthr
+    have hg_pos : (0 : ℝ) < gram u :=
+      lt_of_lt_of_le (by norm_num) (gram_ge_seven u hthr.le)
+    have hD_pos : (0 : ℝ) < 2 * deriv theta (gram u) := by
+      have : (0 : ℝ) < Real.log u / 4 := by positivity
+      linarith
+    have hθ'_pos : (0 : ℝ) < deriv theta (gram u) := by linarith
+    have h_chain := deriv_theta_gram_mul_deriv_gram u hthr hg_pos
+    have h_deriv : deriv gram u = Real.pi / deriv theta (gram u) := by
+      field_simp
+      linarith [h_chain]
+    rw [iteratedDeriv_one, h_deriv]
+    have h1 : Real.log u ≠ 0 := ne_of_gt hl0
+    have h2 : deriv theta (gram u) ≠ 0 := ne_of_gt hθ'_pos
+    field_simp
+  refine h_ev_eq.trans_isLittleO ?_
+  have h := (h_inv.const_mul_left (2 * Real.pi)).const_mul_right
+    (c := 2 * Real.pi) (by positivity)
+  exact h.congr (fun u => rfl) (fun u => by ring)
+
 private lemma gram_residual_isLittleO_gramL :
     Iso
       (fun u : ℝ =>
@@ -379,17 +907,6 @@ private lemma gram_sub_gramL_isLittleO_gramL :
     `2π u / log u`. -/
 private lemma gram_isEquivalent_gramL : IsEquivalent 𝓝∞ gram gramL :=
   gram_sub_gramL_isLittleO_gramL
-
-/-- `gram u → +∞` as `u → +∞`.  Derived from `gram_asymp` together with
-    the elementary fact `2π u / log u → +∞`. -/
-private lemma gram_tendsto_atTop : Tendsto gram 𝓝∞ 𝓝∞ := by
-  refine gram_isEquivalent_gramL.symm.tendsto_atTop ?_
-  exact linear_div_log_tendsto_atTop.congr (fun u => by simp [gramL])
-
-/-- Eventually `0 < gram u` as `u → +∞`. -/
-private lemma eventually_gram_pos :
-    ∀ᶠ u in (𝓝∞ : Filter ℝ), 0 < gram u :=
-  gram_tendsto_atTop.eventually_gt_atTop 0
 
 /-!
   ## §1.8  Mirror chain for `deriv gram`
@@ -480,38 +997,6 @@ private lemma eventually_deriv_gram_pos :
     have := abs_sub_le_iff.mp h_bd
     linarith [this.2]
   linarith
-
-/-- **Chain rule for `gram_spec` (first derivative).**
-
-    Differentiating `θ(gram u) = (u − 1)π` once via the chain rule
-    gives `θ'(gram u) · gram'(u) = π`.  Asymptotic-free; holds
-    pointwise whenever `u > gramThreshold` and `gram u > 0`. -/
-private lemma deriv_theta_gram_mul_deriv_gram (u : ℝ)
-    (hu : gramThreshold < u) (hgram : 0 < gram u) :
-    deriv theta (gram u) * deriv gram u = Real.pi := by
-  -- (1) Differentiability of `theta` at `gram u` and `gram` at `u`.
-  have hθ_diff : DifferentiableAt ℝ theta (gram u) :=
-    (contDiffAt_theta 1 hgram).differentiableAt (by norm_num)
-  have hg_diff : DifferentiableAt ℝ gram u :=
-    (contDiffAt_gram 1 hu).differentiableAt (by norm_num)
-  -- (2) Chain rule: `HasDerivAt (theta ∘ gram) (θ'(gram u) · gram'(u)) u`.
-  have h_comp : HasDerivAt (theta ∘ gram)
-      (deriv theta (gram u) * deriv gram u) u :=
-    hθ_diff.hasDerivAt.comp u hg_diff.hasDerivAt
-  -- (3) On `Ioi gramThreshold`, `theta ∘ gram` equals `s ↦ (s − 1)π`.
-  have h_evEq : (theta ∘ gram) =ᶠ[𝓝 u] (fun s : ℝ => (s - 1) * Real.pi) := by
-    have hIoi : Set.Ioi gramThreshold ∈ (𝓝 u : Filter ℝ) :=
-      isOpen_Ioi.mem_nhds hu
-    filter_upwards [hIoi] with s hs
-    simp [Function.comp_apply, gram_spec s hs.le]
-  -- (4) Compare with `HasDerivAt (· - 1) * π = π · 1 = π`.
-  have h_lin : HasDerivAt (fun s : ℝ => (s - 1) * Real.pi) Real.pi u := by
-    have h1 : HasDerivAt (fun s : ℝ => s - 1) 1 u := (hasDerivAt_id u).sub_const 1
-    simpa using h1.mul_const Real.pi
-  -- (5) Two `HasDerivAt`s for the same function ⟹ same derivative.
-  have h_comp' : HasDerivAt (theta ∘ gram) Real.pi u :=
-    h_lin.congr_of_eventuallyEq h_evEq
-  exact h_comp.unique h_comp'
 
 /-!
   ## §1.9  Transport of Corollary 2 along `gram → +∞`

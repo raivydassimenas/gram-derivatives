@@ -205,11 +205,11 @@ When importing `GramDerivatives.Corollary2`:
 - `def gram (u : ℝ) : ℝ := Function.invFunOn theta (Set.Ici 7) ((u - 1) * Real.pi)` — the Gram function `t_u`.
 - `theorem gram_spec (u : ℝ) (hu : gramThreshold ≤ u) : theta (gram u) = (u − 1) * Real.pi` — equation (7) of the paper; proved via `Function.invFunOn_eq` from the existence of a preimage in `[7, ∞)`, which follows from the intermediate value theorem between `theta 7` and `theta_tendsto_atTop` (`Corollary2.lean` §5).
 - `theorem gram_ge_seven (u : ℝ) (hu : gramThreshold ≤ u) : 7 ≤ gram u` — the chosen inverse lands in `[7, ∞)`.
+- `theorem gram_asymp` and `theorem gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'`. Formerly axioms; now derived in §1.7a (following the blueprint `Proof_Gram_fun_der.tex` at the repo root) from `gram_spec` plus the leading-order behaviour of `θ` and `θ'` (`theta_eq_main_add_δ`, `theta_deriv_asymp` in `Corollary2.lean` §6): `gram u → +∞` unconditionally, the star equation `gram·(log gram − log(2π) − 1) = 2πu + O(1)`, a logarithmic-scale sandwich `log(gram u) = log u − log log u + O(1)`, and a shared inversion lemma `one_div_denom_expansion` applied to the denominators of (8) and (9) (for (9) via the chain-rule identity `θ'(gram u)·gram'(u) = π`).
 
-Remaining axioms (each tagged `-- ASSUMPTION`); all three are statements about the *defined* `gram`, true under the classical (unformalised) fact that `theta` is strictly increasing on `[7, ∞)`, which makes `invFunOn` the genuine monotone inverse there:
+Remaining axiom (tagged `-- ASSUMPTION`); a statement about the *defined* `gram`, true under the classical (unformalised) fact that `theta` is strictly increasing on `[7, ∞)`, which makes `invFunOn` the genuine monotone inverse there:
 
 - `axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : θ(7)/π + π < u) : ContDiffAt ℝ n gram u` — smoothness on the open half-line, by the inverse function theorem.
-- `axiom gram_asymp` and `axiom gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'` (number-theoretic asymptotic results, not formalizable from the repo's analytic material alone).
 
 ### Final statement
 
@@ -263,7 +263,7 @@ is `C^∞` on `(0, ∞)`. Its n-th iterated derivative equals `(−1)^(n−1) ·
 t_u  = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 8, Lavrik [14])
 t_u' = (2π   / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 9, Korolev [10])
 ```
-are taken as established. In `Theorem3.lean`, `gram` is a *`def`* (`Function.invFunOn theta (Set.Ici 7)` applied to `(u − 1)π`) and `gram_spec` / `gram_ge_seven` are *theorems* (intermediate value theorem + `theta_tendsto_atTop` from `Corollary2.lean`); the remaining axiom names are `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp` — statements about the defined `gram`, true under the unformalised strict monotonicity of `θ` on `[7, ∞)`. Used to derive Theorem 3.
+are now *derived* (no longer taken as established): in `Theorem3.lean`, `gram` is a *`def`* (`Function.invFunOn theta (Set.Ici 7)` applied to `(u − 1)π`), `gram_spec` / `gram_ge_seven` are *theorems* (intermediate value theorem + `theta_tendsto_atTop` from `Corollary2.lean`), and `gram_asymp` / `gram_deriv_asymp` (equations (8) and (9)) are *theorems* too (§1.7a, from `gram_spec` + the §6 leading-order asymptotics of `θ`, `θ'` in `Corollary2.lean`). The single remaining axiom is `contDiffAt_gram` — a statement about the defined `gram`, true under the unformalised strict monotonicity of `θ` on `[7, ∞)`. Used to derive Theorem 3.
 
 **Riemann–von Mangoldt formula** — the identity (equation (1) of the paper, [6])
 ```
