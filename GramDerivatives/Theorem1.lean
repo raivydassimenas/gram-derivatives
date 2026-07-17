@@ -3730,6 +3730,330 @@ lemma δ_isO : IsO δ (fun t => t ^ (-1 : ℝ)) 𝓝∞ := by
     exact δ_eq t ht
   exact h_evEq.trans_isBigO h_sub
 
+/-!
+  ## §7a  Pointwise bounds:  `|j t| ≤ 1/(2t²)` and `|δ'(t)| ≤ 1/t²`
+
+  The §7 bounds are asymptotic (`IsO` at `𝓝∞`), i.e. only *eventual*.
+  This section extracts from the same σ-integration-by-parts machinery
+  **explicit pointwise** bounds valid for every `t > 0` — the input for
+  the strict monotonicity of the Riemann–Siegel `θ` on `[7, ∞)`
+  (`strictMonoOn_theta` in `Corollary2.lean`), where an eventual bound
+  says nothing about any concrete `t`.
+
+  Chain (throughout `t > 0`, `m_n := mixedDerivExpr n`):
+
+    1. `m₀ ≤ 0 ≤ m₁` pointwise on `u ≥ 0` (signs of `lorMix 0/1`);
+    2. `∫_{u≥0} m₀ = −kernel 0 t` and `∫_{u≥0} m₁ = 128t/(1+4t²)²`
+       (improper FTC with antiderivative `u ↦ ∂ₜⁿ kernel(u,t)`, via
+       `hasDerivAt_iteratedDeriv_kernel`);
+    3. `|jK n t| = |∫ σ·m_n| ≤ (1/8)·|∫ m_n|`  (`0 ≤ σ ≤ 1/8` and the
+       sign constancy from step 1);
+    4. `|j t| ≤ 1/(2t²)` and `|jK 1 t| ≤ 1/t³`;
+    5. product rule along `δ = α_part − (t/2)·j`  ⟹  `|δ'(t)| ≤ 1/t²`.
+-/
+
+/-- Closed form of the derivative of `lorSq`:  `(lor²)'(s) = −4s·(lor s)³`. -/
+private lemma hasDerivAt_lorSq (s : ℝ) :
+    HasDerivAt lorSq (-(4 * s) * lor s ^ 3) s := by
+  unfold lorSq
+  convert (hasDerivAt_lor s).pow 2 using 1
+  ring
+
+/-- Closed form `lorMix 1 s = 8s·(lor s)³` — via
+    `lorMix 1 = −2·(lor²)'` (`lorMix_eq_iteratedDeriv_lorSq`). -/
+private lemma lorMix_one (s : ℝ) : lorMix 1 s = 8 * s * lor s ^ 3 := by
+  rw [lorMix_eq_iteratedDeriv_lorSq, iteratedDeriv_one, (hasDerivAt_lorSq s).deriv]
+  ring
+
+/-- Sign of the order-`0` mixed integrand:  `∂ᵤ kernel(u,t) ≤ 0` for
+    `u ≥ 0` (the kernel decreases in `u`). -/
+private lemma mixedDerivExpr_zero_nonpos {u : ℝ} (hu : 0 ≤ u) (t : ℝ) :
+    mixedDerivExpr 0 u t ≤ 0 := by
+  rw [mixedDerivExpr_eq_lorMix 0 hu t, lorMix_zero]
+  have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_zpow : (0 : ℝ) < (u + 1 / 4) ^ (-(((0 : ℕ) : ℤ) + 3)) := zpow_pos hr _
+  have h_lorSq : 0 ≤ lorSq ((1 / (2 * (u + 1 / 4))) * t) := by
+    unfold lorSq; positivity
+  nlinarith [h_zpow, h_lorSq]
+
+/-- Sign of the order-`1` mixed integrand:  `∂ᵤ ∂ₜ kernel(u,t) ≥ 0` for
+    `u ≥ 0`, `t ≥ 0`. -/
+private lemma mixedDerivExpr_one_nonneg {u : ℝ} (hu : 0 ≤ u) {t : ℝ} (ht : 0 ≤ t) :
+    0 ≤ mixedDerivExpr 1 u t := by
+  rw [mixedDerivExpr_eq_lorMix 1 hu t, lorMix_one]
+  have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_zpow : (0 : ℝ) < (u + 1 / 4) ^ (-(((1 : ℕ) : ℤ) + 3)) := zpow_pos hr _
+  have h_lor : 0 < lor ((1 / (2 * (u + 1 / 4))) * t) := by
+    unfold lor
+    positivity
+  have h_arg : 0 ≤ (1 / (2 * (u + 1 / 4))) * t := by positivity
+  positivity
+
+/-- `u ↦ mixedDerivExpr n u t` is integrable on `[0, ∞)` for `t ≥ 0`:
+    continuous (`continuousOn_mixedDerivExpr`) and dominated by
+    `M·((u+1/4)^{n+3})⁻¹` via the uniform `lorMix` bound. -/
+private lemma integrableOn_mixedDerivExpr (n : ℕ) {t : ℝ} (ht : 0 ≤ t) :
+    IntegrableOn (fun u : ℝ => mixedDerivExpr n u t) (Set.Ici (0 : ℝ)) := by
+  obtain ⟨M, hM_nn, hM⟩ := lorMix_bounded_on_nonneg n
+  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) M
+    ((continuousOn_mixedDerivExpr n t).aestronglyMeasurable measurableSet_Ici) ?_
+  intro u hu
+  have hu_nn : (0 : ℝ) ≤ u := Set.mem_Ici.mp hu
+  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
+  have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t := by positivity
+  have h_zpow_eq : (u + 1 / 4 : ℝ) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+    rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
+        zpow_neg_nat_eq_inv]
+  rw [show (n + 1) + 2 = n + 3 from rfl, Real.norm_eq_abs,
+      mixedDerivExpr_eq_lorMix n hu_nn t, h_zpow_eq, abs_mul, abs_mul,
+      abs_of_pos (inv_pos.mpr h_pow_pos)]
+  have h_half : |(1 / 2 : ℝ) ^ n| ≤ 1 := by
+    rw [abs_of_pos (by positivity)]
+    exact pow_le_one₀ (by norm_num) (by norm_num)
+  calc |(1 / 2 : ℝ) ^ n| * ((u + 1 / 4) ^ (n + 3))⁻¹
+        * |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|
+      ≤ 1 * ((u + 1 / 4) ^ (n + 3))⁻¹ * M := by
+        gcongr
+        exact hM _ h_arg_nn
+    _ = M * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
+
+/-- **Improper FTC evaluation at kernel-order `0`:**
+    `∫_{u≥0} ∂ᵤ kernel(u,t) du = −kernel 0 t`, the antiderivative being
+    `u ↦ kernel u t` (which vanishes at `+∞`). -/
+private lemma integral_mixedDerivExpr_zero {t : ℝ} (ht : 0 < t) :
+    ∫ u in Set.Ici (0 : ℝ), mixedDerivExpr 0 u t = -kernel 0 t := by
+  have h_int : IntegrableOn (fun u : ℝ => mixedDerivExpr 0 u t) (Set.Ioi (0 : ℝ)) :=
+    (integrableOn_mixedDerivExpr 0 ht.le).mono_set Set.Ioi_subset_Ici_self
+  have h_cont : ContinuousWithinAt (fun u : ℝ => kernel u t) (Set.Ici (0 : ℝ)) 0 := by
+    have h := (continuousOn_iteratedDeriv_kernel 0 t) 0 Set.self_mem_Ici
+    simpa [iteratedDeriv_zero] using h
+  have h_deriv : ∀ u ∈ Set.Ioi (0 : ℝ),
+      HasDerivAt (fun v : ℝ => kernel v t) (mixedDerivExpr 0 u t) u := by
+    intro u hu
+    have h := hasDerivAt_iteratedDeriv_kernel 0 (Set.mem_Ioi.mp hu) t
+    simpa [iteratedDeriv_zero] using h
+  have h_denom : Filter.Tendsto (fun u : ℝ => (u + 1 / 4) ^ 2 + (t / 2) ^ 2)
+      Filter.atTop Filter.atTop :=
+    Filter.tendsto_atTop_add_const_right _ _
+      ((tendsto_pow_atTop (by norm_num : (2 : ℕ) ≠ 0)).comp
+        (Filter.tendsto_atTop_add_const_right _ _ Filter.tendsto_id))
+  have h_tendsto : Filter.Tendsto (fun u : ℝ => kernel u t) Filter.atTop (nhds 0) := by
+    have h := Filter.Tendsto.div_atTop
+      (tendsto_const_nhds (x := (1 : ℝ)) (f := Filter.atTop)) h_denom
+    simpa [kernel] using h
+  rw [MeasureTheory.integral_Ici_eq_integral_Ioi]
+  have h_eval := MeasureTheory.integral_Ioi_of_hasDerivAt_of_tendsto
+    h_cont h_deriv h_int h_tendsto
+  rw [h_eval]
+  ring
+
+/-- `|lor'(s)| ≤ 1`:  `|−2s·(lor s)²| = 2|s|/(1+s²)² ≤ 1` since
+    `2|s| ≤ 1 + s² ≤ (1+s²)²`. -/
+private lemma abs_iteratedDeriv_one_lor_le (s : ℝ) : |iteratedDeriv 1 lor s| ≤ 1 := by
+  rw [iteratedDeriv_one, (hasDerivAt_lor s).deriv]
+  have h_denom : (0 : ℝ) < 1 + s ^ 2 := lor_denom_pos s
+  have h_2s : 2 * |s| ≤ 1 + s ^ 2 := by nlinarith [sq_nonneg (|s| - 1), sq_abs s]
+  have h_eq : -(2 * s) * lor s ^ 2 = -(2 * s) / (1 + s ^ 2) ^ 2 := by
+    unfold lor
+    field_simp
+  rw [h_eq, abs_div, abs_neg, abs_mul, abs_two,
+      abs_of_pos (by positivity : (0 : ℝ) < (1 + s ^ 2) ^ 2),
+      div_le_one (by positivity)]
+  calc 2 * |s| ≤ 1 + s ^ 2 := h_2s
+    _ ≤ (1 + s ^ 2) ^ 2 := by nlinarith [sq_nonneg s]
+
+/-- **Improper FTC evaluation at kernel-order `1`:**
+    `∫_{u≥0} ∂ᵤ ∂ₜ kernel(u,t) du = 128t/(1+4t²)²`, the antiderivative
+    being `u ↦ ∂ₜ kernel(u,t)` (which vanishes at `+∞` and equals
+    `−128t/(1+4t²)²` at `u = 0`). -/
+private lemma integral_mixedDerivExpr_one {t : ℝ} (ht : 0 < t) :
+    ∫ u in Set.Ici (0 : ℝ), mixedDerivExpr 1 u t
+      = 128 * t / (1 + 4 * t ^ 2) ^ 2 := by
+  have h_int : IntegrableOn (fun u : ℝ => mixedDerivExpr 1 u t) (Set.Ioi (0 : ℝ)) :=
+    (integrableOn_mixedDerivExpr 1 ht.le).mono_set Set.Ioi_subset_Ici_self
+  have h_cont : ContinuousWithinAt
+      (fun u : ℝ => iteratedDeriv 1 (fun s => kernel u s) t) (Set.Ici (0 : ℝ)) 0 :=
+    (continuousOn_iteratedDeriv_kernel 1 t) 0 Set.self_mem_Ici
+  have h_deriv : ∀ u ∈ Set.Ioi (0 : ℝ),
+      HasDerivAt (fun v : ℝ => iteratedDeriv 1 (fun s => kernel v s) t)
+        (mixedDerivExpr 1 u t) u :=
+    fun u hu => hasDerivAt_iteratedDeriv_kernel 1 (Set.mem_Ioi.mp hu) t
+  -- The antiderivative tends to `0`:  `|F₁ u| ≤ 2·((u+1/4)²)⁻¹ → 0`.
+  have h_tendsto : Filter.Tendsto
+      (fun u : ℝ => iteratedDeriv 1 (fun s => kernel u s) t) Filter.atTop (nhds 0) := by
+    apply squeeze_zero_norm' (a := fun u : ℝ => 2 * ((u + 1 / 4) ^ 2)⁻¹)
+    · filter_upwards [Filter.eventually_ge_atTop (0 : ℝ)] with u hu
+      have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+      rw [Real.norm_eq_abs, iteratedDeriv_kernel 1 hu t, pow_one, abs_mul, abs_mul,
+          abs_of_pos (inv_pos.mpr (pow_pos hr 2)),
+          abs_of_pos (by positivity : (0 : ℝ) < 1 / (2 * (u + 1 / 4)))]
+      have h_lor := abs_iteratedDeriv_one_lor_le ((1 / (2 * (u + 1 / 4))) * t)
+      have h_half_le : 1 / (2 * (u + 1 / 4)) ≤ 2 := by
+        rw [div_le_iff₀ (by positivity)]
+        linarith
+      calc ((u + 1 / 4) ^ 2)⁻¹ * (1 / (2 * (u + 1 / 4)))
+              * |iteratedDeriv 1 lor ((1 / (2 * (u + 1 / 4))) * t)|
+          ≤ ((u + 1 / 4) ^ 2)⁻¹ * 2 * 1 := by
+            gcongr
+        _ = 2 * ((u + 1 / 4) ^ 2)⁻¹ := by ring
+    · have h_sq : Filter.Tendsto (fun u : ℝ => (u + 1 / 4) ^ 2)
+          Filter.atTop Filter.atTop :=
+        (tendsto_pow_atTop (by norm_num : (2 : ℕ) ≠ 0)).comp
+          (Filter.tendsto_atTop_add_const_right _ _ Filter.tendsto_id)
+      have h := Filter.Tendsto.div_atTop
+        (tendsto_const_nhds (x := (2 : ℝ)) (f := Filter.atTop)) h_sq
+      simpa [div_eq_mul_inv] using h
+  -- Value of the antiderivative at `u = 0`.
+  have h_f0 : iteratedDeriv 1 (fun s => kernel (0 : ℝ) s) t
+      = -(128 * t / (1 + 4 * t ^ 2) ^ 2) := by
+    rw [iteratedDeriv_kernel 1 le_rfl t, iteratedDeriv_one, (hasDerivAt_lor _).deriv]
+    have h_ne : (1 + (1 / (2 * ((0 : ℝ) + 1 / 4)) * t) ^ 2 : ℝ) ≠ 0 := by positivity
+    unfold lor
+    field_simp
+    ring
+  rw [MeasureTheory.integral_Ici_eq_integral_Ioi]
+  have h_eval := MeasureTheory.integral_Ioi_of_hasDerivAt_of_tendsto
+    h_cont h_deriv h_int h_tendsto
+  rw [h_eval, h_f0]
+  ring
+
+/-- **Explicit pointwise bound for `j`:**  `|j t| ≤ 1/(2t²)` for every
+    `t > 0` (the `n = 0` case of the paper's `δ`-machinery bounds, with
+    explicit constant).  Via `j = −∫ σ·m₀`, `0 ≤ σ ≤ 1/8`, `m₀ ≤ 0`, and
+    `∫(−m₀) = kernel 0 t ≤ 4/t²`. -/
+lemma abs_j_le {t : ℝ} (ht : 0 < t) : |j t| ≤ 1 / (2 * t ^ 2) := by
+  have h_eq : j t = -∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr 0 u t := by
+    rw [← jK_zero]
+    exact jK_eq_sigma_integral 0 ht
+  rw [h_eq, abs_neg]
+  have h_int_σm : IntegrableOn (fun u : ℝ => σ u * mixedDerivExpr 0 u t)
+      (Set.Ici (0 : ℝ)) := integrable_sigma_mixedDerivExpr 0 t
+  have h_int_m : IntegrableOn (fun u : ℝ => mixedDerivExpr 0 u t) (Set.Ici (0 : ℝ)) :=
+    integrableOn_mixedDerivExpr 0 ht.le
+  have h_ptwise : ∀ u ∈ Set.Ici (0 : ℝ),
+      |σ u * mixedDerivExpr 0 u t| ≤ (1 / 8) * (-mixedDerivExpr 0 u t) := by
+    intro u hu
+    have h_m := mixedDerivExpr_zero_nonpos (Set.mem_Ici.mp hu) t
+    rw [abs_mul, abs_of_nonneg (σ_nonneg u), abs_of_nonpos h_m]
+    exact mul_le_mul_of_nonneg_right (σ_le_eighth u) (by linarith)
+  calc |∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr 0 u t|
+      ≤ ∫ u in Set.Ici (0 : ℝ), |σ u * mixedDerivExpr 0 u t| :=
+        MeasureTheory.abs_integral_le_integral_abs
+    _ ≤ ∫ u in Set.Ici (0 : ℝ), (1 / 8) * (-mixedDerivExpr 0 u t) :=
+        MeasureTheory.setIntegral_mono_on h_int_σm.abs
+          ((h_int_m.neg).const_mul _) measurableSet_Ici h_ptwise
+    _ = (1 / 8) * (-∫ u in Set.Ici (0 : ℝ), mixedDerivExpr 0 u t) := by
+        rw [MeasureTheory.integral_const_mul, MeasureTheory.integral_neg]
+    _ = (1 / 8) * kernel 0 t := by rw [integral_mixedDerivExpr_zero ht]; ring
+    _ ≤ 1 / (2 * t ^ 2) := by
+        unfold kernel
+        have h_denom_pos : (0 : ℝ) < ((0 : ℝ) + 1 / 4) ^ 2 + (t / 2) ^ 2 := by positivity
+        have h_ge : t ^ 2 / 4 ≤ ((0 : ℝ) + 1 / 4) ^ 2 + (t / 2) ^ 2 := by nlinarith
+        calc (1 / 8 : ℝ) * (1 / (((0 : ℝ) + 1 / 4) ^ 2 + (t / 2) ^ 2))
+            ≤ (1 / 8 : ℝ) * (1 / (t ^ 2 / 4)) := by
+              gcongr
+          _ = 1 / (2 * t ^ 2) := by
+              field_simp
+              ring
+
+/-- **Explicit pointwise bound for `j' = jK 1`:**  `|jK 1 t| ≤ 1/t³` for
+    every `t > 0`.  Via `jK 1 = −∫ σ·m₁`, `0 ≤ σ ≤ 1/8`, `m₁ ≥ 0`, and
+    `∫ m₁ = 128t/(1+4t²)² ≤ 8/t³`. -/
+private lemma abs_jK_one_le {t : ℝ} (ht : 0 < t) : |jK 1 t| ≤ 1 / t ^ 3 := by
+  rw [jK_eq_sigma_integral 1 ht, abs_neg]
+  have h_int_σm : IntegrableOn (fun u : ℝ => σ u * mixedDerivExpr 1 u t)
+      (Set.Ici (0 : ℝ)) := integrable_sigma_mixedDerivExpr 1 t
+  have h_int_m : IntegrableOn (fun u : ℝ => mixedDerivExpr 1 u t) (Set.Ici (0 : ℝ)) :=
+    integrableOn_mixedDerivExpr 1 ht.le
+  have h_ptwise : ∀ u ∈ Set.Ici (0 : ℝ),
+      |σ u * mixedDerivExpr 1 u t| ≤ (1 / 8) * mixedDerivExpr 1 u t := by
+    intro u hu
+    have h_m := mixedDerivExpr_one_nonneg (Set.mem_Ici.mp hu) ht.le
+    rw [abs_mul, abs_of_nonneg (σ_nonneg u), abs_of_nonneg h_m]
+    exact mul_le_mul_of_nonneg_right (σ_le_eighth u) h_m
+  calc |∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr 1 u t|
+      ≤ ∫ u in Set.Ici (0 : ℝ), |σ u * mixedDerivExpr 1 u t| :=
+        MeasureTheory.abs_integral_le_integral_abs
+    _ ≤ ∫ u in Set.Ici (0 : ℝ), (1 / 8) * mixedDerivExpr 1 u t :=
+        MeasureTheory.setIntegral_mono_on h_int_σm.abs
+          (h_int_m.const_mul _) measurableSet_Ici h_ptwise
+    _ = (1 / 8) * (128 * t / (1 + 4 * t ^ 2) ^ 2) := by
+        rw [MeasureTheory.integral_const_mul, integral_mixedDerivExpr_one ht]
+    _ = 16 * t / (1 + 4 * t ^ 2) ^ 2 := by ring
+    _ ≤ 1 / t ^ 3 := by
+        rw [div_le_div_iff₀ (by positivity) (by positivity)]
+        nlinarith [sq_nonneg t, sq_nonneg (t ^ 2), pow_pos ht 4]
+
+/-- Derivative decomposition of `δ` at any `t > 0`:
+    `δ'(t) = α_part'(t) − ((1/2)·j t + (t/2)·jK 1 t)`, by the product
+    rule along `δ = α_part − (·/2)·j` (`δ_eq`). -/
+private lemma hasDerivAt_δ {t : ℝ} (ht : 0 < t) :
+    HasDerivAt δ
+      ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)
+        - (1 / 2 * j t + t / 2 * jK 1 t)) t := by
+  have h_j : HasDerivAt j (jK 1 t) t := by
+    have h := hasDerivAt_jK 0 ht
+    rwa [jK_zero] at h
+  have h_half : HasDerivAt (fun s : ℝ => s / 2) (1 / 2) t := (hasDerivAt_id t).div_const 2
+  have h_tj : HasDerivAt (fun s : ℝ => s / 2 * j s) (1 / 2 * j t + t / 2 * jK 1 t) t :=
+    h_half.mul h_j
+  have h_sub := (hasDerivAt_α_part ht).sub h_tj
+  refine h_sub.congr_of_eventuallyEq ?_
+  filter_upwards [isOpen_Ioi.mem_nhds ht] with s hs
+  exact δ_eq s hs
+
+/-- Explicit bound for the closed-form `α_part'`:
+    `|α_part'(t)| ≤ 1/(4t²)` for `t > 0` — both summands of
+    `(1/4)·log(1+1/(4t²)) − 1/(4t²+1)` lie in `[0, 1/(4t²)]`. -/
+private lemma abs_α_deriv_le {t : ℝ} (ht : 0 < t) :
+    |(1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)|
+      ≤ 1 / (4 * t ^ 2) := by
+  have h_x_pos : (0 : ℝ) < 1 / (4 * t ^ 2) := by positivity
+  have h_log_le : Real.log (1 + 1 / (4 * t ^ 2)) ≤ 1 / (4 * t ^ 2) := by
+    have := Real.log_le_sub_one_of_pos (by linarith : (0 : ℝ) < 1 + 1 / (4 * t ^ 2))
+    linarith
+  have h_log_nn : 0 ≤ Real.log (1 + 1 / (4 * t ^ 2)) :=
+    Real.log_nonneg (by linarith)
+  have h_inv_le : 1 / (4 * t ^ 2 + 1) ≤ 1 / (4 * t ^ 2) := by
+    gcongr
+    linarith
+  have h_inv_nn : (0 : ℝ) ≤ 1 / (4 * t ^ 2 + 1) := by positivity
+  rw [abs_le]
+  constructor <;> linarith
+
+/-- **Explicit pointwise bound for `δ'`** — the `n = 1` case of the
+    paper's `δ^{(n)}(t) = O(t^{−n−1})` with explicit constant `1`:
+
+        `|δ'(t)| ≤ 1/t²`   for every `t > 0`.
+
+    Unlike `iteratedDeriv_δ_isO` this is not merely eventual; it is the
+    input for the strict monotonicity of `θ` on `[7, ∞)` proved in
+    `Corollary2.lean` (`strictMonoOn_theta`). -/
+lemma abs_deriv_δ_le {t : ℝ} (ht : 0 < t) : |deriv δ t| ≤ 1 / t ^ 2 := by
+  rw [(hasDerivAt_δ ht).deriv]
+  have h_α := abs_le.mp (abs_α_deriv_le ht)
+  have h_B : |1 / 2 * j t| ≤ 1 / (4 * t ^ 2) := by
+    rw [abs_mul, abs_of_pos (by norm_num : (0 : ℝ) < 1 / 2)]
+    calc (1 / 2 : ℝ) * |j t| ≤ (1 / 2) * (1 / (2 * t ^ 2)) := by
+          gcongr
+          exact abs_j_le ht
+      _ = 1 / (4 * t ^ 2) := by ring
+  have h_C : |t / 2 * jK 1 t| ≤ 1 / (2 * t ^ 2) := by
+    rw [abs_mul, abs_of_pos (by positivity : (0 : ℝ) < t / 2)]
+    calc t / 2 * |jK 1 t| ≤ t / 2 * (1 / t ^ 3) := by
+          gcongr
+          exact abs_jK_one_le ht
+      _ = 1 / (2 * t ^ 2) := by
+          field_simp
+  have h_B' := abs_le.mp h_B
+  have h_C' := abs_le.mp h_C
+  have h_id : 1 / (4 * t ^ 2) + (1 / (4 * t ^ 2) + 1 / (2 * t ^ 2)) = 1 / t ^ 2 := by
+    field_simp
+    ring
+  rw [abs_le]
+  constructor <;> linarith [h_α.1, h_α.2, h_B'.1, h_B'.2, h_C'.1, h_C'.2]
+
 end ErrorTermDelta
 
 /-!

@@ -437,3 +437,81 @@ theorem theta_deriv_asymp :
   filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
   rw [deriv_theta_eq ht]
   ring
+
+/-!
+  ## §7  Strict monotonicity of `θ` on `[7, ∞)`
+
+  The classical fact cited informally to justify `contDiffAt_gram` in
+  `Theorem3.lean` — that the Riemann–Siegel `θ` is strictly increasing on
+  `[7, ∞)`, making `Function.invFunOn theta (Ici 7)` the genuine monotone
+  inverse — is a *theorem* for our concrete `theta = δ − π·φ − π`:
+
+      θ'(t) = log(t/(2π))/2 + δ'(t)          (`deriv_theta_eq`, §6)
+            ≥ (1 − 2π/t)/2 − 1/t²            (`abs_deriv_δ_le`, log x ≥ 1 − 1/x)
+            > 0   for t ≥ 7                  (π < 3.15).
+
+  The pointwise bound `|δ'(t)| ≤ 1/t²` (`abs_deriv_δ_le`, `Theorem1.lean`
+  §7a) is essential here: the asymptotic `iteratedDeriv_δ_isO` alone says
+  nothing at any concrete `t`.
+-/
+
+/-- Elementary companion of `Real.log_le_sub_one_of_pos`:
+    `1 − 1/x ≤ log x` for `x > 0` (apply the former to `x⁻¹`). -/
+private lemma one_sub_inv_le_log {x : ℝ} (hx : 0 < x) : 1 - x⁻¹ ≤ Real.log x := by
+  have h := Real.log_le_sub_one_of_pos (inv_pos.mpr hx)
+  rw [Real.log_inv] at h
+  linarith
+
+/-- **`θ' > 0` on `[7, ∞)`:**  from `θ'(t) = log(t/(2π))/2 + δ'(t)`,
+    `|δ'(t)| ≤ 1/t²`, `log x ≥ 1 − 1/x`, and `π < 3.15`, positivity
+    reduces to the quadratic inequality `t² − 2πt − 2 > 0`, valid for
+    `t ≥ 7 > 2π`. -/
+theorem deriv_theta_pos {t : ℝ} (ht : 7 ≤ t) : 0 < deriv theta t := by
+  have ht0 : (0 : ℝ) < t := by linarith
+  have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
+  rw [deriv_theta_eq ht0]
+  -- (1) The δ'-term is at least `−1/t²`.
+  have h_δ : -(1 / t ^ 2) ≤ deriv δ t := neg_le_of_abs_le (abs_deriv_δ_le ht0)
+  -- (2) The log-term is at least `(1 − 2π/t)/2`.
+  have h_log : 1 - 2 * Real.pi / t ≤ Real.log (t / (2 * Real.pi)) := by
+    have h := one_sub_inv_le_log (show (0 : ℝ) < t / (2 * Real.pi) by positivity)
+    have h_inv : (t / (2 * Real.pi))⁻¹ = 2 * Real.pi / t := by
+      field_simp
+    rwa [h_inv] at h
+  -- (3) The quadratic inequality `2πt + 2 < t²` for `t ≥ 7`, from `π < 3.15`.
+  have h_pi : Real.pi < 3.15 := Real.pi_lt_d2
+  have h_quad : 2 * Real.pi * t + 2 < t ^ 2 := by
+    nlinarith [mul_nonneg (le_of_lt ht0) (by linarith : (0 : ℝ) ≤ t - 7),
+               mul_lt_mul_of_pos_right h_pi ht0]
+  -- (4) Assemble:  `(1 − 2π/t)/2 − 1/t² = (t² − 2πt − 2)/(2t²) > 0`.
+  have h_step : 0 < 1 / 2 * (1 - 2 * Real.pi / t) - 1 / t ^ 2 := by
+    have h_expand : 1 / 2 * (1 - 2 * Real.pi / t) - 1 / t ^ 2
+        = (t ^ 2 - (2 * Real.pi * t + 2)) / (2 * t ^ 2) := by
+      field_simp
+      ring
+    rw [h_expand]
+    apply div_pos
+    · linarith
+    · positivity
+  calc (0 : ℝ) < 1 / 2 * (1 - 2 * Real.pi / t) - 1 / t ^ 2 := h_step
+    _ ≤ Real.log (t / (2 * Real.pi)) / 2 + deriv δ t := by linarith
+
+/-- **Strict monotonicity of the Riemann–Siegel `θ` on `[7, ∞)`** —
+    formerly cited as a classical unformalised fact; now a theorem for
+    the concrete `theta = δ − π·φ − π`.  This is what makes the
+    `invFunOn`-defined Gram function in `Theorem3.lean` the genuine
+    monotone inverse of `θ` (see `gram_theta` there). -/
+theorem strictMonoOn_theta : StrictMonoOn theta (Set.Ici (7 : ℝ)) := by
+  refine strictMonoOn_of_deriv_pos (convex_Ici 7) ?_ ?_
+  · intro t ht
+    have ht0 : (0 : ℝ) < t := by
+      have := Set.mem_Ici.mp ht
+      linarith
+    exact ((contDiffAt_theta 0 ht0).continuousAt).continuousWithinAt
+  · intro t ht
+    rw [interior_Ici] at ht
+    exact deriv_theta_pos (le_of_lt (Set.mem_Ioi.mp ht))
+
+/-- `θ` is injective on `[7, ∞)`. -/
+theorem injOn_theta : Set.InjOn theta (Set.Ici (7 : ℝ)) :=
+  strictMonoOn_theta.injOn

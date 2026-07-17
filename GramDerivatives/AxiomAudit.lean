@@ -19,6 +19,8 @@ when re-auditing.
 
 #print axioms theorem1
 #print axioms corollary2
+#print axioms strictMonoOn_theta
+#print axioms gram_theta
 #print axioms theorem3
 #print axioms Gram.Theorem4.theorem4
 #print axioms Gram.corollary5

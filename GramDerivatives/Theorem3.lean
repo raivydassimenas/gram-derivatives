@@ -150,11 +150,27 @@ theorem gram_spec (u : ℝ) (hu : gramThreshold ≤ u) :
 theorem gram_ge_seven (u : ℝ) (hu : gramThreshold ≤ u) : 7 ≤ gram u :=
   Function.invFunOn_mem (exists_gram_preimage u hu)
 
+/-- **`gram` is a genuine left inverse of `theta`:**  for `t ≥ 7`,
+    `gram (θ(t)/π + 1) = t`.  This is where the strict monotonicity of
+    `θ` on `[7, ∞)` (`strictMonoOn_theta` / `injOn_theta`,
+    `Corollary2.lean` §7) enters: injectivity forces the `invFunOn`
+    choice to return `t` itself, not merely *some* preimage. -/
+theorem gram_theta {t : ℝ} (ht : 7 ≤ t) : gram (theta t / Real.pi + 1) = t := by
+  have h_arg : (theta t / Real.pi + 1 - 1) * Real.pi = theta t := by
+    have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+    field_simp
+    ring
+  unfold gram
+  rw [h_arg]
+  exact injOn_theta.leftInvOn_invFunOn (Set.mem_Ici.mpr ht)
+
 /-- ASSUMPTION: `gram` is `C^∞` on the open half-line `(θ(7)/π + π, ∞)`.
     Morally, this follows from the inverse function theorem applied to
-    `theta` (whose derivative does not vanish there).  A statement about
-    the *defined* `gram` above; true under the classical fact that `θ`
-    is strictly increasing on `[7, ∞)`. -/
+    `theta` (whose derivative does not vanish there — `deriv_theta_pos`).
+    A statement about the *defined* `gram` above; true under the strict
+    monotonicity of `θ` on `[7, ∞)`, now formal (`strictMonoOn_theta`,
+    `Corollary2.lean` §7) — only the inverse-function-theorem step
+    itself remains unformalised. -/
 axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : gramThreshold < u) :
     ContDiffAt ℝ n gram u -- ASSUMPTION
 

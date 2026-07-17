@@ -41,7 +41,9 @@ discussion of custom assumptions below.
 |---|---|---|
 | `theorem1` | `Theorem1.lean:3754` | **none** (only the three standard Lean axioms) |
 | `corollary2` | `Corollary2.lean:209` | **none** (only the three standard Lean axioms) |
-| `theorem3` | `Theorem3.lean:3654` | `contDiffAt_gram` |
+| `strictMonoOn_theta` | `Corollary2.lean` §7 | **none** (only the three standard Lean axioms) |
+| `gram_theta` | `Theorem3.lean` §1 | **none** (only the three standard Lean axioms) |
+| `theorem3` | `Theorem3.lean` | `contDiffAt_gram` |
 | `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | `contDiffAt_gram` **+** `isUDModOne_of_iteratedDeriv_decay` |
 | `Gram.corollary5` | `Corollary5.lean:40` | the 2 axioms above **+** `continuous_ud_criterion`, `IsUDModOne.shift` |
 
@@ -72,6 +74,12 @@ discussion of custom assumptions below.
   `theta_deriv_asymp` in `Corollary2.lean` §6, resting on the fully proved
   `δ = O(1/t)` and `δ' = O(1/t²)` bounds of `Theorem1.lean`). Theorem 3's
   custom-axiom surface is down to a single axiom, `contDiffAt_gram`.
+- **`θ` is provably strictly increasing on `[7, ∞)`.** `strictMonoOn_theta`
+  (`Corollary2.lean` §7) is an axiom-free theorem, resting on the explicit
+  pointwise bound `|δ'(t)| ≤ 1/t²` (`abs_deriv_δ_le`, `Theorem1.lean` §7a).
+  Consequently `gram` is a genuine left inverse of `theta` (`gram_theta`,
+  axiom-free), and the informal justification of `contDiffAt_gram` is reduced
+  to the inverse-function-theorem step alone.
 - **The dependencies are strictly cumulative** down the chain
   Theorem 3 → Theorem 4 → Corollary 5, with each step adding exactly the
   equidistribution axioms it needs.
@@ -113,10 +121,17 @@ and `j = O(t⁻²)` from `iteratedDeriv_j_isO` at order 0).
 |---|---|---|
 | `contDiffAt_gram` | `(n) {u} (hu : gramThreshold < u) → ContDiffAt ℝ n gram u` | `C^∞` on the tail, by the inverse function theorem |
 
-The single remaining axiom is a statement about the *defined* `gram`; it is
-true under the classical (unformalised) fact that `theta` is strictly
-increasing on `[7, ∞)`, which makes `Function.invFunOn theta (Ici 7)` the
-genuine monotone inverse there.
+The single remaining axiom is a statement about the *defined* `gram`. The
+strict monotonicity of `theta` on `[7, ∞)` that justifies it is now **formal**
+(`strictMonoOn_theta`, `Corollary2.lean` §7, axiom-free): `θ'(t) =
+log(t/(2π))/2 + δ'(t) > 0` for `t ≥ 7`, using the explicit pointwise bound
+`|δ'(t)| ≤ 1/t²` (`abs_deriv_δ_le`, `Theorem1.lean` §7a — derived from the
+σ-integration-by-parts machinery with explicit constants, not merely the
+asymptotic `iteratedDeriv_δ_isO`), the elementary `log x ≥ 1 − 1/x`, and
+`π < 3.15`. Injectivity (`injOn_theta`) makes the `invFunOn`-defined `gram` a
+genuine left inverse: `gram (θ(t)/π + 1) = t` for `t ≥ 7` (`gram_theta`,
+axiom-free). Only the inverse-function-theorem step behind `contDiffAt_gram`
+itself remains unformalised.
 
 The Lavrik/Korolev baselines `gram_asymp` (eq. (8), [14, Lemma 2]) and
 `gram_deriv_asymp` (eq. (9), [10, Lemma 1.1]) — formerly axioms — are now
