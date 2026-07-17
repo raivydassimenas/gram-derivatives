@@ -23,12 +23,13 @@
     • `gram_spec`       = θ(t_u) = (u − 1)·π                  (eq. (7));
                           a *theorem* (IVT + `theta_tendsto_atTop`).
     • `contDiffAt_gram` = smoothness on (θ(7)/π + π, ∞)
-                          (inverse function theorem applied to θ;
-                          axiomatised).
+                          (a *theorem*: inverse function theorem applied
+                          to θ, using `deriv_theta_pos` / `injOn_theta`
+                          from `Corollary2.lean` §7).
     • `gram_asymp`,
       `gram_deriv_asymp`
                         = base-case asymptotics (eqs. (8), (9), Lavrik
-                          [14] and Korolev [10]; axiomatised).
+                          [14] and Korolev [10]; *theorems*, §1.7a).
 
   Proof outline (paper §2):
     Induction on k ≥ 2 with inductive hypothesis
@@ -47,9 +48,10 @@
   the atomic-term asymptotic (`theorem3_atomic_term`, §2.4) with the
   cOther contribution bound (`cOther_contribution_isLittleO`, §2.5.4) via
   the Faà di Bruno solved form `iteratedDeriv_n_gram_solved_eventually`
-  (§2.3).  All remaining `-- ASSUMPTION` axioms are listed under §1;
-  `gram` itself and `gram_spec` are no longer axioms (a `def` and a
-  theorem respectively).
+  (§2.3).  This file contains **zero axioms**: `gram` is a `def`,
+  `gram_spec` / `gram_ge_seven` / `gram_theta` / `contDiffAt_gram` /
+  `gram_asymp` / `gram_deriv_asymp` are all theorems, and `theorem3`
+  depends only on Lean's standard foundation (`#print axioms`).
 -/
 
 import GramDerivatives.Corollary2
@@ -79,15 +81,15 @@ abbrev Iso (f g : ℝ → ℝ) (l : Filter ℝ) : Prop := Asymptotics.IsLittleO 
   `[7, ∞)`, by the intermediate value theorem between `theta 7` and
   `theta_tendsto_atTop` (§5 of `Corollary2.lean`).
 
-  Three classical analytic facts remain axioms:
-    • smoothness on the open half-line where `θ` is monotonic
-                                                         (`contDiffAt_gram`);
-    • the Lavrik asymptotic for `t_u` itself             (`gram_asymp`);
-    • the Korolev asymptotic for the first derivative    (`gram_deriv_asymp`).
-  All three are statements about the *defined* `gram`; they are true
-  under the classical (unformalised) fact that `θ` is strictly
-  increasing on `[7, ∞)`, which makes `Function.invFunOn theta (Ici 7)`
-  the genuine monotone inverse there.
+  The facts that were formerly axioms are now all theorems:
+    • `gram_theta`       — `gram` is a genuine left inverse of `θ`
+                           (from `injOn_theta`, `Corollary2.lean` §7);
+    • `contDiffAt_gram`  — smoothness on the open half-line, by the
+                           inverse function theorem
+                           (`ContDiffAt.to_localInverse`) applied to `θ`
+                           at `gram u`, using `deriv_theta_pos`;
+    • `gram_asymp`, `gram_deriv_asymp` — the Lavrik/Korolev base-case
+                           asymptotics (§1.7a).
 -/
 
 /-- The threshold above which `θ` is monotonically increasing on `[7, ∞)`
@@ -164,15 +166,83 @@ theorem gram_theta {t : ℝ} (ht : 7 ≤ t) : gram (theta t / Real.pi + 1) = t :
   rw [h_arg]
   exact injOn_theta.leftInvOn_invFunOn (Set.mem_Ici.mpr ht)
 
-/-- ASSUMPTION: `gram` is `C^∞` on the open half-line `(θ(7)/π + π, ∞)`.
-    Morally, this follows from the inverse function theorem applied to
-    `theta` (whose derivative does not vanish there — `deriv_theta_pos`).
-    A statement about the *defined* `gram` above; true under the strict
-    monotonicity of `θ` on `[7, ∞)`, now formal (`strictMonoOn_theta`,
-    `Corollary2.lean` §7) — only the inverse-function-theorem step
-    itself remains unformalised. -/
-axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : gramThreshold < u) :
-    ContDiffAt ℝ n gram u -- ASSUMPTION
+/-- **`gram` is `C^n` on the open half-line `(θ(7)/π + π, ∞)`** —
+    formerly the project's last axiom; now a theorem, by the inverse
+    function theorem.
+
+    At `u > gramThreshold` set `t₀ := gram u`.  Then `t₀ > 7` strictly
+    (since `θ(t₀) = (u−1)π > θ(7)`), `θ` is `C^m` at `t₀`
+    (`contDiffAt_theta`) with `θ'(t₀) > 0` (`deriv_theta_pos`,
+    `Corollary2.lean` §7), so Mathlib's `ContDiffAt.to_localInverse`
+    produces a `C^m` local inverse `g` of `θ` at `θ(t₀)`.  Near `u` the
+    function `gram` agrees with `g ∘ (·−1)·π`: both are preimages of
+    `(u'−1)π` under `θ` lying in `[7, ∞)`, hence equal by `injOn_theta`
+    (strict monotonicity of `θ`).  Smoothness transfers along the
+    eventual equality. -/
+theorem contDiffAt_gram (n : ℕ) {u : ℝ} (hu : gramThreshold < u) :
+    ContDiffAt ℝ n gram u := by
+  have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
+  set t₀ : ℝ := gram u with ht₀_def
+  have h7 : 7 ≤ t₀ := gram_ge_seven u hu.le
+  have ht₀_pos : (0 : ℝ) < t₀ := by linarith
+  have h_spec : theta t₀ = (u - 1) * Real.pi := gram_spec u hu.le
+  -- (1) `θ(7) < (u−1)π`, hence `t₀ > 7` strictly.
+  have h_theta7_lt : theta 7 < (u - 1) * Real.pi := by
+    have hu' : theta 7 / Real.pi + Real.pi < u := hu
+    have h1 : (1 : ℝ) < Real.pi := by nlinarith [Real.pi_gt_three]
+    have h_expand : (theta 7 / Real.pi + Real.pi - 1) * Real.pi
+        = theta 7 + Real.pi * (Real.pi - 1) := by
+      field_simp
+      ring
+    nlinarith [mul_lt_mul_of_pos_right
+      (show theta 7 / Real.pi + Real.pi - 1 < u - 1 by linarith) hπ]
+  have h7_lt : 7 < t₀ := by
+    rcases lt_or_eq_of_le h7 with h | h
+    · exact h
+    · rw [← h] at h_spec
+      linarith
+  -- (2) Inverse function theorem for `θ` at `t₀`, at exponent `m := max n 1`.
+  set m : ℕ := max n 1 with hm_def
+  have hm_ne : (m : WithTop ℕ∞) ≠ 0 := by
+    have h1 : 1 ≤ m := le_max_right n 1
+    simp only [ne_eq, Nat.cast_eq_zero]
+    omega
+  have hθ_cd : ContDiffAt ℝ m theta t₀ := contDiffAt_theta m ht₀_pos
+  have hd_ne : deriv theta t₀ ≠ 0 := ne_of_gt (deriv_theta_pos h7)
+  have hθ_deriv : HasDerivAt theta (deriv theta t₀) t₀ :=
+    ((contDiffAt_theta 1 ht₀_pos).differentiableAt (by norm_num)).hasDerivAt
+  have hθ_fderiv := hθ_deriv.hasFDerivAt_equiv hd_ne
+  set g : ℝ → ℝ := hθ_cd.localInverse hθ_fderiv hm_ne with hg_def
+  have hg_cd : ContDiffAt ℝ m g (theta t₀) := hθ_cd.to_localInverse hθ_fderiv hm_ne
+  have hg_image : g (theta t₀) = t₀ := hθ_cd.localInverse_apply_image hθ_fderiv hm_ne
+  have hg_right : ∀ᶠ y in nhds (theta t₀), theta (g y) = y :=
+    (hθ_cd.hasStrictFDerivAt' hθ_fderiv hm_ne).eventually_right_inverse
+  have hg_cont : ContinuousAt g (theta t₀) := hg_cd.continuousAt
+  -- (3) Affine reparametrization `ℓ u' = (u'−1)π`, with `ℓ u = θ(t₀)`.
+  have hℓ_cd : ContDiffAt ℝ m (fun u' : ℝ => (u' - 1) * Real.pi) u :=
+    (contDiffAt_id.sub contDiffAt_const).mul contDiffAt_const
+  have h_tendsto : Filter.Tendsto (fun u' : ℝ => (u' - 1) * Real.pi)
+      (nhds u) (nhds (theta t₀)) := by
+    rw [h_spec]
+    exact hℓ_cd.continuousAt
+  -- (4) `G := g ∘ ℓ` is `C^m` at `u`.
+  have hG_cd : ContDiffAt ℝ m (fun u' : ℝ => g ((u' - 1) * Real.pi)) u := by
+    refine ContDiffAt.comp u ?_ hℓ_cd
+    rw [show ((u : ℝ) - 1) * Real.pi = theta t₀ from h_spec.symm]
+    exact hg_cd
+  -- (5) `gram` agrees with `G` on a neighborhood of `u`.
+  have h_ev_mem : ∀ᶠ y in nhds (theta t₀), g y ∈ Set.Ioi (7 : ℝ) :=
+    hg_cont.eventually_mem (by rw [hg_image]; exact isOpen_Ioi.mem_nhds h7_lt)
+  have h_ev_eq : gram =ᶠ[nhds u] (fun u' : ℝ => g ((u' - 1) * Real.pi)) := by
+    filter_upwards [h_tendsto.eventually hg_right, h_tendsto.eventually h_ev_mem,
+        isOpen_Ioi.mem_nhds hu] with u' h_ri h_mem h_thr
+    have h_thr' : gramThreshold ≤ u' := le_of_lt h_thr
+    exact injOn_theta (Set.mem_Ici.mpr (gram_ge_seven u' h_thr'))
+      (Set.mem_Ici.mpr (le_of_lt h_mem))
+      ((gram_spec u' h_thr').trans h_ri.symm)
+  -- (6) Transfer smoothness and downgrade `m → n`.
+  exact (hG_cd.congr_of_eventuallyEq h_ev_eq).of_le
+    (by exact_mod_cast Nat.cast_le.mpr (le_max_left n 1))
 
 /-!
   ## §1.5  Local `iteratedDeriv` helpers
