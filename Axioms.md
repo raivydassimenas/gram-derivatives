@@ -45,7 +45,7 @@ discussion of custom assumptions below.
 | `gram_theta` | `Theorem3.lean` §1 | **none** (only the three standard Lean axioms) |
 | `theorem3` | `Theorem3.lean` | **none** (only the three standard Lean axioms) |
 | `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | `isUDModOne_of_iteratedDeriv_decay` |
-| `Gram.corollary5` | `Corollary5.lean:40` | the axiom above **+** `continuous_ud_criterion`, `IsUDModOne.shift` |
+| `Gram.corollary5` | `Corollary5.lean:40` | the axiom above **+** `continuous_ud_criterion` |
 
 ### Notable findings
 
@@ -85,7 +85,8 @@ discussion of custom assumptions below.
   identified with `gram` near `u` via `injOn_theta`. The whole analytic chain
   Theorem 1 → Corollary 2 → Theorem 3 rests only on Lean's standard
   foundation; the equidistribution results (Theorem 4, Corollary 5) retain
-  only the three Kuipers–Niederreiter-type axioms.
+  only the two Kuipers–Niederreiter-type axioms
+  (`isUDModOne_of_iteratedDeriv_decay`, `continuous_ud_criterion`).
 - **The dependencies are strictly cumulative** down the chain
   Theorem 4 → Corollary 5, with each step adding exactly the
   equidistribution axioms it needs.
@@ -163,14 +164,14 @@ The leading-term asymptotic and the monotonicity / decay / growth hypotheses fed
 into this axiom are all **proved** in §2–§3 (Faà di Bruno expansion of
 `(·^n) ∘ gram`); only the criterion itself is assumed.
 
-### `UDModOne.lean` — index shift of a UD sequence
+### `UDModOne.lean` — definitions and index shift
 
-| Axiom | Signature | Provenance |
-|---|---|---|
-| `IsUDModOne.shift` | `{a} (h : IsUDModOne a) → IsUDModOne (fun k => a (k+1))` | shifting the index by one preserves UD mod 1 (Cesàro tail estimate); kept axiomatic to bound refactor scope |
-
-The definitions `IsUDModOne` / `IsCUDModOne` themselves are *honest* (Fourier /
-Weyl-exponential Cesàro and time averages), not opaque `Prop` wrappers.
+**No custom axioms.** The definitions `IsUDModOne` / `IsCUDModOne` are *honest*
+(Fourier / Weyl-exponential Cesàro and time averages), not opaque `Prop`
+wrappers, and `IsUDModOne.shift` — formerly an axiom — is a **theorem**: the
+shifted Cesàro average telescopes against the unshifted one up to the boundary
+term `(1/N)·(e(N) − e(0))`, which has norm at most `2/N` (each Weyl exponential
+lies on the unit circle) and vanishes by `squeeze_zero_norm`.
 
 ### `Corollary5.lean` — discrete-to-continuous bridge
 
