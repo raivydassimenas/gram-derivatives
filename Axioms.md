@@ -45,7 +45,7 @@ discussion of custom assumptions below.
 | `gram_theta` | `Theorem3.lean` §1 | **none** (only the three standard Lean axioms) |
 | `theorem3` | `Theorem3.lean` | **none** (only the three standard Lean axioms) |
 | `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | `isUDModOne_of_iteratedDeriv_decay` |
-| `Gram.corollary5` | `Corollary5.lean:40` | the axiom above **+** `continuous_ud_criterion` |
+| `Gram.corollary5` | `Corollary5.lean:38` | `isUDModOne_of_iteratedDeriv_decay` (the same one — no further axioms) |
 
 ### Notable findings
 
@@ -85,11 +85,20 @@ discussion of custom assumptions below.
   identified with `gram` near `u` via `injOn_theta`. The whole analytic chain
   Theorem 1 → Corollary 2 → Theorem 3 rests only on Lean's standard
   foundation; the equidistribution results (Theorem 4, Corollary 5) retain
-  only the two Kuipers–Niederreiter-type axioms
-  (`isUDModOne_of_iteratedDeriv_decay`, `continuous_ud_criterion`).
-- **The dependencies are strictly cumulative** down the chain
-  Theorem 4 → Corollary 5, with each step adding exactly the
-  equidistribution axioms it needs.
+  exactly **one** Kuipers–Niederreiter-type axiom, the discrete Fejér
+  criterion `isUDModOne_of_iteratedDeriv_decay`.
+- **The discrete-to-continuous bridge is proved, not assumed.** Corollary 5
+  passes from Theorem 4 to continuous uniform distribution via
+  Kuipers–Niederreiter Theorem 9.6(a) (Ryll-Nardzewski), which is a
+  **theorem** (`Gram.UD.isCUDModOne_of_forall_shift`, `UDModOne.lean`):
+  dominated convergence over `[0, 1]` of the shifted Cesàro averages, unit
+  intervals spliced into `∫₀ᴺ`, and a floor-cutoff squeeze for real time.
+  Its measurability hypothesis is discharged by `measurable_gram`
+  (`Theorem3.lean`: `gram` is monotone above `θ(7)/π + 1` by injectivity of
+  `θ` and constant below it, where `invFunOn` returns its default), and its
+  shifted-UD hypothesis by `theorem4_shift` (`Theorem4.lean` §8: the four
+  Fejér hypotheses transported along `u ↦ u + t`). So Corollary 5 depends on
+  **the same single axiom as Theorem 4** and nothing more.
 
 ## Catalog of custom axioms
 
@@ -164,20 +173,35 @@ The leading-term asymptotic and the monotonicity / decay / growth hypotheses fed
 into this axiom are all **proved** in §2–§3 (Faà di Bruno expansion of
 `(·^n) ∘ gram`); only the criterion itself is assumed.
 
-### `UDModOne.lean` — definitions and index shift
+### `UDModOne.lean` — definitions, index shift, and the K–N 9.6(a) bridge
 
 **No custom axioms.** The definitions `IsUDModOne` / `IsCUDModOne` are *honest*
 (Fourier / Weyl-exponential Cesàro and time averages), not opaque `Prop`
-wrappers, and `IsUDModOne.shift` — formerly an axiom — is a **theorem**: the
-shifted Cesàro average telescopes against the unshifted one up to the boundary
-term `(1/N)·(e(N) − e(0))`, which has norm at most `2/N` (each Weyl exponential
-lies on the unit circle) and vanishes by `squeeze_zero_norm`.
+wrappers, and the file's two lemmas are **theorems**:
+
+- `IsUDModOne.shift` — formerly an axiom: the shifted Cesàro average
+  telescopes against the unshifted one up to the boundary term
+  `(1/N)·(e(N) − e(0))`, which has norm at most `2/N` (each Weyl exponential
+  lies on the unit circle) and vanishes by `squeeze_zero_norm`.
+- `isCUDModOne_of_forall_shift` — Kuipers–Niederreiter Theorem 9.6(a)
+  (Ryll-Nardzewski): if `f` is measurable and every shifted integer sample
+  `(f(k + t))ₖ`, `t ∈ [0, 1]`, is UD mod 1, then `f` is CUD mod 1. Proof:
+  for each nonzero frequency, splice `∫₀ᴺ` of the Weyl exponential into unit
+  intervals to identify the integer-cutoff time average with the
+  `[0,1]`-integral of the shifted Cesàro averages; those tend to `0`
+  pointwise with uniform bound `1`, so dominated convergence kills the
+  integer averages; a floor cutoff (`N = ⌊T⌋₊`, leftover of norm `≤ 1`)
+  squeezes the real-time average. (The classical statement needs only
+  *almost all* `t`; the all-`t` form proved here is what the application
+  supplies.)
 
 ### `Corollary5.lean` — discrete-to-continuous bridge
 
-| Axiom | Signature | Provenance |
-|---|---|---|
-| `continuous_ud_criterion` | `(f) (IsUDModOne (f∘ℕ)) (IsUDModOne (f(·+1)∘ℕ)) → IsCUDModOne f` | Kuipers–Niederreiter discrete ⇒ continuous UD criterion |
+**No custom axioms** (formerly the axiom `continuous_ud_criterion`, now
+deleted). `corollary5` applies `isCUDModOne_of_forall_shift` with
+measurability from `measurable_gramPow` and shifted UD from `theorem4_shift`,
+adding no assumptions beyond the single Fejér axiom already counted for
+Theorem 4.
 
 ## Reproducing this audit
 

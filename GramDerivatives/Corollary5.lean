@@ -3,8 +3,8 @@ import GramDerivatives.Theorem4
 /-!
 # Corollary 5 for powers of the Gram function
 
-Formalization of the logical structure behind Corollary 5 in the paper *Higher
-derivatives of the Gram function*.
+Formalization of Corollary 5 in the paper *Higher derivatives of the Gram
+function*.
 
 The paper states:
 
@@ -13,25 +13,22 @@ The paper states:
 - **Corollary 5**: the function `u ↦ t_u^n` is continuously uniformly distributed
   modulo one.
 
-Theorem 4 is supplied as `Gram.Theorem4.theorem4` (this file imports
-`GramDerivatives.Theorem4`, which builds on the concrete `gram` from
-`GramDerivatives.Theorem3`).  The Kuipers–Niederreiter discrete-to-continuous
-bridge is the only remaining axiom local to this file.
+This file contains **no axioms**.  The discrete-to-continuous bridge is
+Kuipers–Niederreiter Theorem 9.6(a) (Ryll-Nardzewski), *proved* as
+`Gram.UD.isCUDModOne_of_forall_shift` in `UDModOne.lean` via the dominated
+convergence theorem.  Its two hypotheses are supplied by:
+
+- `Gram.Theorem4.measurable_gramPow` — measurability of `u ↦ (gram u)^n`
+  (from `measurable_gram` in `Theorem3.lean`);
+- `Gram.Theorem4.theorem4_shift` — uniform distribution mod one of every
+  shifted integer sample `((gram (k + t))^n)ₖ`, `t ∈ [0, 1]` (the four Fejér
+  hypotheses of Theorem 4, transported along the translation `u ↦ u + t`).
+
+Consequently `corollary5` depends on exactly one custom axiom: the discrete
+Fejér criterion `isUDModOne_of_iteratedDeriv_decay` of `Theorem4.lean`.
 -/
 
 namespace Gram
-
-/--
-Abstract Kuipers–Niederreiter style criterion used to deduce continuous uniform
-distribution from discrete uniform distribution data.
-
-This is the formal bridge from Theorem 4 to Corollary 5.
--- ASSUMPTION -/
-axiom continuous_ud_criterion
-  (f : ℝ → ℝ)
-  (h0 : Gram.UD.IsUDModOne (fun k : ℕ => f k))
-  (h1 : Gram.UD.IsUDModOne (fun k : ℕ => f (k + 1))) :
-  Gram.UD.IsCUDModOne f
 
 /--
 Corollary 5: for every `n ≥ 1`, the function `u ↦ (gram u)^n` is continuously
@@ -39,16 +36,9 @@ uniformly distributed modulo one.
 -/
 lemma corollary5 (n : ℕ) (hn : 1 ≤ n) :
     Gram.UD.IsCUDModOne (fun u : ℝ => Gram.Theorem4.gramPow n u) := by
-  refine continuous_ud_criterion (f := fun u : ℝ => Gram.Theorem4.gramPow n u) ?h0 ?h1
-  · exact Gram.Theorem4.theorem4 n hn
-  · -- Reconcile `gramPow n ↑(k+1)` (from the shift) with `gramPow n (↑k + 1)`
-    -- (the expected `f (k+1)` form) via a Nat-cast rewrite, transported through
-    -- `IsUDModOne` without unfolding its body.
-    have h := Gram.UD.IsUDModOne.shift (Gram.Theorem4.theorem4 n hn)
-    have heq :
-        (fun k : ℕ => Gram.Theorem4.gramPow n (((k + 1 : ℕ) : ℝ)))
-          = (fun k : ℕ => Gram.Theorem4.gramPow n ((k : ℝ) + 1)) := by
-      funext k; push_cast; ring
-    exact heq ▸ h
+  refine Gram.UD.isCUDModOne_of_forall_shift
+    (Gram.Theorem4.measurable_gramPow n) ?_
+  intro t ht
+  exact Gram.Theorem4.theorem4_shift n hn t ht.1
 
 end Gram
