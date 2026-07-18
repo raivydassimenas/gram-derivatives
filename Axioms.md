@@ -11,7 +11,7 @@ Regenerate at any time with the scratch module
 lake build GramDerivatives.AxiomAudit   # prints the axiom list for each theorem
 ```
 
-Last audited: 2026-07-17, against `lean4:v4.30.0-rc2` + matching Mathlib.
+Last audited: 2026-07-18, against `lean4:v4.30.0-rc2` + matching Mathlib.
 
 ## Method
 
@@ -40,6 +40,8 @@ discussion of custom assumptions below.
 | Theorem | Location | Custom axioms it depends on |
 |---|---|---|
 | `theorem1` | `Theorem1.lean:3754` | **none** (only the three standard Lean axioms) |
+| `Gram.UD.vdc_fundamental_inequality` | `VanDerCorput.lean` §4 | **none** (only the three standard Lean axioms) |
+| `Gram.UD.isUDModOne_of_forall_diff` | `VanDerCorput.lean` §5 | **none** (only the three standard Lean axioms) |
 | `corollary2` | `Corollary2.lean:209` | **none** (only the three standard Lean axioms) |
 | `strictMonoOn_theta` | `Corollary2.lean` §7 | **none** (only the three standard Lean axioms) |
 | `gram_theta` | `Theorem3.lean` §1 | **none** (only the three standard Lean axioms) |
@@ -194,6 +196,30 @@ wrappers, and the file's two lemmas are **theorems**:
   squeezes the real-time average. (The classical statement needs only
   *almost all* `t`; the all-`t` form proved here is what the application
   supplies.)
+
+### `VanDerCorput.lean` — van der Corput's inequality and difference theorem
+
+**No custom axioms.** New module (not yet consumed by the main chain) working
+toward a proof of the remaining Fejér axiom, formalizing Kuipers–Niederreiter
+Chapter 1, §3:
+
+- `vdc_fundamental_inequality` — K–N Lemma 3.1 (with the crude multiplicity
+  bound `H` per correlation gap): pad the sequence by zeros, write `H·∑uₙ` as
+  the sum of all length-`H` sliding-window sums, apply Cauchy–Schwarz
+  (`sq_sum_le_card_mul_sum_sq`), and expand the window squares into a
+  diagonal term (`H·∑‖uₙ‖²`) plus off-diagonal window cross-correlations,
+  each of which *equals* a plain gap-`δ` correlation sum of the original
+  sequence (`corr_eq`) and is counted at most `2H` times per gap.
+- `isUDModOne_of_forall_diff` — K–N Theorem 3.1 (van der Corput's difference
+  theorem): if every difference sequence `(a(n+h) − a(n))ₙ`, `h ≥ 1`, is UD
+  mod 1, so is `(a(n))ₙ`. Weyl criterion: the correlation sums of the
+  unimodular exponentials `e(n) = exp(2πik·aₙ)` are the Weyl sums of the
+  difference sequences, hence `o(N)`; the fundamental inequality then gives
+  `limsup ‖(1/N)∑e(n)‖² ≤ 4/H` for every `H`, packaged as an explicit
+  `ε`/`H`/`N₀` argument.
+
+Also proved here: `IsUDModOne.neg` and `isUDModOne_congr_eventually`
+(stability of UD mod 1 under negation and finite modification).
 
 ### `Corollary5.lean` — discrete-to-continuous bridge
 
