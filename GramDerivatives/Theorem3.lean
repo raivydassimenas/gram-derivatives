@@ -207,7 +207,7 @@ private lemma gram_monotoneOn :
     MonotoneOn gram (Set.Ici (theta 7 / Real.pi + 1)) := by
   intro u₁ h₁ u₂ h₂ h₁₂
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have hθ := strictMonoOn_theta
     (Set.mem_Ici.mpr (gram_ge_seven' u₂ h₂))
     (Set.mem_Ici.mpr (gram_ge_seven' u₁ h₁)) hlt
