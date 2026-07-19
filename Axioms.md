@@ -11,17 +11,16 @@ Regenerate at any time with the scratch module
 lake build GramDerivatives.AxiomAudit   # prints the axiom list for each theorem
 ```
 
-Last audited: 2026-07-18, against `lean4:v4.30.0-rc2` + matching Mathlib.
+Last audited: 2026-07-19, against `lean4:v4.30.0-rc2` + matching Mathlib.
 
 ## Method
 
-Every proof module builds with **zero `sorry`**. The deep analytic-number-theory
-input that Mathlib lacks (Riemann ζ, the Riemann–Siegel θ, Karatsuba–Korolev,
-Kuipers–Niederreiter equidistribution) is
-isolated into a small number of `axiom` declarations, each tagged `-- ASSUMPTION`
-in source. `#print axioms` walks the full transitive dependency graph, so the
-lists below are exhaustive: anything *not* listed is genuinely proved from
-Mathlib.
+Every proof module builds with **zero `sorry`** and — as of 2026-07-19 —
+**zero `axiom` declarations**: the last remaining assumption (the discrete
+Fejér / Kuipers–Niederreiter criterion) is now a theorem, proved in
+`Fejer.lean`. `#print axioms` walks the full transitive dependency graph, so
+the lists below are exhaustive: anything *not* listed is genuinely proved
+from Mathlib.
 
 Three axioms appear under every result and are **Lean's standard logical
 foundation**, not project assumptions:
@@ -46,8 +45,10 @@ discussion of custom assumptions below.
 | `strictMonoOn_theta` | `Corollary2.lean` §7 | **none** (only the three standard Lean axioms) |
 | `gram_theta` | `Theorem3.lean` §1 | **none** (only the three standard Lean axioms) |
 | `theorem3` | `Theorem3.lean` | **none** (only the three standard Lean axioms) |
-| `Gram.Theorem4.theorem4` | `Theorem4.lean:1925` | `isUDModOne_of_iteratedDeriv_decay` |
-| `Gram.corollary5` | `Corollary5.lean:38` | `isUDModOne_of_iteratedDeriv_decay` (the same one — no further axioms) |
+| `Gram.UD.isUDModOne_of_antitone_diff` | `Fejer.lean` §3 | **none** (only the three standard Lean axioms) |
+| `Gram.UD.isUDModOne_of_iteratedDeriv_decay` | `Fejer.lean` §6 | **none** (only the three standard Lean axioms) |
+| `Gram.Theorem4.theorem4` | `Theorem4.lean` | **none** (only the three standard Lean axioms) |
+| `Gram.corollary5` | `Corollary5.lean` | **none** (only the three standard Lean axioms) |
 
 ### Notable findings
 
@@ -86,9 +87,19 @@ discussion of custom assumptions below.
   (nonvanishing derivative from `deriv_theta_pos`), with the local inverse
   identified with `gram` near `u` via `injOn_theta`. The whole analytic chain
   Theorem 1 → Corollary 2 → Theorem 3 rests only on Lean's standard
-  foundation; the equidistribution results (Theorem 4, Corollary 5) retain
-  exactly **one** Kuipers–Niederreiter-type axiom, the discrete Fejér
-  criterion `isUDModOne_of_iteratedDeriv_decay`.
+  foundation.
+- **The Fejér criterion is proved, not assumed.** The project's last axiom,
+  `isUDModOne_of_iteratedDeriv_decay` (the higher-derivative
+  Kuipers–Niederreiter / Fejér criterion), is now a **theorem**
+  (`Fejer.lean`): the discrete Fejér theorem (K–N Theorem 2.5) is proved by
+  Abel summation against `1/Δf(n)` with the global quadratic bound
+  `‖exp(iθ) − 1 − iθ‖ ≤ 3θ²` and the Cesàro lemma; the mean value theorem
+  transfers derivative hypotheses to difference sequences (base case
+  `l = 1`, K–N Corollary 2.1); induction on the derivative order runs
+  through van der Corput's difference theorem (`VanDerCorput.lean`); and an
+  intermediate-value sign dichotomy reduces the `|f^(l)|` form to the
+  sign-normalized master lemma. Consequently **every result in the project,
+  including Theorem 4 and Corollary 5, is axiom-free**.
 - **The discrete-to-continuous bridge is proved, not assumed.** Corollary 5
   passes from Theorem 4 to continuous uniform distribution via
   Kuipers–Niederreiter Theorem 9.6(a) (Ryll-Nardzewski), which is a
@@ -100,7 +111,8 @@ discussion of custom assumptions below.
   `θ` and constant below it, where `invFunOn` returns its default), and its
   shifted-UD hypothesis by `theorem4_shift` (`Theorem4.lean` §8: the four
   Fejér hypotheses transported along `u ↦ u + t`). So Corollary 5 depends on
-  **the same single axiom as Theorem 4** and nothing more.
+  **exactly the same (empty) axiom set as Theorem 4**: nothing beyond Lean's
+  standard foundation.
 
 ## Catalog of custom axioms
 
@@ -167,13 +179,44 @@ converts the problem into the same inversion. All downstream consequences
 
 ### `Theorem4.lean` — the higher-derivative equidistribution criterion
 
-| Axiom | Signature (abridged) | Provenance |
-|---|---|---|
-| `isUDModOne_of_iteratedDeriv_decay` | `(f) (l) (1 ≤ l) (eventually ContDiffAt) (|f^(l)| eventually antitone) (f^(l) → 0) (u·|f^(l)| → ∞) → IsUDModOne (f ∘ ℕ-cast)` | higher-derivative Kuipers–Niederreiter / Fejér criterion; Kuipers–Niederreiter [11, Thm 2.5], Pańkowski [17, Proof of Thm 1] |
+**No custom axioms** (formerly one: `isUDModOne_of_iteratedDeriv_decay`, the
+higher-derivative Kuipers–Niederreiter / Fejér criterion — K–N [11, Thm 2.5],
+Pańkowski [17, Proof of Thm 1]). The criterion is now a **theorem**
+delegating to `Gram.UD.isUDModOne_of_iteratedDeriv_decay` (`Fejer.lean`, see
+below). The leading-term asymptotic and the monotonicity / decay / growth
+hypotheses fed into it are all proved in §2–§3 (Faà di Bruno expansion of
+`(·^n) ∘ gram`).
 
-The leading-term asymptotic and the monotonicity / decay / growth hypotheses fed
-into this axiom are all **proved** in §2–§3 (Faà di Bruno expansion of
-`(·^n) ∘ gram`); only the criterion itself is assumed.
+### `Fejer.lean` — Fejér's theorem and the higher-derivative criterion
+
+**No custom axioms.** Proves the criterion consumed by `Theorem4.lean`,
+following Kuipers–Niederreiter Chapter 1:
+
+- `IsUDModOne.unshift` / `isUDModOne_of_shift` — u.d. of a tail
+  `(a(n+m))ₙ` implies u.d. of `(a(n))ₙ` (telescoping boundary term `≤ 2/N`),
+  so finitely many initial terms can be discarded.
+- `norm_exp_mul_I_sub_one_sub_le` — the global quadratic Taylor bound
+  `‖exp(iθ) − 1 − iθ‖ ≤ 3θ²` (Mathlib's `norm_exp_sub_one_sub_id_le` for
+  `|θ| ≤ 1`, triangle inequality otherwise).
+- `isUDModOne_of_antitone_diff` — **K–N Theorem 2.5** (discrete Fejér
+  theorem, positive antitone differences): Abel summation of the Weyl
+  exponentials against `1/d n` telescopes to the bound
+  `2π|k|·‖∑_{n<N} e n‖ ≤ 2/d N + 12π²k²·∑_{n<N} d n`; after division by `N`
+  the first term vanishes by `N·d N → ∞` and the second by the Cesàro lemma
+  (`Filter.Tendsto.cesaro`).
+- `isUDModOne_of_iteratedDeriv_pos_antitone` — the sign-normalized master
+  lemma, by induction on the derivative order `l ≥ 1`
+  (`Nat.le_induction`). Base case `l = 1` is **K–N Corollary 2.1** (Fejér's
+  theorem): the mean value theorem on unit intervals transfers the
+  hypotheses on `f'` to the difference sequence of `(f(n + n₀))ₙ`. The
+  inductive step feeds the shifted differences `g(u) = f(u+h) − f(u)`
+  (which satisfy the level-`l` hypotheses, again by the mean value theorem
+  applied to `iteratedDeriv l f`) to van der Corput's difference theorem
+  `isUDModOne_of_forall_diff`.
+- `isUDModOne_of_iteratedDeriv_decay` — the sign-free form: since
+  `u·|f^(l)(u)| → ∞` forces eventual nonvanishing and `f^(l)` is continuous
+  on a tail, the intermediate value theorem gives an eventually constant
+  sign; the master lemma applies to `f` or `−f`.
 
 ### `UDModOne.lean` — definitions, index shift, and the K–N 9.6(a) bridge
 
@@ -199,9 +242,8 @@ wrappers, and the file's two lemmas are **theorems**:
 
 ### `VanDerCorput.lean` — van der Corput's inequality and difference theorem
 
-**No custom axioms.** New module (not yet consumed by the main chain) working
-toward a proof of the remaining Fejér axiom, formalizing Kuipers–Niederreiter
-Chapter 1, §3:
+**No custom axioms.** Formalizes Kuipers–Niederreiter Chapter 1, §3; consumed
+by `Fejer.lean` (inductive step of the master lemma):
 
 - `vdc_fundamental_inequality` — K–N Lemma 3.1 (with the crude multiplicity
   bound `H` per correlation gap): pad the sequence by zeros, write `H·∑uₙ` as
@@ -226,8 +268,7 @@ Also proved here: `IsUDModOne.neg` and `isUDModOne_congr_eventually`
 **No custom axioms** (formerly the axiom `continuous_ud_criterion`, now
 deleted). `corollary5` applies `isCUDModOne_of_forall_shift` with
 measurability from `measurable_gramPow` and shifted UD from `theorem4_shift`,
-adding no assumptions beyond the single Fejér axiom already counted for
-Theorem 4.
+adding no assumptions beyond those of Theorem 4 — that is, none at all.
 
 ## Reproducing this audit
 

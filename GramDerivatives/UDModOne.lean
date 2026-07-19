@@ -12,9 +12,9 @@ real sequences and real functions, expressed via Fourier exponentials
 periodicity of the complex exponential.
 
 These replace the opaque `Prop` wrappers previously used in
-`GramDerivatives.Corollary5`. The one deep analytic theorem consumed
-downstream (derivative-decay ⇒ UD, the discrete Fejér criterion) remains an
-`-- ASSUMPTION` axiom in `Theorem4.lean`; this file itself is axiom-free —
+`GramDerivatives.Corollary5`. The deep analytic theorem consumed downstream
+(derivative-decay ⇒ UD, the discrete Fejér criterion) is proved in
+`Fejer.lean`; this file itself is likewise axiom-free —
 the definitions of UD/CUD are honest, and both the index-shift lemma
 `IsUDModOne.shift` and the Kuipers–Niederreiter discrete-to-continuous
 bridge `isCUDModOne_of_forall_shift` (K–N Theorem 9.6(a)) are proved.

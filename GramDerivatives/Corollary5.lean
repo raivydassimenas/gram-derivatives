@@ -24,8 +24,9 @@ convergence theorem.  Its two hypotheses are supplied by:
   shifted integer sample `((gram (k + t))^n)ₖ`, `t ∈ [0, 1]` (the four Fejér
   hypotheses of Theorem 4, transported along the translation `u ↦ u + t`).
 
-Consequently `corollary5` depends on exactly one custom axiom: the discrete
-Fejér criterion `isUDModOne_of_iteratedDeriv_decay` of `Theorem4.lean`.
+Consequently `corollary5` depends on **no custom axioms at all**: the
+discrete Fejér criterion `isUDModOne_of_iteratedDeriv_decay`, formerly the
+project's last axiom, is now a theorem (`Fejer.lean`).
 -/
 
 namespace Gram

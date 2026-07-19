@@ -39,11 +39,13 @@
            `iteratedDeriv_two_gramPow_one_eventually_nonpos` (§3d.0, n=1),
            `iteratedDeriv_three_gramPow_two_isEquivalent` (§3d.1, n=2),
            `theorem4` itself (one-line application of the K–N criterion).
-  Axioms (this file):
-    • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion
-      (antitone variant).  Permanent: no UD-mod-1 theory in Mathlib.
+  Axioms (this file): **none**.  The K–N criterion
+  `isUDModOne_of_iteratedDeriv_decay` (antitone variant), formerly the
+  project's last axiom, is now a theorem delegating to
+  `Gram.UD.isUDModOne_of_iteratedDeriv_decay` in `Fejer.lean`.
 -/
 
+import GramDerivatives.Fejer
 import GramDerivatives.Theorem3
 import GramDerivatives.UDModOne
 
@@ -79,15 +81,18 @@ The eventual-monotonicity hypothesis is stated with `AntitoneOn`
 the classical K–N statement allows either direction, but the antitone
 side is what our setting provides.
 
--- ASSUMPTION -/
-axiom isUDModOne_of_iteratedDeriv_decay
-    (f : ℝ → ℝ) (l : ℕ) (_hl : 1 ≤ l)
-    (_hC : ∀ᶠ u : ℝ in atTop, ContDiffAt ℝ l f u)
-    (_hmono : ∃ x₀ : ℝ,
+Formerly the project's last `-- ASSUMPTION` axiom; now a theorem, proved in
+`Fejer.lean` (discrete Fejér theorem + mean value theorem + van der Corput's
+difference theorem). -/
+theorem isUDModOne_of_iteratedDeriv_decay
+    (f : ℝ → ℝ) (l : ℕ) (hl : 1 ≤ l)
+    (hC : ∀ᶠ u : ℝ in atTop, ContDiffAt ℝ l f u)
+    (hmono : ∃ x₀ : ℝ,
         AntitoneOn (fun t : ℝ => |iteratedDeriv l f t|) (Set.Ici x₀))
-    (_h0 : Tendsto (fun u : ℝ => iteratedDeriv l f u) atTop (𝓝 0))
-    (_hInf : Tendsto (fun u : ℝ => u * |iteratedDeriv l f u|) atTop atTop) :
-    Gram.UD.IsUDModOne (fun k : ℕ => f k)
+    (h0 : Tendsto (fun u : ℝ => iteratedDeriv l f u) atTop (𝓝 0))
+    (hInf : Tendsto (fun u : ℝ => u * |iteratedDeriv l f u|) atTop atTop) :
+    Gram.UD.IsUDModOne (fun k : ℕ => f k) :=
+  Gram.UD.isUDModOne_of_iteratedDeriv_decay f l hl hC hmono h0 hInf
 
 /-! ## §2  Smoothness of `gramPow n` on the Gram tail (proved) -/
 
