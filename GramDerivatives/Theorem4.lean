@@ -39,11 +39,13 @@
            `iteratedDeriv_two_gramPow_one_eventually_nonpos` (§3d.0, n=1),
            `iteratedDeriv_three_gramPow_two_isEquivalent` (§3d.1, n=2),
            `theorem4` itself (one-line application of the K–N criterion).
-  Axioms (this file):
-    • `isUDModOne_of_iteratedDeriv_decay` — the K–N criterion
-      (antitone variant).  Permanent: no UD-mod-1 theory in Mathlib.
+  Axioms (this file): **none**.  The K–N criterion
+  `isUDModOne_of_iteratedDeriv_decay` (antitone variant), formerly the
+  project's last axiom, is now a theorem delegating to
+  `Gram.UD.isUDModOne_of_iteratedDeriv_decay` in `Fejer.lean`.
 -/
 
+import GramDerivatives.Fejer
 import GramDerivatives.Theorem3
 import GramDerivatives.UDModOne
 
@@ -79,15 +81,18 @@ The eventual-monotonicity hypothesis is stated with `AntitoneOn`
 the classical K–N statement allows either direction, but the antitone
 side is what our setting provides.
 
--- ASSUMPTION -/
-axiom isUDModOne_of_iteratedDeriv_decay
-    (f : ℝ → ℝ) (l : ℕ) (_hl : 1 ≤ l)
-    (_hC : ∀ᶠ u : ℝ in atTop, ContDiffAt ℝ l f u)
-    (_hmono : ∃ x₀ : ℝ,
+Formerly the project's last `-- ASSUMPTION` axiom; now a theorem, proved in
+`Fejer.lean` (discrete Fejér theorem + mean value theorem + van der Corput's
+difference theorem). -/
+theorem isUDModOne_of_iteratedDeriv_decay
+    (f : ℝ → ℝ) (l : ℕ) (hl : 1 ≤ l)
+    (hC : ∀ᶠ u : ℝ in atTop, ContDiffAt ℝ l f u)
+    (hmono : ∃ x₀ : ℝ,
         AntitoneOn (fun t : ℝ => |iteratedDeriv l f t|) (Set.Ici x₀))
-    (_h0 : Tendsto (fun u : ℝ => iteratedDeriv l f u) atTop (𝓝 0))
-    (_hInf : Tendsto (fun u : ℝ => u * |iteratedDeriv l f u|) atTop atTop) :
-    Gram.UD.IsUDModOne (fun k : ℕ => f k)
+    (h0 : Tendsto (fun u : ℝ => iteratedDeriv l f u) atTop (𝓝 0))
+    (hInf : Tendsto (fun u : ℝ => u * |iteratedDeriv l f u|) atTop atTop) :
+    Gram.UD.IsUDModOne (fun k : ℕ => f k) :=
+  Gram.UD.isUDModOne_of_iteratedDeriv_decay f l hl hC hmono h0 hInf
 
 /-! ## §2  Smoothness of `gramPow n` on the Gram tail (proved) -/
 
@@ -1929,5 +1934,65 @@ theorem theorem4 (n : ℕ) (hn : 1 ≤ n) :
     (iteratedDeriv_n_gramPow_n_eventually_antitone n hn)
     (iteratedDeriv_n_gramPow_n_tendsto_zero n hn)
     (mul_iteratedDeriv_n_gramPow_n_tendsto_atTop n hn)
+
+/-! ## §8  Shifted variant, for the continuous result
+
+Corollary 5 consumes Theorem 4 through the Kuipers–Niederreiter
+discrete-to-continuous criterion (K–N Theorem 9.6(a), proved as
+`Gram.UD.isCUDModOne_of_forall_shift` in `UDModOne.lean`), which needs
+uniform distribution of every *shifted* integer sample
+`(gramPow n (k + t))ₖ`, `t ∈ [0, 1]`.  Each shift satisfies the same
+four Fejér hypotheses as the unshifted sequence: they transport along
+the translation `u ↦ u + t` via `iteratedDeriv_comp_add_const`. -/
+
+/-- `gramPow n` is measurable — inherited from `measurable_gram`
+(`Theorem3.lean`), which glues the monotone true inverse above
+`θ(7)/π + 1` with the constant `invFunOn` default below it. -/
+lemma measurable_gramPow (n : ℕ) : Measurable (gramPow n) :=
+  measurable_gram.pow_const n
+
+/-- **Shifted Theorem 4**: for every `t ≥ 0`, the sequence
+`((gram (k + t))^n)ₖ` is uniformly distributed modulo one.  The four
+hypotheses of the Fejér criterion for `u ↦ gramPow n (u + t)` follow
+from the ones proved in §§2–6 by translating along `u ↦ u + t`. -/
+theorem theorem4_shift (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 ≤ t) :
+    Gram.UD.IsUDModOne (fun k : ℕ => gramPow n ((k : ℝ) + t)) := by
+  have hshift : Tendsto (fun u : ℝ => u + t) atTop atTop :=
+    tendsto_atTop_add_const_right _ t tendsto_id
+  have hrw := iteratedDeriv_comp_add_const n (gramPow n) t
+  refine isUDModOne_of_iteratedDeriv_decay
+    (fun u => gramPow n (u + t)) n hn ?_ ?_ ?_ ?_
+  · -- eventual smoothness, translated
+    filter_upwards [eventually_gt_atTop gramThreshold] with u hu
+    have hgt : gramThreshold < u + t := by linarith
+    exact ContDiffAt.comp (g := gramPow n) (f := fun u : ℝ => u + t) u
+      (contDiffAt_gramPow n n hgt) (contDiffAt_id.add contDiffAt_const)
+  · -- eventual antitonicity of `|iteratedDeriv n ·|`, translated
+    obtain ⟨x₀, hx₀⟩ := iteratedDeriv_n_gramPow_n_eventually_antitone n hn
+    refine ⟨x₀, ?_⟩
+    intro u₁ h₁ u₂ h₂ h₁₂
+    simp only [hrw]
+    exact hx₀ (Set.mem_Ici.mpr (by linarith [Set.mem_Ici.mp h₁]))
+      (Set.mem_Ici.mpr (by linarith [Set.mem_Ici.mp h₂])) (by linarith)
+  · -- decay to zero, translated
+    have h0 := iteratedDeriv_n_gramPow_n_tendsto_zero n hn
+    simp only [hrw]
+    exact h0.comp hshift
+  · -- `u · |·| → ∞`: from `(u+t) · |·(u+t)| → ∞` since
+    -- `u + t ≤ u · (1 + t)` for `u ≥ 1`.
+    have hcomp : Tendsto
+        (fun u : ℝ => (u + t) * |iteratedDeriv n (gramPow n) (u + t)|)
+        atTop atTop :=
+      (mul_iteratedDeriv_n_gramPow_n_tendsto_atTop n hn).comp hshift
+    have h1t : (0 : ℝ) < 1 + t := by linarith
+    have hdiv := hcomp.atTop_div_const h1t
+    simp only [hrw]
+    refine tendsto_atTop_mono' atTop ?_ hdiv
+    filter_upwards [eventually_ge_atTop (1 : ℝ)] with u hu
+    have habs : (0 : ℝ) ≤ |iteratedDeriv n (gramPow n) (u + t)| :=
+      abs_nonneg _
+    rw [div_le_iff₀ h1t]
+    nlinarith [mul_nonneg (mul_nonneg habs ht)
+      (by linarith : (0 : ℝ) ≤ u - 1)]
 
 end Gram.Theorem4

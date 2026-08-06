@@ -1,5 +1,7 @@
 import GramDerivatives.Theorem1
 import GramDerivatives.Corollary2
 import GramDerivatives.Theorem3
+import GramDerivatives.VanDerCorput
+import GramDerivatives.Fejer
 import GramDerivatives.Theorem4
 import GramDerivatives.Corollary5

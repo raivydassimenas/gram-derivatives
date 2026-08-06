@@ -26,29 +26,31 @@ GramDerivatives/
   Theorem4.lean                   # detailed proof of Theorem 4 (uniform distribution of {t_k^n})
   Corollary5.lean                 # Corollary 5 (continuous uniform distribution; depends on Theorem4)
   UDModOne.lean                   # honest UD/CUD-mod-1 definitions used by Theorem4/Corollary5
+  VanDerCorput.lean               # K–N Ch.1 §3: van der Corput inequality + difference theorem
+  Fejer.lean                      # K–N Thm 2.5 / Cor 2.1: discrete + higher-derivative Fejér criterion
 ```
 
 Note: the root `GramDerivatives.lean` imports all five proof modules, so a plain `lake build` (default target `GramDerivatives`) compiles the whole project. `Axioms.md` records the full `#print axioms` dependency of every top-level result; regenerate it with `lake build GramDerivatives.AxiomAudit`.
 
 ### Proof strategy
 
-Deep analytic number theory unavailable in Mathlib (Riemann zeta, Riemann–Siegel theta, Karatsuba–Korolev formula, Kuipers–Niederreiter UD criteria) is introduced as `axiom` declarations, each marked `-- ASSUMPTION` in `Theorem1.lean`. This lets the *logical structure* of each proof compile while isolating the gaps. `Theorem1.lean` itself builds with **zero `sorry`** — every lemma that is provable in principle (including `iteratedDeriv_α_part_isO`, `iteratedDeriv_j_isO`, `iteratedDeriv_tj_isO`, and `δ_eq`) is fully discharged; only the `-- ASSUMPTION` axioms remain.
+The project is now **entirely axiom-free**: every top-level result (`theorem1`, `corollary2`, `theorem3`, `theorem4`, `corollary5`) depends only on Lean's standard foundation (`propext`, `Classical.choice`, `Quot.sound`), as verified by `lake build GramDerivatives.AxiomAudit`. The final assumption to fall was the discrete Fejér / Kuipers–Niederreiter criterion `isUDModOne_of_iteratedDeriv_decay`, now a theorem: `VanDerCorput.lean` proves van der Corput's fundamental inequality (K–N Lemma 3.1) and difference theorem (K–N Theorem 3.1), and `Fejer.lean` proves the discrete Fejér theorem (K–N Theorem 2.5, Abel summation + Cesàro), the function version via the mean value theorem (K–N Corollary 2.1, base case `l = 1`), the induction on the derivative order through the difference theorem, and the intermediate-value sign dichotomy giving the `|f^(l)|` form consumed by `Theorem4.lean`. (`UDModOne.lean` and `Corollary5.lean` were already axiom-free: the index-shift lemma, the K–N 9.6(a) discrete-to-continuous bridge `isCUDModOne_of_forall_shift`, and the measurability of `gram` are all proved.) `Theorem1.lean` itself builds with **zero `sorry` and zero axioms** — every lemma (including `iteratedDeriv_α_part_isO`, `iteratedDeriv_j_isO`, `iteratedDeriv_tj_isO`, and `δ_eq`) is fully discharged, and the step-function slot is the bundled structure `StepFunction` (any function locally constant off a discrete jump set) whose regular-point properties are proved theorems; `theorem1` is proved for every instance.
 
 - **`GramDerOverview.lean`** — states all five results (`Theorem1`, `Corollary2`, `Theorem3`, `Theorem4`, `Corollary5`) inside `namespace GramPaper`; serves as the spec. UD/CUD are stubbed via lightweight `Prop` wrappers (`UDMod1`, `CUDMod1`) and the analytic input is bundled into one axiom `gramPow_good_for_UD`.
 - **`Theorem1.lean`** — implements the paper's decomposition for Theorem 1: splits `S(t)` into a smooth main term `φ(t)` and an error term `δ(t)`, then bounds the n-th derivative of each. The fully completed proof here is `iteratedDeriv_log` (iterated derivatives of `log` by induction); `iteratedDeriv_φ` builds on it. The final theorem is `theorem1` (§8).
-- **`Corollary2.lean`** — derives the asymptotic for the n-th derivative of the Riemann–Siegel theta function `θ` from `theorem1` in `Theorem1.lean`. Imports `GramDerivatives.Theorem1` and reuses the decomposition `S = φ − (1/π)·δ + N_step` together with the Riemann–von Mangoldt / Karatsuba–Korolev relation `N(t) = (1/π)·θ(t) + 1 + S(t)`. See "Working on `Corollary2.lean`" below.
+- **`Corollary2.lean`** — derives the asymptotic for the n-th derivative of the Riemann–Siegel theta function `θ` from `theorem1` in `Theorem1.lean`. Imports `GramDerivatives.Theorem1` and reuses the decomposition `S F = φ − (1/π)·δ + F` (for `F : StepFunction`) together with the Riemann–von Mangoldt / Karatsuba–Korolev relation `N(t) = (1/π)·θ(t) + 1 + S(t)`. See "Working on `Corollary2.lean`" below.
 - **`Theorem3.lean`** — planned: derives the asymptotic for the n-th derivative of the Gram function `t_u` (the inverse of `θ` on `[θ(7), ∞)`) by induction, differentiating the implicit relation `θ(t_u) = (u−1)π` and substituting the `θ^(n)` asymptotics from `Corollary2.lean`. See "Working on `Theorem3.lean`" below.
-- **`Corollary5.lean`** — minimal-imports formalization (only `Mathlib.Data.Real.Basic`) inside `namespace Gram`. Uses opaque `Prop` wrappers `UDSeqModOne` / `UDContModOne`, takes Theorem 4 as an axiom, and derives `corollary5` via an abstract `continuous_ud_criterion` plus `UDSeqModOne_shift`. This is intentionally separate from the heavier `GramDerOverview.lean` formulation.
+- **`Corollary5.lean`** — inside `namespace Gram`, imports `GramDerivatives.Theorem4` and uses the honest UD/CUD definitions from `UDModOne.lean`. **Axiom-free**: derives `corollary5` by applying the proved K–N 9.6(a) bridge `Gram.UD.isCUDModOne_of_forall_shift` (`UDModOne.lean`) to `measurable_gramPow` and `theorem4_shift` (`Theorem4.lean` §8); like Theorem 4 it rests on no custom axioms at all.
 
 ## Working on `Theorem1.lean`
 
 `Theorem1.lean` is intentionally **independent of the Karatsuba–Korolev results**. Treat its setup abstractly:
 
-- **`N_step` may be any piecewise-constant function** `ℝ → ℝ`. It need *not* be the zero-counting step function `N(γ+0)` tied to the ordinates of zeros of ζ. The only properties the proof uses are that it is locally constant on `(0, ∞)` — so `contDiffAt_N_step` holds and `N_step_iteratedDeriv_eq_zero` makes every `n ≥ 1` derivative vanish. Keep these axioms general; do not specialize `N_step` to ζ-zero ordinates.
-- **`S` may be any function of the form** `S(t) = φ(t) − (1/π)·δ(t) + N_step(t)`. In `Theorem1.lean`, `S` *is* `def`-ined by exactly that formula, and `S_eq_φ_sub_δ_add_N` is a `rfl` theorem — not an imported analytic fact about `(1/π)·arg ζ(1/2 + it)`.
+- **The step-function slot is the bundled structure `StepFunction`**: a function `toFun : ℝ → ℝ` together with a jump set `jumpSet : Set ℝ` that is *discrete* (`jumpSet_discrete`: every point of it is isolated in it) and off which the function is locally constant (`locallyConstant_off`). It stands in for the zero-counting step function `N(γ+0)`; the proof uses only local constancy — `StepFunction.contDiffAt` and `StepFunction.iteratedDeriv_eq_zero` are **theorems** proved from that field. Discreteness is used only for `StepFunction.neBot_regularAtTop` (the relativized filter is nontrivial, so `theorem1` is never vacuous). Do not add ζ-specific properties.
+- **`S` is parametrized over the class**: `S F (t) = φ(t) − (1/π)·δ(t) + F(t)` for any `F : StepFunction`, and `S_eq_φ_sub_δ_add_N` is a `rfl` theorem — not an imported analytic fact about `(1/π)·arg ζ(1/2 + it)`. `theorem1` takes `F` as its first argument and concludes at the filter `𝓝∞₀[F.jumpSet]`.
 - **Do not change the definitions of `φ` and `δ`.** They stay exactly as in §1: `φ` the smooth main term and `δ = α_part − (t/2)·j` the error term. The leading-term asymptotic of Theorem 1 comes entirely from `φ`, and `δ^(n)(t) = O(t^(−n−1))` from `δ`.
 
-Consequence: Theorem 1's proof in this file rests only on elementary calculus plus the abstract decomposition above — it does **not** depend on the Karatsuba–Korolev representation, the Riemann ζ function, or properties of its zeros. Docstrings and comments that still attribute `S`, `N_step`, or `S_eq_φ_sub_δ_add_N` to Karatsuba–Korolev describe the *original motivation* only; the formal content is the general statement.
+Consequence: Theorem 1's proof in this file rests only on elementary calculus plus the abstract decomposition above — it does **not** depend on the Karatsuba–Korolev representation, the Riemann ζ function, or properties of its zeros. Docstrings and comments that still attribute `S`, the step function, or `S_eq_φ_sub_δ_add_N` to Karatsuba–Korolev describe the *original motivation* only; the formal content is the general statement.
 
 ## Working on `Corollary2.lean`
 
@@ -68,12 +70,12 @@ For n ≥ 2, away from discontinuities,
 When importing `GramDerivatives.Theorem1`, fix the following analytic interpretation of its abstract symbols. These are *intent* commitments that drive how the new axioms in `Corollary2.lean` are stated; they do **not** require editing `Theorem1.lean`.
 
 - **`S`** is `(1/π) · arg ζ(1/2 + it)`, where the argument is taken along the continuous branch from `s = 2` to `s = 2 + it` to `s = 1/2 + it` (and averaged at zeros). This is the function `S(t)` of the paper.
-- **`N_step`** is `N(γ+0)`, the right-continuous Riemann ζ zero-counting function: the number of nontrivial zeros `ρ = β + iγ` with `0 < γ ≤ t`, `0 ≤ β ≤ 1`. It is integer-valued and piecewise constant on `(0, ∞)`, with jumps exactly at the ordinates of ζ-zeros — which justifies `N_step_iteratedDeriv_eq_zero` at every regular point. (The `True` placeholder slot in that axiom is conceptually a "not at a ζ-zero ordinate" predicate.)
+- **The step function `F : StepFunction`** morally plays the role of `N(γ+0)`, the right-continuous Riemann ζ zero-counting function: the number of nontrivial zeros `ρ = β + iγ` with `0 < γ ≤ t`, `0 ≤ β ≤ 1` — integer-valued and piecewise constant on `(0, ∞)`, with jumps exactly at the ordinates of ζ-zeros. (Formally, `StepFunction` is the abstract class in `Theorem1.lean` of functions locally constant off a discrete jump set; `StepFunction.iteratedDeriv_eq_zero` is a theorem about it.)
 - **`θ`** is the Riemann–Siegel theta function: the continuous branch of `arg(π^(-s/2) Γ(s/2))` along the segment from `s = 1/2` to `s = 1/2 + it`. It is `C^∞` on `(0, ∞)` (no exceptional points) and monotonically increasing for `t ≥ 7`.
 
 ### Karatsuba–Korolev input
 
-The decomposition `S = φ − (1/π)·δ + N_step` from `Theorem1.lean` *is* the Karatsuba–Korolev expansion (equation (2) of the paper, [6, Proof of Theorem 2]) under the interpretation above. In `Theorem1.lean` it holds by `rfl`, but morally it is the Karatsuba–Korolev result.
+The decomposition `S F = φ − (1/π)·δ + F` (for a step function `F`) from `Theorem1.lean` *is* the Karatsuba–Korolev expansion (equation (2) of the paper, [6, Proof of Theorem 2]) under the interpretation above. In `Theorem1.lean` it holds by `rfl`, but morally it is the Karatsuba–Korolev result.
 
 The **second** Karatsuba–Korolev input — the one that lets us pass from `S` to `θ` — is the **Riemann–von Mangoldt formula** (equation (1) of the paper):
 
@@ -84,7 +86,7 @@ N(t) = (1/π) · θ(t) + 1 + S(t).
 Solving for `θ`:
 
 ```
-θ(t) = π · (N_step(t) − 1 − S(t)).
+θ(t) = π · (F(t) − 1 − S F (t)).
 ```
 
 Equivalently, substituting the Karatsuba–Korolev expansion of `S`:
@@ -93,17 +95,17 @@ Equivalently, substituting the Karatsuba–Korolev expansion of `S`:
 θ(t) = δ(t) − π · φ(t) − π,
 ```
 
-which — note — does **not** involve `N_step` at all. Either form is acceptable; the second is preferable because it makes `θ` smooth on all of `(0, ∞)` without invoking the locally-constant axiom for `N_step`.
+which — note — does **not** involve any step function at all. Either form is acceptable; the second is preferable because it makes `θ` smooth on all of `(0, ∞)` without invoking the local-constancy field of `StepFunction`.
 
 ### Proof sketch
 
 Once `θ` is introduced, the proof of Corollary 2 is a one-step reduction to `theorem1`:
 
-1. Pointwise on `(0, ∞)` (away from ζ-zero ordinates if working with `N_step`),
-   `θ(t) = π · (N_step(t) − 1 − S(t))`.
+1. Pointwise on `(0, ∞)` (away from ζ-zero ordinates if working with a step function `F`),
+   `θ(t) = π · (F(t) − 1 − S F (t))`.
 2. Apply `iteratedDeriv` `n` times. For `n ≥ 1`:
    - `iteratedDeriv n (1 : ℝ → ℝ) = 0` (constant), and
-   - `iteratedDeriv n N_step t = 0` by `N_step_iteratedDeriv_eq_zero`.
+   - `iteratedDeriv n F t = 0` by `StepFunction.iteratedDeriv_eq_zero`.
    Hence `θ^(n)(t) = −π · S^(n)(t)`.
 3. Substitute `theorem1`: for `n ≥ 2`,
    ```
@@ -122,9 +124,9 @@ Introduce the following new axioms (each tagged `-- ASSUMPTION` and given a docs
 
 - `axiom theta : ℝ → ℝ` — the Riemann–Siegel theta function.
 - `axiom contDiffAt_theta (n : ℕ) {s : ℝ} (hs : 0 < s) : ContDiffAt ℝ n theta s` — `θ` is `C^∞` on `(0, ∞)`.
-- `axiom riemann_vonMangoldt (t : ℝ) (ht : 0 < t) : N_step t = (1 / Real.pi) * theta t + 1 + S t` — equation (1) of the paper; the Karatsuba–Korolev / Riemann–von Mangoldt identity.
+- `axiom riemann_vonMangoldt (F : StepFunction) (t : ℝ) (ht : 0 < t) : F t = (1 / Real.pi) * theta t + 1 + S F t` — equation (1) of the paper; the Karatsuba–Korolev / Riemann–von Mangoldt identity.
 
-The `N_step` and `S` here are the ones already defined in `Theorem1.lean`; do not redefine them.
+The `StepFunction` and `S` here are the ones already defined in `Theorem1.lean`; do not redefine them.
 
 Alternative axiom-light path: replace the axioms above with a **definition** `theta t := δ t − Real.pi * φ t − Real.pi`. Then `riemann_vonMangoldt` becomes a `rfl` (or near-`rfl`) theorem, smoothness of `θ` follows from `contDiffAt_δ` and `contDiffAt_φ`, and only the *interpretation* "this `theta` agrees with the Riemann–Siegel theta function" is informal. Prefer this path if it keeps the file `sorry`-free without adding genuine analytic-number-theory axioms; document the identification with the Riemann–Siegel θ in the module docstring.
 
@@ -196,18 +198,20 @@ t_u^(k) = (-1)^(k+1) · 2π · (k − 2)! / (u^(k-1) · log² u)
 When importing `GramDerivatives.Corollary2`:
 
 - **`theta`** is the Riemann–Siegel theta function (as fixed in `Corollary2.lean`), monotonically increasing for `t ≥ 7`.
-- **`gram : ℝ → ℝ`** — the Gram function, defined as the inverse of `theta` on `[θ(7), ∞)` (or equivalently the solution of `θ(t_u) = (u − 1)π`). Smoothness on `(θ(7)/π + π, ∞)` follows from the inverse function theorem applied to `theta` (which has nonvanishing derivative there).
+- **`gram : ℝ → ℝ`** — the Gram function, a genuine `def`: an inverse of `theta` on `[7, ∞)` chosen via `Function.invFunOn theta (Set.Ici 7)` (equivalently, a solution of `θ(t_u) = (u − 1)π` lying in `[7, ∞)`). Smoothness on `(θ(7)/π + π, ∞)` is the *theorem* `contDiffAt_gram`, by the inverse function theorem applied to `theta` (nonvanishing derivative from `deriv_theta_pos`).
 
 ### Axiom budget for `Theorem3.lean`
 
-Introduce the following new axioms (each tagged `-- ASSUMPTION`):
+**Not axioms** (definition + derived theorems):
 
-- `axiom gram : ℝ → ℝ` — the Gram function `t_u`.
-- `axiom gram_spec (u : ℝ) (hu : θ(7)/π + π ≤ u) : theta (gram u) = (u − 1) * Real.pi` — equation (7) of the paper.
-- `axiom contDiffAt_gram (n : ℕ) {u : ℝ} (hu : θ(7)/π + π < u) : ContDiffAt ℝ n gram u` — smoothness on the open half-line, by the inverse function theorem.
-- `axiom gram_asymp` and `axiom gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'`.
+- `def gram (u : ℝ) : ℝ := Function.invFunOn theta (Set.Ici 7) ((u - 1) * Real.pi)` — the Gram function `t_u`.
+- `theorem gram_spec (u : ℝ) (hu : gramThreshold ≤ u) : theta (gram u) = (u − 1) * Real.pi` — equation (7) of the paper; proved via `Function.invFunOn_eq` from the existence of a preimage in `[7, ∞)`, which follows from the intermediate value theorem between `theta 7` and `theta_tendsto_atTop` (`Corollary2.lean` §5).
+- `theorem gram_ge_seven (u : ℝ) (hu : gramThreshold ≤ u) : 7 ≤ gram u` — the chosen inverse lands in `[7, ∞)`.
+- `theorem gram_asymp` and `theorem gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'`. Formerly axioms; now derived in §1.7a (following the blueprint `Proof_Gram_fun_der.tex` at the repo root) from `gram_spec` plus the leading-order behaviour of `θ` and `θ'` (`theta_eq_main_add_δ`, `theta_deriv_asymp` in `Corollary2.lean` §6): `gram u → +∞` unconditionally, the star equation `gram·(log gram − log(2π) − 1) = 2πu + O(1)`, a logarithmic-scale sandwich `log(gram u) = log u − log log u + O(1)`, and a shared inversion lemma `one_div_denom_expansion` applied to the denominators of (8) and (9) (for (9) via the chain-rule identity `θ'(gram u)·gram'(u) = π`).
 
-Alternative axiom-light path: define `gram` directly via Mathlib's inverse function constructions applied to `theta`, and prove `gram_spec` and `contDiffAt_gram` from `contDiffAt_theta` + monotonicity. Equations (8) and (9) likely remain as axioms (they are number-theoretic asymptotic results, not formalizable from the `theta` axioms alone).
+- `theorem contDiffAt_gram (n : ℕ) {u : ℝ} (hu : θ(7)/π + π < u) : ContDiffAt ℝ n gram u` — smoothness on the open half-line. Formerly the project's last analytic axiom; now proved by Mathlib's C^m inverse function theorem (`ContDiffAt.to_localInverse`) applied to `theta` at `gram u`: the strict monotonicity of `theta` on `[7, ∞)` is formal (`strictMonoOn_theta` in `Corollary2.lean` §7, via the explicit pointwise bound `abs_deriv_δ_le : |δ'(t)| ≤ 1/t²` from `Theorem1.lean` §7a), `deriv_theta_pos` gives the nonvanishing derivative, and `injOn_theta` identifies the IFT local inverse with `gram` near `u` (`gram_theta` is the resulting left-inverse identity).
+
+`Theorem3.lean` contains **zero axioms**; `theorem3` depends only on Lean's standard foundation.
 
 ### Final statement
 
@@ -232,11 +236,11 @@ i.e. the `(2 + o(1))` factor is encoded as a `IsLittleO` remainder against `log 
 
 When working on proofs in this repo, treat the following as established results that do not need to be re-derived or questioned — introduce them as `axiom` declarations if not already present:
 
-**Decomposition of `S`** — `S(t)` is defined as
+**Decomposition of `S`** — for any step function `F : StepFunction`, `S F (t)` is defined as
 ```
-S(t) = φ(t) − (1/π) δ(t) + N_step(t)
+S F (t) = φ(t) − (1/π) δ(t) + F(t)
 ```
-In `Theorem1.lean`, `S` is a `def` and `S_eq_φ_sub_δ_add_N` is a `rfl` theorem, not an imported number-theoretic fact. `S` may be any function of this form; see "Working on `Theorem1.lean`" above. The Karatsuba–Korolev representation is the motivation for this decomposition but is not needed by the proof.
+In `Theorem1.lean`, `S` is a `def` parametrized over `StepFunction` and `S_eq_φ_sub_δ_add_N` is a `rfl` theorem, not an imported number-theoretic fact. See "Working on `Theorem1.lean`" above. The Karatsuba–Korolev representation is the motivation for this decomposition but is not needed by the proof.
 
 **Analytic properties of `S`** — `S : ℝ → ℝ` is smooth on `(0, ∞)` away from a discrete set (the imaginary parts of zeros of ζ); at each interior point of a zero-free interval it is `ContDiffAt ℝ ⊤`. Axiom name: `contDiffAt_S` (or the per-piece variants already in `Theorem1.lean`).
 
@@ -252,22 +256,22 @@ is `C^∞` on `(0, ∞)`. Its n-th iterated derivative equals `(−1)^(n−1) ·
 ```
 (where `j(t) = ∫₀^∞ ρ(u)/((u+1/4)²+(t/2)²) du` and `ρ(u) = 1/2 − {u}`) is `ContDiff ℝ ⊤` on `(0, ∞)`. Its n-th derivative satisfies `δ^(n)(t) = O(t^(−n−1))` for all `n ≥ 1`. Axiom name: `contDiffAt_δ`; the bound `iteratedDeriv_δ_isO` is proved via `iteratedDeriv_α_part_isO` + `iteratedDeriv_tj_isO`.
 
-**Analytic properties of `N_step`** — `N_step : ℝ → ℝ` may be any piecewise-constant (locally constant) function on `(0, ∞)`; it need not be the ζ-zero-counting step function. Being locally constant, its n-th iterated derivative (`n ≥ 1`) vanishes. Axiom name: `N_step_iteratedDeriv_eq_zero` (already in `Theorem1.lean`). When working in `Corollary2.lean`, interpret `N_step` as the right-continuous Riemann ζ zero-counting function `N(γ+0)`, which is integer-valued and jumps only at the ordinates of nontrivial ζ-zeros.
+**Analytic properties of the step function** — the step-function slot in the decomposition is the bundled structure `StepFunction` in `Theorem1.lean`: any function `ℝ → ℝ` locally constant off a discrete jump set (`jumpSet`); the proof only uses local constancy off `F.jumpSet`. Being locally constant at regular points, its n-th iterated derivative (`n ≥ 1`) vanishes there. Lemma names: `StepFunction.contDiffAt` and `StepFunction.iteratedDeriv_eq_zero` (theorems in `Theorem1.lean`, formerly axioms); `StepFunction.neBot_regularAtTop` shows the relativized filter `𝓝∞₀[F.jumpSet]` is nontrivial. When working in `Corollary2.lean`, the step function morally plays the role of the right-continuous Riemann ζ zero-counting function `N(γ+0)`, which is integer-valued and jumps only at the ordinates of nontrivial ζ-zeros.
 
-**Riemann–Siegel theta function `θ`** — `θ : ℝ → ℝ` is the continuous branch of `arg(π^(-s/2) Γ(s/2))` along the segment from `s = 1/2` to `s = 1/2 + it`. It is `C^∞` on `(0, ∞)` (no exceptional points) and monotonically increasing for `t ≥ 7`. Axiom names in `Corollary2.lean`: `theta` (the function), `contDiffAt_theta` (smoothness). May alternatively be *defined* as `theta t := δ t − π · φ t − π` (see "Working on `Corollary2.lean`"), in which case smoothness follows from `contDiffAt_δ` and `contDiffAt_φ`.
+**Riemann–Siegel theta function `θ`** — `θ : ℝ → ℝ` is the continuous branch of `arg(π^(-s/2) Γ(s/2))` along the segment from `s = 1/2` to `s = 1/2 + it`. It is `C^∞` on `(0, ∞)` (no exceptional points) and monotonically increasing for `t ≥ 7`. In `Corollary2.lean`, `theta` is *defined* as `theta t := δ t − π · φ t − π` (the axiom-light path; see "Working on `Corollary2.lean`"), so smoothness (`contDiffAt_theta`) follows from `contDiffAt_δ` and `contDiffAt_φ`, and `theta_tendsto_atTop` (θ → +∞ at +∞, §5) is proved from the concrete formula. Only the *identification* with the analytic Riemann–Siegel θ is informal.
 
 **Gram function `t_u`** — the inverse of `θ` on the half-line where `θ` is monotonic. For `u ≥ θ(7)/π + π`, `t_u` is the unique real satisfying `θ(t_u) = (u − 1)π` (equation (7) of the paper). It is `C^∞` on `(θ(7)/π + π, ∞)` by the inverse function theorem (since `θ'` does not vanish there). The base-case asymptotics
 ```
 t_u  = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 8, Lavrik [14])
 t_u' = (2π   / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 9, Korolev [10])
 ```
-are taken as established. Axiom names in `Theorem3.lean`: `gram`, `gram_spec`, `contDiffAt_gram`, `gram_asymp`, `gram_deriv_asymp`. Used to derive Theorem 3.
+are now *derived* (no longer taken as established): in `Theorem3.lean`, `gram` is a *`def`* (`Function.invFunOn theta (Set.Ici 7)` applied to `(u − 1)π`), `gram_spec` / `gram_ge_seven` are *theorems* (intermediate value theorem + `theta_tendsto_atTop` from `Corollary2.lean`), and `gram_asymp` / `gram_deriv_asymp` (equations (8) and (9)) are *theorems* too (§1.7a, from `gram_spec` + the §6 leading-order asymptotics of `θ`, `θ'` in `Corollary2.lean`). `contDiffAt_gram` is a *theorem* as well — the inverse function theorem (`ContDiffAt.to_localInverse`) applied to `theta` at `gram u`, using the now-formal strict monotonicity of `θ` on `[7, ∞)` (`strictMonoOn_theta`, `Corollary2.lean` §7, from `abs_deriv_δ_le` in `Theorem1.lean` §7a), `deriv_theta_pos`, and `injOn_theta`; `gram_theta` is the resulting left-inverse identity. `Theorem3.lean` contains no axioms. Used to derive Theorem 3.
 
 **Riemann–von Mangoldt formula** — the identity (equation (1) of the paper, [6])
 ```
 N(t) = (1/π) · θ(t) + 1 + S(t)
 ```
-relates the Riemann ζ zero-counting function `N`, the Riemann–Siegel theta function `θ`, and the argument function `S`. Combined with the Karatsuba–Korolev expansion `S = φ − (1/π)·δ + N_step` (the decomposition that holds by `rfl` in `Theorem1.lean`), it yields `θ(t) = δ(t) − π·φ(t) − π`. Axiom name in `Corollary2.lean`: `riemann_vonMangoldt`. This is the **only** Karatsuba–Korolev / number-theoretic input needed for Corollary 2 beyond `theorem1`.
+relates the Riemann ζ zero-counting function `N`, the Riemann–Siegel theta function `θ`, and the argument function `S`. Combined with the Karatsuba–Korolev expansion `S F = φ − (1/π)·δ + F` (the decomposition that holds by `rfl` in `Theorem1.lean`), it yields `θ(t) = δ(t) − π·φ(t) − π`. Name in `Corollary2.lean`: `riemann_vonMangoldt` (a theorem there, stated for every `F : StepFunction`). This is the **only** Karatsuba–Korolev / number-theoretic input needed for Corollary 2 beyond `theorem1`.
 
 ### Lakefile options
 

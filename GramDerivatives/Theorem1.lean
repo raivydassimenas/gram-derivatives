@@ -11,22 +11,24 @@
       S^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1)).
 
   ─── Strategy ──────────────────────────────────────────────────────────
-  Abstract decomposition — `S` is *defined* by:
-        S(t) = φ(t) − (1/π)·δ(t) + N_step(t)
+  Abstract decomposition — for a step function `F` (any member of the
+  class `StepFunction`), `S F` is *defined* by:
+        S F (t) = φ(t) − (1/π)·δ(t) + F(t)
   with
     • φ(t) = −t/(2π)·log(t/(2π)) + t/(2π) − 7/8   (smooth main term),
     • δ(t) = α_part(t) − (t/2)·j(t)               (smooth error term),
-    • N_step                                       (any piecewise-constant
-                                                    function).
+    • F : StepFunction                             (any function locally
+                                                    constant off a discrete
+                                                    jump set `F.jumpSet`).
   Then φ^(n)(t) supplies the leading term and δ^(n)(t) = O(t^(−n−1)).
-  `S` may be any function of this form and `N_step` any locally constant
-  function: the proof uses no Riemann ζ, no Karatsuba–Korolev result, and
-  no facts about zeros of ζ.
+  Theorem 1 is proved for *every* such `F`: the proof uses only local
+  constancy of `F` off its jump set — no Riemann ζ, no
+  Karatsuba–Korolev result, and no facts about zeros of ζ.
 
   ─── File layout ───────────────────────────────────────────────────────
     §0  Notation and asymptotic infrastructure.
     §1  Definitions  (`φ`, `δ`, `α_part`, `ρ`, `j`).
-    §2  Assumptions  (the sole axiom: the piecewise-constant `N_step`).
+    §2  The class `StepFunction` and its regular-point lemmas.
     §3  Smoothness lemmas (derived from §2 + elementary Mathlib calculus).
     §4  Iterated derivatives of `φ`              (main term).
     §5  Iterated derivatives of `α_part`         (algebraic error).
@@ -35,29 +37,31 @@
     §8  Statement and proof of Theorem 1.
 
   ─── What's axiomatised ────────────────────────────────────────────────
-  Four axioms describe `N_step`:
-    • `N_step` itself — an opaque constant for an arbitrary
-      piecewise-constant function on `(0, ∞)`.
-    • `JumpSet` — the (opaque) set of jump points of `N_step`, possibly
-      countably infinite (the motivating instance being the ordinates of
-      ζ-zeros).
-    • `contDiffAt_N_step` — `N_step` is smooth at every point of
-      `(0, ∞) \ JumpSet` (a regular point).
-    • `N_step_iteratedDeriv_eq_zero` — every positive-order iterated
-      derivative of `N_step` vanishes at regular points.
+  Nothing.  This file contains **zero axioms**.  `StepFunction` is a
+  bundled structure: a function `ℝ → ℝ` together with a discrete jump
+  set (`jumpSet`, every point of which is isolated in it) off which the
+  function is locally constant (`locallyConstant_off`).  The former
+  axioms about the step function are now theorems about the class:
+    • `StepFunction.contDiffAt` — a step function is smooth at every
+      point off its jump set (a regular point), being locally constant
+      there.
+    • `StepFunction.iteratedDeriv_eq_zero` — every positive-order
+      iterated derivative of a step function vanishes at regular points.
 
-  Theorem 1's conclusion is consequently relativized to the filter
-  `𝓝∞₀ = 𝓝∞ ⊓ principal JumpSetᶜ` — going to `+∞` through regular
-  points only.  This is mathematically necessary: at a jump point of
-  `N_step`, the function `S = φ − (1/π)·δ + N_step` jumps too, so
-  Mathlib's `iteratedDeriv n S` returns `0` there and the asymptotic
-  fails.
+  Theorem 1's conclusion is relativized to the filter
+  `𝓝∞₀[F.jumpSet] = 𝓝∞ ⊓ principal F.jumpSetᶜ` — going to `+∞` through
+  regular points only.  This is mathematically necessary: at a jump
+  point of `F`, the function `S F = φ − (1/π)·δ + F` jumps too, so
+  Mathlib's `iteratedDeriv n (S F)` returns `0` there and the asymptotic
+  fails.  Discreteness of the jump set guarantees this filter is
+  nontrivial (`StepFunction.neBot_regularAtTop`), so the theorem is never
+  vacuous.
 
   `S` is an ordinary `def` and `S_eq_φ_sub_δ_add_N` holds by `rfl`.  No
   Riemann ζ, Riemann–Siegel θ, or Karatsuba–Korolev input is assumed;
-  the motivating instance `S(t) = (1/π)·arg ζ(1/2 + it)` merely explains
-  where the decomposition comes from.  Every axiom is tagged
-  `-- ASSUMPTION` and carries a docstring.
+  the motivating instance `S(t) = (1/π)·arg ζ(1/2 + it)` — with `F`
+  the ζ-zero counting step `N(γ+0)` — merely explains where the
+  decomposition comes from.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
   None.  `Theorem1.lean` builds with zero `sorry`.  `jK_isO` (§6) is
@@ -187,83 +191,125 @@ noncomputable def j (t : ℝ) : ℝ :=
   ∫ u in Set.Ici (0 : ℝ), ρ u / ((u + 1 / 4) ^ 2 + (t / 2) ^ 2)
 
 /-!
-  ## §2  Assumptions
+  ## §2  The class `StepFunction`
 
-  Three axioms describe the step function `N_step`:
+  The step-function slot of the decomposition is fully abstract (no
+  axioms): a `StepFunction` is any function `ℝ → ℝ` that is locally
+  constant off a prescribed *discrete* jump set.
 
-    • Opaque step function:  `N_step`  (any piecewise-constant function
-      on `(0, ∞)`, with a possibly-countable set of jump points — the
-      motivating instance being `N(γ+0)`, the right-continuous Riemann ζ
-      zero-counting function whose jumps occur at the imaginary parts of
-      ζ's nontrivial zeros).
-    • The jump set:  `JumpSet`  (an opaque `Set ℝ` recording where
-      `N_step` is discontinuous).
-    • Regular-point properties:  `contDiffAt_N_step` and
-      `N_step_iteratedDeriv_eq_zero` both require the input to lie *off*
-      `JumpSet`.  This faithfully models the motivating instance, where
-      `N(γ+0)` is locally constant — and so smooth, with vanishing
-      positive-order derivatives — exactly at non-jump points.
+    • `jumpSet : Set ℝ` — an arbitrary discrete subset of `ℝ` (every
+      point of `jumpSet` is isolated in it), recording where the
+      function may jump.
+    • `locallyConstant_off` — off `jumpSet`, the function is locally
+      constant.  This is the *only* property of the step function that
+      the proof of Theorem 1 uses.
+    • Regular-point properties:  `StepFunction.contDiffAt` and
+      `StepFunction.iteratedDeriv_eq_zero` require the input to lie
+      *off* `jumpSet`.  This faithfully models the motivating instance
+      `N(γ+0)` — the right-continuous Riemann ζ zero-counting function,
+      whose jumps occur at the ordinates of ζ's nontrivial zeros — which
+      is locally constant, and so smooth with vanishing positive-order
+      derivatives, exactly at non-jump points.
 
-  `S` is *defined* by the decomposition `S = φ − (1/π)·δ + N_step`, so
-  `S_eq_φ_sub_δ_add_N` holds by `rfl` and is no longer an axiom.  Note:
-  `S` inherits `N_step`'s jumps, so `theorem1`'s conclusion is stated at
-  the relativized filter `𝓝∞₀ = 𝓝∞ ⊓ principal JumpSetᶜ` — going to
-  `+∞` through *regular* points only (see §8).  At a jump point of `S`,
-  Mathlib's `deriv` convention returns `0`, so the asymptotic genuinely
-  fails there; relativization is mathematically necessary, not a
-  formalism artefact.
+  `S F` is *defined* by the decomposition `S F = φ − (1/π)·δ + F`, so
+  `S_eq_φ_sub_δ_add_N` holds by `rfl` and is not an axiom.  Note:
+  `S F` inherits `F`'s jumps, so `theorem1`'s conclusion is stated at
+  the relativized filter `𝓝∞₀[F.jumpSet] = 𝓝∞ ⊓ principal F.jumpSetᶜ` —
+  going to `+∞` through *regular* points only (see §8).  At a jump point
+  of `S F`, Mathlib's `deriv` convention returns `0`, so the asymptotic
+  genuinely fails there; relativization is mathematically necessary, not
+  a formalism artefact.  Discreteness of `jumpSet` ensures the filter is
+  nontrivial (`StepFunction.neBot_regularAtTop`).
 
   Smoothness of `φ`, `α_part`, `δ`, and `t·j(t)` is *derived* in §3 from
   the §2.5 theorem `contDiffAt_j` (formerly an axiom; now built on the
   joint induction `contDiffOn_jK`) plus elementary Mathlib calculus.
 -/
 
-/-- The step function in the decomposition of `S`.  Any piecewise-constant
-    function on `(0, ∞)`, possibly with countably many jumps; opaque
-    otherwise.  The motivating instance is the integer-valued counting
-    step `N(γ+0)` from the Karatsuba–Korolev expansion. -/
-axiom N_step : ℝ → ℝ -- ASSUMPTION
+/-- A **step function**: a function `ℝ → ℝ` that is locally constant off
+    a prescribed discrete jump set.  Models any piecewise-constant
+    function; the proof of Theorem 1 uses only `locallyConstant_off`.
+    The motivating instance is the counting step `N(γ+0)` from the
+    Karatsuba–Korolev expansion, whose jumps occur at the ordinates of
+    ζ's nontrivial zeros. -/
+structure StepFunction where
+  /-- The underlying function. -/
+  toFun : ℝ → ℝ
+  /-- The set of points where the function may jump. -/
+  jumpSet : Set ℝ
+  /-- The jump set is discrete: every point of it is isolated in it. -/
+  jumpSet_discrete :
+    ∀ x ∈ jumpSet, ∃ ε > 0, ∀ y ∈ jumpSet, |y - x| < ε → y = x
+  /-- Off the jump set, the function is locally constant. -/
+  locallyConstant_off :
+    ∀ ⦃s : ℝ⦄, s ∉ jumpSet → toFun =ᶠ[nhds s] fun _ => toFun s
 
-/-- ASSUMPTION: the set of jump (discontinuity) points of `N_step` in
-    `(0, ∞)`.  Opaque; for the motivating instance, this is the set of
-    ordinates of the nontrivial Riemann ζ-zeros, a countable subset of
-    `(0, ∞)`.  Outside `JumpSet`, `N_step` is locally constant. -/
-axiom JumpSet : Set ℝ -- ASSUMPTION
+instance : CoeFun StepFunction (fun _ => ℝ → ℝ) := ⟨StepFunction.toFun⟩
 
-/-- ASSUMPTION: at every *regular* point `s ∈ (0, ∞) \ JumpSet`,
-    `N_step` is smooth (in fact locally constant). -/
-axiom contDiffAt_N_step (n : ℕ) {s : ℝ} (hs : 0 < s) (h_reg : s ∉ JumpSet) :
-    ContDiffAt ℝ n N_step s
+namespace StepFunction
 
-/-- ASSUMPTION: at every regular point `t ∈ (0, ∞) \ JumpSet`, all
-    positive-order iterated derivatives of `N_step` vanish (because
-    `N_step` is locally constant near such a `t`). -/
-axiom N_step_iteratedDeriv_eq_zero (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht : 0 < t)
-    (h_reg : t ∉ JumpSet)
-    : iteratedDeriv n N_step t = 0
+/-- At every *regular* point `s ∉ F.jumpSet`, a step function is smooth
+    (being locally constant there). -/
+theorem contDiffAt (F : StepFunction) (n : ℕ) {s : ℝ}
+    (h_reg : s ∉ F.jumpSet) : ContDiffAt ℝ n F s :=
+  contDiffAt_const.congr_of_eventuallyEq (F.locallyConstant_off h_reg)
+
+/-- At every regular point `t ∉ F.jumpSet`, all positive-order iterated
+    derivatives of a step function vanish (because it is locally constant
+    near such a `t`). -/
+theorem iteratedDeriv_eq_zero (F : StepFunction) (n : ℕ) (hn : 1 ≤ n)
+    {t : ℝ} (h_reg : t ∉ F.jumpSet) : iteratedDeriv n F t = 0 := by
+  rw [(F.locallyConstant_off h_reg).iteratedDeriv_eq n, iteratedDeriv_const]
+  exact if_neg (by omega)
+
+end StepFunction
 
 /-- The relativized "neighbourhood of `+∞`" filter: tend to `+∞` through
-    regular points only (i.e., points not in `JumpSet`).  This is the
-    filter at which `theorem1`'s asymptotic holds; at a jump point of
-    `N_step`, `S` has a jump too, so `iteratedDeriv n S` takes Mathlib's
-    default value of `0` there and the asymptotic genuinely fails. -/
-notation "𝓝∞₀" => Filter.atTop ⊓ Filter.principal (JumpSet : Set ℝ)ᶜ
+    regular points only (i.e., points not in the given jump set `J`).
+    This is the filter at which `theorem1`'s asymptotic holds; at a jump
+    point of `F`, `S F` has a jump too, so `iteratedDeriv n (S F)` takes
+    Mathlib's default value of `0` there and the asymptotic genuinely
+    fails. -/
+notation "𝓝∞₀[" J "]" => Filter.atTop ⊓ Filter.principal ((J : Set ℝ))ᶜ
+
+/-- Discreteness of the jump set makes the relativized filter
+    `𝓝∞₀[F.jumpSet]` nontrivial, so `theorem1` is never vacuous: every
+    ray `[a, ∞)` contains a regular point, since a discrete set cannot
+    contain a whole ray. -/
+theorem StepFunction.neBot_regularAtTop (F : StepFunction) :
+    (𝓝∞₀[F.jumpSet]).NeBot := by
+  rw [Filter.inf_principal_neBot_iff]
+  intro U hU
+  obtain ⟨a, ha⟩ := Filter.mem_atTop_sets.mp hU
+  -- It suffices to find a regular point in `[a, ∞)`.
+  by_cases h : a + 1 ∈ F.jumpSet
+  · -- `a + 1` jumps; by isolation, a slightly larger point is regular.
+    obtain ⟨ε, hε, h_iso⟩ := F.jumpSet_discrete (a + 1) h
+    have h2 : 0 < min ε 1 := lt_min hε one_pos
+    have h1 : min ε 1 ≤ ε := min_le_left _ _
+    refine ⟨a + 1 + min ε 1 / 2, ha _ (by linarith), fun h_mem => ?_⟩
+    have h_close : |a + 1 + min ε 1 / 2 - (a + 1)| < ε := by
+      rw [show a + 1 + min ε 1 / 2 - (a + 1) = min ε 1 / 2 by ring,
+          abs_of_pos (by linarith)]
+      linarith
+    linarith [h_iso _ h_mem h_close]
+  · exact ⟨a + 1, ha _ (by linarith), h⟩
 
 /-- The target function `S`, *defined* by the abstract decomposition
-    `S(t) = φ(t) − (1/π)·δ(t) + N_step(t)`.  `S` may be any function of this
-    form; Theorem 1's proof uses only this definition — no Riemann ζ and no
-    Karatsuba–Korolev input.  The motivating instance is
-    `(1/π)·arg ζ(1/2 + it)`, for which the decomposition is the
-    Karatsuba–Korolev representation. -/
-noncomputable def S (t : ℝ) : ℝ :=
-  φ t - (1 / Real.pi) * δ t + N_step t
+    `S F (t) = φ(t) − (1/π)·δ(t) + F(t)` for an arbitrary step function
+    `F`.  Theorem 1's proof uses only this definition and the
+    `StepFunction` fields — no Riemann ζ and no Karatsuba–Korolev input.
+    The motivating instance is `(1/π)·arg ζ(1/2 + it)`, for which the
+    decomposition is the Karatsuba–Korolev representation. -/
+noncomputable def S (F : StepFunction) (t : ℝ) : ℝ :=
+  φ t - (1 / Real.pi) * δ t + F t
 
 /-- The defining decomposition of `S` — true by definition (`rfl`); was an
     axiom while `S` was opaque.  For the motivating instance
     `S(t) = (1/π)·arg ζ(1/2 + it)` it is the Karatsuba–Korolev
     representation ([6, proof of Thm 2]). -/
-theorem S_eq_φ_sub_δ_add_N (t : ℝ) :
-    S t = φ t - (1 / Real.pi) * δ t + N_step t := rfl
+theorem S_eq_φ_sub_δ_add_N (F : StepFunction) (t : ℝ) :
+    S F t = φ t - (1 / Real.pi) * δ t + F t := rfl
 
 /-!
   ## §2.5  Parametric-integral infrastructure for `j`
@@ -844,6 +890,39 @@ theorem contDiffAt_φ (n : ℕ) {s : ℝ} (hs : 0 < s) :
     h_div.log hne
   unfold φ
   exact ((h_div.neg.mul h_log).add h_div).sub contDiffAt_const
+
+/-- First derivative of `φ`:  `φ'(t) = −(1/(2π)) · log(t/(2π))` for `t > 0`.
+    The `n = 1` companion of `iteratedDeriv_φ` (which starts at `n = 2`);
+    needed for the first-derivative asymptotic of `θ` in `Corollary2.lean`. -/
+theorem hasDerivAt_φ {t : ℝ} (ht : 0 < t) :
+    HasDerivAt φ (-(1 / (2 * Real.pi)) * Real.log (t / (2 * Real.pi))) t := by
+  have h2π_pos : (0 : ℝ) < 2 * Real.pi := by positivity
+  have hne : t / (2 * Real.pi) ≠ 0 := ne_of_gt (by positivity)
+  -- `s ↦ s/(2π)`.
+  have h_div : HasDerivAt (fun s : ℝ => s / (2 * Real.pi)) (1 / (2 * Real.pi)) t := by
+    simpa using (hasDerivAt_id t).div_const (2 * Real.pi)
+  -- `s ↦ log(s/(2π))`.
+  have h_log : HasDerivAt (fun s : ℝ => Real.log (s / (2 * Real.pi)))
+      ((1 / (2 * Real.pi)) / (t / (2 * Real.pi))) t := h_div.log hne
+  -- `s ↦ −(s/(2π)) · log(s/(2π))`.
+  have h_mul : HasDerivAt
+      (fun s : ℝ => -(s / (2 * Real.pi)) * Real.log (s / (2 * Real.pi)))
+      (-(1 / (2 * Real.pi)) * Real.log (t / (2 * Real.pi))
+        + -(t / (2 * Real.pi)) * ((1 / (2 * Real.pi)) / (t / (2 * Real.pi)))) t :=
+    h_div.neg.mul h_log
+  -- Assemble `φ` and clean up the derivative (the two `1/(2π)` terms cancel).
+  have h_sum := (h_mul.add h_div).sub_const (7 / 8)
+  have h_fun : (fun x : ℝ =>
+      ((fun s : ℝ => -(s / (2 * Real.pi)) * Real.log (s / (2 * Real.pi)))
+        + fun s : ℝ => s / (2 * Real.pi)) x - 7 / 8) = φ := by
+    funext s
+    simp only [Pi.add_apply]
+    unfold φ; ring
+  rw [h_fun] at h_sum
+  convert h_sum using 1
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  field_simp
+  ring
 
 /-- `α_part` is smooth on `(0, ∞)`. -/
 theorem contDiffAt_α_part (n : ℕ) {s : ℝ} (hs : 0 < s) :
@@ -3568,6 +3647,413 @@ lemma iteratedDeriv_δ_isO (n : ℕ) (hn : 1 ≤ n) :
     rw [← h_split t ht, ← h_iter_eq t ht]
   exact h_evEq.symm.trans_isBigO h_sum
 
+/-- `α_part` itself is `O(t⁻¹)` at `+∞` — the `n = 0` companion of
+    `iteratedDeriv_α_part_isO`.  Elementary:  `log(1+x) ≤ x` and
+    `arctan x ≤ x` for `x ≥ 0` give `0 ≤ α_part t ≤ 3/(16t)`. -/
+lemma α_part_isO : IsO α_part (fun t => t ^ (-1 : ℝ)) 𝓝∞ := by
+  refine IsBigO.of_bound (3 / 16) ?_
+  filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht
+  have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le one_pos ht
+  have h_inner_pos : (0 : ℝ) < 1 + 1 / (4 * t ^ 2) := by positivity
+  -- Elementary upper bounds for the two summands.
+  have h_log_le : Real.log (1 + 1 / (4 * t ^ 2)) ≤ 1 / (4 * t ^ 2) := by
+    have := Real.log_le_sub_one_of_pos h_inner_pos
+    linarith
+  have h_log_nn : 0 ≤ Real.log (1 + 1 / (4 * t ^ 2)) :=
+    Real.log_nonneg (by linarith [show (0:ℝ) ≤ 1 / (4 * t ^ 2) by positivity])
+  have h_arc_nn : 0 ≤ Real.arctan (1 / (2 * t)) :=
+    Real.arctan_nonneg.mpr (by positivity)
+  have h_arc_le : Real.arctan (1 / (2 * t)) ≤ 1 / (2 * t) := by
+    calc Real.arctan (1 / (2 * t))
+        ≤ Real.tan (Real.arctan (1 / (2 * t))) :=
+          Real.le_tan h_arc_nn (Real.arctan_lt_pi_div_two _)
+      _ = 1 / (2 * t) := Real.tan_arctan _
+  -- `0 ≤ α_part t ≤ 1/(16t) + 1/(8t) = (3/16) · t⁻¹`.
+  have h_b1 : t / 4 * Real.log (1 + 1 / (4 * t ^ 2)) ≤ 1 / (16 * t) := by
+    have h := mul_le_mul_of_nonneg_left h_log_le
+      (by positivity : (0 : ℝ) ≤ t / 4)
+    have h_eq : t / 4 * (1 / (4 * t ^ 2)) = 1 / (16 * t) := by
+      field_simp; ring
+    linarith [h_eq ▸ h]
+  have h_b2 : 1 / 4 * Real.arctan (1 / (2 * t)) ≤ 1 / (8 * t) := by
+    have h := mul_le_mul_of_nonneg_left h_arc_le
+      (by norm_num : (0 : ℝ) ≤ 1 / 4)
+    have h_eq : (1 : ℝ) / 4 * (1 / (2 * t)) = 1 / (8 * t) := by
+      field_simp; ring
+    linarith [h_eq ▸ h]
+  have h_nn : 0 ≤ α_part t := by
+    unfold α_part
+    have h1 : 0 ≤ t / 4 * Real.log (1 + 1 / (4 * t ^ 2)) :=
+      mul_nonneg (by positivity) h_log_nn
+    have h2 : 0 ≤ 1 / 4 * Real.arctan (1 / (2 * t)) :=
+      mul_nonneg (by norm_num) h_arc_nn
+    linarith
+  -- Normalize the `rpow` and conclude.
+  have h_pow : t ^ (-1 : ℝ) = t⁻¹ := by
+    have := rpow_neg_nat_eq_inv ht_pos 1
+    norm_num at this
+    simpa using this
+  rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_of_nonneg h_nn, h_pow,
+      abs_of_pos (by positivity : (0 : ℝ) < t⁻¹)]
+  have h_sum : α_part t ≤ 1 / (16 * t) + 1 / (8 * t) := by
+    unfold α_part; linarith
+  have h_total : 1 / (16 * t) + 1 / (8 * t) = 3 / 16 * t⁻¹ := by
+    field_simp; ring
+  linarith [h_total ▸ h_sum]
+
+/-- `δ` itself is `O(t⁻¹)` at `+∞` — the `n = 0` case of the paper's
+    `δ^(n)(t) = O(t^(−n−1))`.  This is the input for the leading-order
+    `θ`-asymptotic (fact (θ1) of the Gram-asymptotics blueprint) in
+    `Corollary2.lean`. -/
+lemma δ_isO : IsO δ (fun t => t ^ (-1 : ℝ)) 𝓝∞ := by
+  -- (1) `j = O(t⁻²)` — the `n = 0` case of `iteratedDeriv_j_isO`.
+  have h_j : IsO j (fun t => t ^ (-(0 : ℕ) - 2 : ℝ)) 𝓝∞ := by
+    have := iteratedDeriv_j_isO 0
+    simpa [iteratedDeriv_zero] using this
+  -- (2) `(t/2)·j = O(t · t⁻²) = O(t⁻¹)`.
+  have h_tj : IsO (fun t => t / 2 * j t) (fun t => t ^ (-1 : ℝ)) 𝓝∞ := by
+    have h_half : IsO (fun t : ℝ => t / 2) (fun t : ℝ => t) 𝓝∞ := by
+      have h := (Asymptotics.isBigO_refl (fun t : ℝ => t) 𝓝∞).const_mul_left (1 / 2)
+      exact h.congr_left fun t => by ring
+    have h_mul := h_half.mul h_j
+    refine h_mul.trans_eventuallyEq ?_
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    have h1 : t = t ^ (1 : ℝ) := (Real.rpow_one t).symm
+    rw [show (-(0 : ℕ) - 2 : ℝ) = -2 by norm_num]
+    calc t * t ^ (-2 : ℝ) = t ^ (1 : ℝ) * t ^ (-2 : ℝ) := by rw [← h1]
+      _ = t ^ ((1 : ℝ) + -2) := (Real.rpow_add ht 1 (-2)).symm
+      _ = t ^ (-1 : ℝ) := by norm_num
+  -- (3) Combine along `δ = α_part − (t/2)·j` (valid for `t > 0`).
+  have h_sub := α_part_isO.sub h_tj
+  have h_evEq : δ =ᶠ[Filter.atTop] (fun t => α_part t - t / 2 * j t) := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    exact δ_eq t ht
+  exact h_evEq.trans_isBigO h_sub
+
+/-!
+  ## §7a  Pointwise bounds:  `|j t| ≤ 1/(2t²)` and `|δ'(t)| ≤ 1/t²`
+
+  The §7 bounds are asymptotic (`IsO` at `𝓝∞`), i.e. only *eventual*.
+  This section extracts from the same σ-integration-by-parts machinery
+  **explicit pointwise** bounds valid for every `t > 0` — the input for
+  the strict monotonicity of the Riemann–Siegel `θ` on `[7, ∞)`
+  (`strictMonoOn_theta` in `Corollary2.lean`), where an eventual bound
+  says nothing about any concrete `t`.
+
+  Chain (throughout `t > 0`, `m_n := mixedDerivExpr n`):
+
+    1. `m₀ ≤ 0 ≤ m₁` pointwise on `u ≥ 0` (signs of `lorMix 0/1`);
+    2. `∫_{u≥0} m₀ = −kernel 0 t` and `∫_{u≥0} m₁ = 128t/(1+4t²)²`
+       (improper FTC with antiderivative `u ↦ ∂ₜⁿ kernel(u,t)`, via
+       `hasDerivAt_iteratedDeriv_kernel`);
+    3. `|jK n t| = |∫ σ·m_n| ≤ (1/8)·|∫ m_n|`  (`0 ≤ σ ≤ 1/8` and the
+       sign constancy from step 1);
+    4. `|j t| ≤ 1/(2t²)` and `|jK 1 t| ≤ 1/t³`;
+    5. product rule along `δ = α_part − (t/2)·j`  ⟹  `|δ'(t)| ≤ 1/t²`.
+-/
+
+/-- Closed form of the derivative of `lorSq`:  `(lor²)'(s) = −4s·(lor s)³`. -/
+private lemma hasDerivAt_lorSq (s : ℝ) :
+    HasDerivAt lorSq (-(4 * s) * lor s ^ 3) s := by
+  unfold lorSq
+  convert (hasDerivAt_lor s).pow 2 using 1
+  ring
+
+/-- Closed form `lorMix 1 s = 8s·(lor s)³` — via
+    `lorMix 1 = −2·(lor²)'` (`lorMix_eq_iteratedDeriv_lorSq`). -/
+private lemma lorMix_one (s : ℝ) : lorMix 1 s = 8 * s * lor s ^ 3 := by
+  rw [lorMix_eq_iteratedDeriv_lorSq, iteratedDeriv_one, (hasDerivAt_lorSq s).deriv]
+  ring
+
+/-- Sign of the order-`0` mixed integrand:  `∂ᵤ kernel(u,t) ≤ 0` for
+    `u ≥ 0` (the kernel decreases in `u`). -/
+private lemma mixedDerivExpr_zero_nonpos {u : ℝ} (hu : 0 ≤ u) (t : ℝ) :
+    mixedDerivExpr 0 u t ≤ 0 := by
+  rw [mixedDerivExpr_eq_lorMix 0 hu t, lorMix_zero]
+  have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_zpow : (0 : ℝ) < (u + 1 / 4) ^ (-(((0 : ℕ) : ℤ) + 3)) := zpow_pos hr _
+  have h_lorSq : 0 ≤ lorSq ((1 / (2 * (u + 1 / 4))) * t) := by
+    unfold lorSq; positivity
+  nlinarith [h_zpow, h_lorSq]
+
+/-- Sign of the order-`1` mixed integrand:  `∂ᵤ ∂ₜ kernel(u,t) ≥ 0` for
+    `u ≥ 0`, `t ≥ 0`. -/
+private lemma mixedDerivExpr_one_nonneg {u : ℝ} (hu : 0 ≤ u) {t : ℝ} (ht : 0 ≤ t) :
+    0 ≤ mixedDerivExpr 1 u t := by
+  rw [mixedDerivExpr_eq_lorMix 1 hu t, lorMix_one]
+  have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_zpow : (0 : ℝ) < (u + 1 / 4) ^ (-(((1 : ℕ) : ℤ) + 3)) := zpow_pos hr _
+  have h_lor : 0 < lor ((1 / (2 * (u + 1 / 4))) * t) := by
+    unfold lor
+    positivity
+  have h_arg : 0 ≤ (1 / (2 * (u + 1 / 4))) * t := by positivity
+  positivity
+
+/-- `u ↦ mixedDerivExpr n u t` is integrable on `[0, ∞)` for `t ≥ 0`:
+    continuous (`continuousOn_mixedDerivExpr`) and dominated by
+    `M·((u+1/4)^{n+3})⁻¹` via the uniform `lorMix` bound. -/
+private lemma integrableOn_mixedDerivExpr (n : ℕ) {t : ℝ} (ht : 0 ≤ t) :
+    IntegrableOn (fun u : ℝ => mixedDerivExpr n u t) (Set.Ici (0 : ℝ)) := by
+  obtain ⟨M, hM_nn, hM⟩ := lorMix_bounded_on_nonneg n
+  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) M
+    ((continuousOn_mixedDerivExpr n t).aestronglyMeasurable measurableSet_Ici) ?_
+  intro u hu
+  have hu_nn : (0 : ℝ) ≤ u := Set.mem_Ici.mp hu
+  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
+  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
+  have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t := by positivity
+  have h_zpow_eq : (u + 1 / 4 : ℝ) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
+    rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
+        zpow_neg_nat_eq_inv]
+  rw [show (n + 1) + 2 = n + 3 from rfl, Real.norm_eq_abs,
+      mixedDerivExpr_eq_lorMix n hu_nn t, h_zpow_eq, abs_mul, abs_mul,
+      abs_of_pos (inv_pos.mpr h_pow_pos)]
+  have h_half : |(1 / 2 : ℝ) ^ n| ≤ 1 := by
+    rw [abs_of_pos (by positivity)]
+    exact pow_le_one₀ (by norm_num) (by norm_num)
+  calc |(1 / 2 : ℝ) ^ n| * ((u + 1 / 4) ^ (n + 3))⁻¹
+        * |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|
+      ≤ 1 * ((u + 1 / 4) ^ (n + 3))⁻¹ * M := by
+        gcongr
+        exact hM _ h_arg_nn
+    _ = M * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
+
+/-- **Improper FTC evaluation at kernel-order `0`:**
+    `∫_{u≥0} ∂ᵤ kernel(u,t) du = −kernel 0 t`, the antiderivative being
+    `u ↦ kernel u t` (which vanishes at `+∞`). -/
+private lemma integral_mixedDerivExpr_zero {t : ℝ} (ht : 0 < t) :
+    ∫ u in Set.Ici (0 : ℝ), mixedDerivExpr 0 u t = -kernel 0 t := by
+  have h_int : IntegrableOn (fun u : ℝ => mixedDerivExpr 0 u t) (Set.Ioi (0 : ℝ)) :=
+    (integrableOn_mixedDerivExpr 0 ht.le).mono_set Set.Ioi_subset_Ici_self
+  have h_cont : ContinuousWithinAt (fun u : ℝ => kernel u t) (Set.Ici (0 : ℝ)) 0 := by
+    have h := (continuousOn_iteratedDeriv_kernel 0 t) 0 Set.self_mem_Ici
+    simpa [iteratedDeriv_zero] using h
+  have h_deriv : ∀ u ∈ Set.Ioi (0 : ℝ),
+      HasDerivAt (fun v : ℝ => kernel v t) (mixedDerivExpr 0 u t) u := by
+    intro u hu
+    have h := hasDerivAt_iteratedDeriv_kernel 0 (Set.mem_Ioi.mp hu) t
+    simpa [iteratedDeriv_zero] using h
+  have h_denom : Filter.Tendsto (fun u : ℝ => (u + 1 / 4) ^ 2 + (t / 2) ^ 2)
+      Filter.atTop Filter.atTop :=
+    Filter.tendsto_atTop_add_const_right _ _
+      ((tendsto_pow_atTop (by norm_num : (2 : ℕ) ≠ 0)).comp
+        (Filter.tendsto_atTop_add_const_right _ _ Filter.tendsto_id))
+  have h_tendsto : Filter.Tendsto (fun u : ℝ => kernel u t) Filter.atTop (nhds 0) := by
+    have h := Filter.Tendsto.div_atTop
+      (tendsto_const_nhds (x := (1 : ℝ)) (f := Filter.atTop)) h_denom
+    simpa [kernel] using h
+  rw [MeasureTheory.integral_Ici_eq_integral_Ioi]
+  have h_eval := MeasureTheory.integral_Ioi_of_hasDerivAt_of_tendsto
+    h_cont h_deriv h_int h_tendsto
+  rw [h_eval]
+  ring
+
+/-- `|lor'(s)| ≤ 1`:  `|−2s·(lor s)²| = 2|s|/(1+s²)² ≤ 1` since
+    `2|s| ≤ 1 + s² ≤ (1+s²)²`. -/
+private lemma abs_iteratedDeriv_one_lor_le (s : ℝ) : |iteratedDeriv 1 lor s| ≤ 1 := by
+  rw [iteratedDeriv_one, (hasDerivAt_lor s).deriv]
+  have h_denom : (0 : ℝ) < 1 + s ^ 2 := lor_denom_pos s
+  have h_2s : 2 * |s| ≤ 1 + s ^ 2 := by nlinarith [sq_nonneg (|s| - 1), sq_abs s]
+  have h_eq : -(2 * s) * lor s ^ 2 = -(2 * s) / (1 + s ^ 2) ^ 2 := by
+    unfold lor
+    field_simp
+  rw [h_eq, abs_div, abs_neg, abs_mul, abs_two,
+      abs_of_pos (by positivity : (0 : ℝ) < (1 + s ^ 2) ^ 2),
+      div_le_one (by positivity)]
+  calc 2 * |s| ≤ 1 + s ^ 2 := h_2s
+    _ ≤ (1 + s ^ 2) ^ 2 := by nlinarith [sq_nonneg s]
+
+/-- **Improper FTC evaluation at kernel-order `1`:**
+    `∫_{u≥0} ∂ᵤ ∂ₜ kernel(u,t) du = 128t/(1+4t²)²`, the antiderivative
+    being `u ↦ ∂ₜ kernel(u,t)` (which vanishes at `+∞` and equals
+    `−128t/(1+4t²)²` at `u = 0`). -/
+private lemma integral_mixedDerivExpr_one {t : ℝ} (ht : 0 < t) :
+    ∫ u in Set.Ici (0 : ℝ), mixedDerivExpr 1 u t
+      = 128 * t / (1 + 4 * t ^ 2) ^ 2 := by
+  have h_int : IntegrableOn (fun u : ℝ => mixedDerivExpr 1 u t) (Set.Ioi (0 : ℝ)) :=
+    (integrableOn_mixedDerivExpr 1 ht.le).mono_set Set.Ioi_subset_Ici_self
+  have h_cont : ContinuousWithinAt
+      (fun u : ℝ => iteratedDeriv 1 (fun s => kernel u s) t) (Set.Ici (0 : ℝ)) 0 :=
+    (continuousOn_iteratedDeriv_kernel 1 t) 0 Set.self_mem_Ici
+  have h_deriv : ∀ u ∈ Set.Ioi (0 : ℝ),
+      HasDerivAt (fun v : ℝ => iteratedDeriv 1 (fun s => kernel v s) t)
+        (mixedDerivExpr 1 u t) u :=
+    fun u hu => hasDerivAt_iteratedDeriv_kernel 1 (Set.mem_Ioi.mp hu) t
+  -- The antiderivative tends to `0`:  `|F₁ u| ≤ 2·((u+1/4)²)⁻¹ → 0`.
+  have h_tendsto : Filter.Tendsto
+      (fun u : ℝ => iteratedDeriv 1 (fun s => kernel u s) t) Filter.atTop (nhds 0) := by
+    apply squeeze_zero_norm' (a := fun u : ℝ => 2 * ((u + 1 / 4) ^ 2)⁻¹)
+    · filter_upwards [Filter.eventually_ge_atTop (0 : ℝ)] with u hu
+      have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+      rw [Real.norm_eq_abs, iteratedDeriv_kernel 1 hu t, pow_one, abs_mul, abs_mul,
+          abs_of_pos (inv_pos.mpr (pow_pos hr 2)),
+          abs_of_pos (by positivity : (0 : ℝ) < 1 / (2 * (u + 1 / 4)))]
+      have h_lor := abs_iteratedDeriv_one_lor_le ((1 / (2 * (u + 1 / 4))) * t)
+      have h_half_le : 1 / (2 * (u + 1 / 4)) ≤ 2 := by
+        rw [div_le_iff₀ (by positivity)]
+        linarith
+      calc ((u + 1 / 4) ^ 2)⁻¹ * (1 / (2 * (u + 1 / 4)))
+              * |iteratedDeriv 1 lor ((1 / (2 * (u + 1 / 4))) * t)|
+          ≤ ((u + 1 / 4) ^ 2)⁻¹ * 2 * 1 := by
+            gcongr
+        _ = 2 * ((u + 1 / 4) ^ 2)⁻¹ := by ring
+    · have h_sq : Filter.Tendsto (fun u : ℝ => (u + 1 / 4) ^ 2)
+          Filter.atTop Filter.atTop :=
+        (tendsto_pow_atTop (by norm_num : (2 : ℕ) ≠ 0)).comp
+          (Filter.tendsto_atTop_add_const_right _ _ Filter.tendsto_id)
+      have h := Filter.Tendsto.div_atTop
+        (tendsto_const_nhds (x := (2 : ℝ)) (f := Filter.atTop)) h_sq
+      simpa [div_eq_mul_inv] using h
+  -- Value of the antiderivative at `u = 0`.
+  have h_f0 : iteratedDeriv 1 (fun s => kernel (0 : ℝ) s) t
+      = -(128 * t / (1 + 4 * t ^ 2) ^ 2) := by
+    rw [iteratedDeriv_kernel 1 le_rfl t, iteratedDeriv_one, (hasDerivAt_lor _).deriv]
+    have h_ne : (1 + (1 / (2 * ((0 : ℝ) + 1 / 4)) * t) ^ 2 : ℝ) ≠ 0 := by positivity
+    unfold lor
+    field_simp
+    ring
+  rw [MeasureTheory.integral_Ici_eq_integral_Ioi]
+  have h_eval := MeasureTheory.integral_Ioi_of_hasDerivAt_of_tendsto
+    h_cont h_deriv h_int h_tendsto
+  rw [h_eval, h_f0]
+  ring
+
+/-- **Explicit pointwise bound for `j`:**  `|j t| ≤ 1/(2t²)` for every
+    `t > 0` (the `n = 0` case of the paper's `δ`-machinery bounds, with
+    explicit constant).  Via `j = −∫ σ·m₀`, `0 ≤ σ ≤ 1/8`, `m₀ ≤ 0`, and
+    `∫(−m₀) = kernel 0 t ≤ 4/t²`. -/
+lemma abs_j_le {t : ℝ} (ht : 0 < t) : |j t| ≤ 1 / (2 * t ^ 2) := by
+  have h_eq : j t = -∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr 0 u t := by
+    rw [← jK_zero]
+    exact jK_eq_sigma_integral 0 ht
+  rw [h_eq, abs_neg]
+  have h_int_σm : IntegrableOn (fun u : ℝ => σ u * mixedDerivExpr 0 u t)
+      (Set.Ici (0 : ℝ)) := integrable_sigma_mixedDerivExpr 0 t
+  have h_int_m : IntegrableOn (fun u : ℝ => mixedDerivExpr 0 u t) (Set.Ici (0 : ℝ)) :=
+    integrableOn_mixedDerivExpr 0 ht.le
+  have h_ptwise : ∀ u ∈ Set.Ici (0 : ℝ),
+      |σ u * mixedDerivExpr 0 u t| ≤ (1 / 8) * (-mixedDerivExpr 0 u t) := by
+    intro u hu
+    have h_m := mixedDerivExpr_zero_nonpos (Set.mem_Ici.mp hu) t
+    rw [abs_mul, abs_of_nonneg (σ_nonneg u), abs_of_nonpos h_m]
+    exact mul_le_mul_of_nonneg_right (σ_le_eighth u) (by linarith)
+  calc |∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr 0 u t|
+      ≤ ∫ u in Set.Ici (0 : ℝ), |σ u * mixedDerivExpr 0 u t| :=
+        MeasureTheory.abs_integral_le_integral_abs
+    _ ≤ ∫ u in Set.Ici (0 : ℝ), (1 / 8) * (-mixedDerivExpr 0 u t) :=
+        MeasureTheory.setIntegral_mono_on h_int_σm.abs
+          ((h_int_m.neg).const_mul _) measurableSet_Ici h_ptwise
+    _ = (1 / 8) * (-∫ u in Set.Ici (0 : ℝ), mixedDerivExpr 0 u t) := by
+        rw [MeasureTheory.integral_const_mul, MeasureTheory.integral_neg]
+    _ = (1 / 8) * kernel 0 t := by rw [integral_mixedDerivExpr_zero ht]; ring
+    _ ≤ 1 / (2 * t ^ 2) := by
+        unfold kernel
+        have h_denom_pos : (0 : ℝ) < ((0 : ℝ) + 1 / 4) ^ 2 + (t / 2) ^ 2 := by positivity
+        have h_ge : t ^ 2 / 4 ≤ ((0 : ℝ) + 1 / 4) ^ 2 + (t / 2) ^ 2 := by nlinarith
+        calc (1 / 8 : ℝ) * (1 / (((0 : ℝ) + 1 / 4) ^ 2 + (t / 2) ^ 2))
+            ≤ (1 / 8 : ℝ) * (1 / (t ^ 2 / 4)) := by
+              gcongr
+          _ = 1 / (2 * t ^ 2) := by
+              field_simp
+              ring
+
+/-- **Explicit pointwise bound for `j' = jK 1`:**  `|jK 1 t| ≤ 1/t³` for
+    every `t > 0`.  Via `jK 1 = −∫ σ·m₁`, `0 ≤ σ ≤ 1/8`, `m₁ ≥ 0`, and
+    `∫ m₁ = 128t/(1+4t²)² ≤ 8/t³`. -/
+private lemma abs_jK_one_le {t : ℝ} (ht : 0 < t) : |jK 1 t| ≤ 1 / t ^ 3 := by
+  rw [jK_eq_sigma_integral 1 ht, abs_neg]
+  have h_int_σm : IntegrableOn (fun u : ℝ => σ u * mixedDerivExpr 1 u t)
+      (Set.Ici (0 : ℝ)) := integrable_sigma_mixedDerivExpr 1 t
+  have h_int_m : IntegrableOn (fun u : ℝ => mixedDerivExpr 1 u t) (Set.Ici (0 : ℝ)) :=
+    integrableOn_mixedDerivExpr 1 ht.le
+  have h_ptwise : ∀ u ∈ Set.Ici (0 : ℝ),
+      |σ u * mixedDerivExpr 1 u t| ≤ (1 / 8) * mixedDerivExpr 1 u t := by
+    intro u hu
+    have h_m := mixedDerivExpr_one_nonneg (Set.mem_Ici.mp hu) ht.le
+    rw [abs_mul, abs_of_nonneg (σ_nonneg u), abs_of_nonneg h_m]
+    exact mul_le_mul_of_nonneg_right (σ_le_eighth u) h_m
+  calc |∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr 1 u t|
+      ≤ ∫ u in Set.Ici (0 : ℝ), |σ u * mixedDerivExpr 1 u t| :=
+        MeasureTheory.abs_integral_le_integral_abs
+    _ ≤ ∫ u in Set.Ici (0 : ℝ), (1 / 8) * mixedDerivExpr 1 u t :=
+        MeasureTheory.setIntegral_mono_on h_int_σm.abs
+          (h_int_m.const_mul _) measurableSet_Ici h_ptwise
+    _ = (1 / 8) * (128 * t / (1 + 4 * t ^ 2) ^ 2) := by
+        rw [MeasureTheory.integral_const_mul, integral_mixedDerivExpr_one ht]
+    _ = 16 * t / (1 + 4 * t ^ 2) ^ 2 := by ring
+    _ ≤ 1 / t ^ 3 := by
+        rw [div_le_div_iff₀ (by positivity) (by positivity)]
+        nlinarith [sq_nonneg t, sq_nonneg (t ^ 2), pow_pos ht 4]
+
+/-- Derivative decomposition of `δ` at any `t > 0`:
+    `δ'(t) = α_part'(t) − ((1/2)·j t + (t/2)·jK 1 t)`, by the product
+    rule along `δ = α_part − (·/2)·j` (`δ_eq`). -/
+private lemma hasDerivAt_δ {t : ℝ} (ht : 0 < t) :
+    HasDerivAt δ
+      ((1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)
+        - (1 / 2 * j t + t / 2 * jK 1 t)) t := by
+  have h_j : HasDerivAt j (jK 1 t) t := by
+    have h := hasDerivAt_jK 0 ht
+    rwa [jK_zero] at h
+  have h_half : HasDerivAt (fun s : ℝ => s / 2) (1 / 2) t := (hasDerivAt_id t).div_const 2
+  have h_tj : HasDerivAt (fun s : ℝ => s / 2 * j s) (1 / 2 * j t + t / 2 * jK 1 t) t :=
+    h_half.mul h_j
+  have h_sub := (hasDerivAt_α_part ht).sub h_tj
+  refine h_sub.congr_of_eventuallyEq ?_
+  filter_upwards [isOpen_Ioi.mem_nhds ht] with s hs
+  exact δ_eq s hs
+
+/-- Explicit bound for the closed-form `α_part'`:
+    `|α_part'(t)| ≤ 1/(4t²)` for `t > 0` — both summands of
+    `(1/4)·log(1+1/(4t²)) − 1/(4t²+1)` lie in `[0, 1/(4t²)]`. -/
+private lemma abs_α_deriv_le {t : ℝ} (ht : 0 < t) :
+    |(1 / 4) * Real.log (1 + 1 / (4 * t ^ 2)) - 1 / (4 * t ^ 2 + 1)|
+      ≤ 1 / (4 * t ^ 2) := by
+  have h_x_pos : (0 : ℝ) < 1 / (4 * t ^ 2) := by positivity
+  have h_log_le : Real.log (1 + 1 / (4 * t ^ 2)) ≤ 1 / (4 * t ^ 2) := by
+    have := Real.log_le_sub_one_of_pos (by linarith : (0 : ℝ) < 1 + 1 / (4 * t ^ 2))
+    linarith
+  have h_log_nn : 0 ≤ Real.log (1 + 1 / (4 * t ^ 2)) :=
+    Real.log_nonneg (by linarith)
+  have h_inv_le : 1 / (4 * t ^ 2 + 1) ≤ 1 / (4 * t ^ 2) := by
+    gcongr
+    linarith
+  have h_inv_nn : (0 : ℝ) ≤ 1 / (4 * t ^ 2 + 1) := by positivity
+  rw [abs_le]
+  constructor <;> linarith
+
+/-- **Explicit pointwise bound for `δ'`** — the `n = 1` case of the
+    paper's `δ^{(n)}(t) = O(t^{−n−1})` with explicit constant `1`:
+
+        `|δ'(t)| ≤ 1/t²`   for every `t > 0`.
+
+    Unlike `iteratedDeriv_δ_isO` this is not merely eventual; it is the
+    input for the strict monotonicity of `θ` on `[7, ∞)` proved in
+    `Corollary2.lean` (`strictMonoOn_theta`). -/
+lemma abs_deriv_δ_le {t : ℝ} (ht : 0 < t) : |deriv δ t| ≤ 1 / t ^ 2 := by
+  rw [(hasDerivAt_δ ht).deriv]
+  have h_α := abs_le.mp (abs_α_deriv_le ht)
+  have h_B : |1 / 2 * j t| ≤ 1 / (4 * t ^ 2) := by
+    rw [abs_mul, abs_of_pos (by norm_num : (0 : ℝ) < 1 / 2)]
+    calc (1 / 2 : ℝ) * |j t| ≤ (1 / 2) * (1 / (2 * t ^ 2)) := by
+          gcongr
+          exact abs_j_le ht
+      _ = 1 / (4 * t ^ 2) := by ring
+  have h_C : |t / 2 * jK 1 t| ≤ 1 / (2 * t ^ 2) := by
+    rw [abs_mul, abs_of_pos (by positivity : (0 : ℝ) < t / 2)]
+    calc t / 2 * |jK 1 t| ≤ t / 2 * (1 / t ^ 3) := by
+          gcongr
+          exact abs_jK_one_le ht
+      _ = 1 / (2 * t ^ 2) := by
+          field_simp
+  have h_B' := abs_le.mp h_B
+  have h_C' := abs_le.mp h_C
+  have h_id : 1 / (4 * t ^ 2) + (1 / (4 * t ^ 2) + 1 / (2 * t ^ 2)) = 1 / t ^ 2 := by
+    field_simp
+    ring
+  rw [abs_le]
+  constructor <;> linarith [h_α.1, h_α.2, h_B'.1, h_B'.2, h_C'.1, h_C'.2]
+
 end ErrorTermDelta
 
 /-!
@@ -3576,53 +4062,55 @@ end ErrorTermDelta
 
 /-- **Theorem 1** (Dundulis–Garunkštis–Laurinčikas–Šimenas, 2026).
 
-    For n ≥ 2, the n-th derivative of S satisfies
+    For every step function `F` and n ≥ 2, the n-th derivative of `S F`
+    satisfies
 
-        S^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1))
+        (S F)^(n)(t) = (-1)^(n-1) · (n-2)! / (2π) · t^(1-n)  +  O(t^(-n-1))
 
-    as t → +∞ *through regular points* (i.e., points not in `JumpSet`).
-    The conclusion is stated at the relativized filter `𝓝∞₀`, which is
-    the natural mathematical filter here: at a jump point of `N_step`
-    (and hence of `S`), `iteratedDeriv n S` returns `0` by Mathlib's
+    as t → +∞ *through regular points* (i.e., points not in `F.jumpSet`).
+    The conclusion is stated at the relativized filter `𝓝∞₀[F.jumpSet]`,
+    which is the natural mathematical filter here: at a jump point of `F`
+    (and hence of `S F`), `iteratedDeriv n (S F)` returns `0` by Mathlib's
     convention for non-differentiable points, so the asymptotic fails
     at such points by `O(t^(1-n))` — much larger than the claimed
-    `O(t^(-n-1))`. -/
-theorem theorem1 (n : ℕ) (hn : 2 ≤ n) :
+    `O(t^(-n-1))`.  The filter is nontrivial by
+    `StepFunction.neBot_regularAtTop`. -/
+theorem theorem1 (F : StepFunction) (n : ℕ) (hn : 2 ≤ n) :
     IsO
       (fun t =>
-        iteratedDeriv n S t
+        iteratedDeriv n (S F) t
         - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
            * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ))))
       (fun t => t ^ (-(n : ℝ) - 1))
-      𝓝∞₀ := by
+      𝓝∞₀[F.jumpSet] := by
   have hn1 : 1 ≤ n := by omega
-  -- (1) Pointwise rewrite of S on (0,∞), in addition-of-negation form so we can
-  -- use `iteratedDeriv_add` rather than `iteratedDeriv_sub`.
+  -- (1) Pointwise rewrite of S F on (0,∞), in addition-of-negation form so we
+  -- can use `iteratedDeriv_add` rather than `iteratedDeriv_sub`.
   have h_S_sum : ∀ s ∈ Set.Ioi (0 : ℝ),
-      S s = φ s + ((-(1 / Real.pi)) * δ s) + N_step s := by
-    intro s _; rw [S_eq_φ_sub_δ_add_N s]; ring
+      S F s = φ s + ((-(1 / Real.pi)) * δ s) + F s := by
+    intro s _; rw [S_eq_φ_sub_δ_add_N F s]; ring
   -- (2) Lift the pointwise equality to iteratedDeriv on the open set (0,∞).
   have h_iter_eq : ∀ t ∈ Set.Ioi (0 : ℝ),
-      iteratedDeriv n S t
+      iteratedDeriv n (S F) t
         = iteratedDeriv n
-            (fun s => φ s + ((-(1 / Real.pi)) * δ s) + N_step s) t :=
+            (fun s => φ s + ((-(1 / Real.pi)) * δ s) + F s) t :=
     iteratedDeriv_congr_of_nhds n isOpen_Ioi h_S_sum
   -- (3) Split the triple sum using local ContDiffAt — requires regularity
-  -- (`t ∉ JumpSet`) since `N_step` is only `ContDiffAt` away from its jumps.
-  have h_split : ∀ t, 0 < t → t ∉ JumpSet →
-      iteratedDeriv n (fun s => φ s + ((-(1 / Real.pi)) * δ s) + N_step s) t
+  -- (`t ∉ F.jumpSet`) since `F` is only `ContDiffAt` away from its jumps.
+  have h_split : ∀ t, 0 < t → t ∉ F.jumpSet →
+      iteratedDeriv n (fun s => φ s + ((-(1 / Real.pi)) * δ s) + F s) t
         = iteratedDeriv n φ t
           + (-(1 / Real.pi)) * iteratedDeriv n δ t
-          + iteratedDeriv n N_step t := by
+          + iteratedDeriv n F t := by
     intro t ht ht_reg
-    have hφ  : ContDiffAt ℝ n φ t       := contDiffAt_φ n ht
-    have hδ  : ContDiffAt ℝ n δ t       := contDiffAt_δ n ht
-    have hN  : ContDiffAt ℝ n N_step t  := contDiffAt_N_step n ht ht_reg
+    have hφ  : ContDiffAt ℝ n φ t  := contDiffAt_φ n ht
+    have hδ  : ContDiffAt ℝ n δ t  := contDiffAt_δ n ht
+    have hN  : ContDiffAt ℝ n F t  := F.contDiffAt n ht_reg
     have hcδ : ContDiffAt ℝ n (fun s => (-(1 / Real.pi)) * δ s) t :=
       contDiffAt_const.mul hδ
-    -- Outer split: (φ + c·δ) + N_step
+    -- Outer split: (φ + c·δ) + F
     change iteratedDeriv n
-              ((fun s => φ s + ((-(1 / Real.pi)) * δ s)) + N_step) t = _
+              ((fun s => φ s + ((-(1 / Real.pi)) * δ s)) + ⇑F) t = _
     rw [iteratedDeriv_add (hφ.add hcδ) hN]
     -- Inner split: φ + c·δ
     have h_inner :
@@ -3632,34 +4120,34 @@ theorem theorem1 (n : ℕ) (hn : 2 ≤ n) :
       change iteratedDeriv n (φ + fun s => (-(1 / Real.pi)) * δ s) t = _
       exact iteratedDeriv_add hφ hcδ
     rw [h_inner, iteratedDeriv_const_mul_field (-(1 / Real.pi)) δ]
-  -- (4) Substitute closed form for `φ` and the vanishing for `N_step` at
+  -- (4) Substitute closed form for `φ` and the vanishing for `F` at
   -- regular points.
-  have h_clean : ∀ t, 0 < t → t ∉ JumpSet →
-      iteratedDeriv n S t
+  have h_clean : ∀ t, 0 < t → t ∉ F.jumpSet →
+      iteratedDeriv n (S F) t
         - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
            * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ)))
         = (-(1 / Real.pi)) * iteratedDeriv n δ t := by
     intro t ht ht_reg
     rw [h_iter_eq t ht, h_split t ht ht_reg,
         iteratedDeriv_φ n hn t ht,
-        N_step_iteratedDeriv_eq_zero n hn1 t ht ht_reg]
+        F.iteratedDeriv_eq_zero n hn1 ht_reg]
     ring
   -- (5) The residual `c · iteratedDeriv n δ t` is O(t^(-n-1)) on `𝓝∞`; mono
-  -- to the smaller `𝓝∞₀`.
+  -- to the smaller `𝓝∞₀[F.jumpSet]`.
   have h_bd :
       IsO (fun t => (-(1 / Real.pi)) * iteratedDeriv n δ t)
-          (fun t => t ^ (-(n : ℝ) - 1)) 𝓝∞₀ :=
+          (fun t => t ^ (-(n : ℝ) - 1)) 𝓝∞₀[F.jumpSet] :=
     ((iteratedDeriv_δ_isO n hn1).const_mul_left (-(1 / Real.pi))).mono inf_le_left
-  -- (6) Stitch via eventual equality at `𝓝∞₀`.
+  -- (6) Stitch via eventual equality at `𝓝∞₀[F.jumpSet]`.
   have h_evEq :
-      (fun t => iteratedDeriv n S t
+      (fun t => iteratedDeriv n (S F) t
         - ((-1 : ℝ) ^ (n - 1) * (n - 2).factorial
            * (1 / (2 * Real.pi)) * t ^ (1 - (n : ℝ))))
-        =ᶠ[𝓝∞₀]
+        =ᶠ[𝓝∞₀[F.jumpSet]]
       (fun t => (-(1 / Real.pi)) * iteratedDeriv n δ t) := by
-    have h_pos : ∀ᶠ t in (𝓝∞₀ : Filter ℝ), 0 < t :=
+    have h_pos : ∀ᶠ t in (𝓝∞₀[F.jumpSet] : Filter ℝ), 0 < t :=
       (Filter.eventually_gt_atTop (0 : ℝ)).filter_mono inf_le_left
-    have h_reg : ∀ᶠ t in (𝓝∞₀ : Filter ℝ), t ∉ JumpSet :=
+    have h_reg : ∀ᶠ t in (𝓝∞₀[F.jumpSet] : Filter ℝ), t ∉ F.jumpSet :=
       Filter.eventually_inf_principal.mpr (Filter.Eventually.of_forall (fun _ h => h))
     filter_upwards [h_pos, h_reg] with t ht ht_reg
     exact h_clean t ht ht_reg

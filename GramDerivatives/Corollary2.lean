@@ -14,12 +14,13 @@
 
   ─── Strategy ──────────────────────────────────────────────────────────
   We bypass `theorem1` entirely.  Theorem 1's conclusion is at the
-  relativized filter `𝓝∞₀` (= `Filter.atTop ⊓ principal JumpSetᶜ`),
-  because at a jump point of `N_step` the function `S` has a jump too
-  and the asymptotic for `iteratedDeriv n S` genuinely fails.  By
-  contrast, `theta := δ − π·φ − π` is *smooth on all of `(0, ∞)`* — it
-  doesn't involve `N_step` — so its asymptotic holds at the unrelativized
-  filter `𝓝∞`.
+  relativized filter `𝓝∞₀[F.jumpSet]` (= `Filter.atTop ⊓ principal
+  F.jumpSetᶜ`), because at a jump point of the step function `F` the
+  function `S F` has a jump too and the asymptotic for
+  `iteratedDeriv n (S F)` genuinely fails.  By contrast,
+  `theta := δ − π·φ − π` is *smooth on all of `(0, ∞)`* — it doesn't
+  involve any step function — so its asymptotic holds at the
+  unrelativized filter `𝓝∞`.
 
   Concretely, for `n ≥ 1` and `t > 0`:
 
@@ -40,13 +41,17 @@
 
   the closed form obtained by solving the Riemann–von Mangoldt identity
   `N(t) = (1/π)·θ(t) + 1 + S(t)` for θ and substituting
-  `S = φ − (1/π)·δ + N_step` (from `Theorem1.lean`); the `N_step` terms
-  cancel algebraically.  Smoothness (`contDiffAt_theta`) follows from
-  `contDiffAt_δ` and `contDiffAt_φ`.
+  `S F = φ − (1/π)·δ + F` (from `Theorem1.lean`); the step-function
+  terms cancel algebraically.  Smoothness (`contDiffAt_theta`) follows
+  from `contDiffAt_δ` and `contDiffAt_φ`.
 
   The agreement of this `theta` with the analytic Riemann–Siegel theta
   function on `(0, ∞)` is informal — it is the content of the
   Karatsuba–Korolev representation.
+
+  §5 additionally proves `theta_tendsto_atTop` (θ → +∞ at +∞), the
+  existence input that lets `Theorem3.lean` *define* the Gram function
+  as an inverse of `theta` instead of axiomatising it.
 
   Builds with zero `sorry`.
 -/
@@ -61,13 +66,13 @@ open scoped ContDiff
 
   `theta : ℝ → ℝ` is *defined* as `δ − π·φ − π`, the closed form obtained
   by solving the Riemann–von Mangoldt identity for θ and substituting
-  `S = φ − (1/π)·δ + N_step` from `Theorem1.lean`.  Under this definition:
+  `S F = φ − (1/π)·δ + F` from `Theorem1.lean`.  Under this definition:
 
     • `contDiffAt_theta`  is a derived theorem (from smoothness of `φ`
       and `δ`).
-    • `riemann_vonMangoldt` reduces to an algebraic identity in which
-      the `N_step` terms cancel between the two sides; the identity
-      then closes by `field_simp` + `ring`.
+    • `riemann_vonMangoldt` reduces, for every step function `F`, to an
+      algebraic identity in which the `F t` terms cancel between the two
+      sides; the identity then closes by `field_simp` + `ring`.
 
   The agreement of this `theta` with the analytic Riemann–Siegel theta
   function on `(0, ∞)` is the content of the Karatsuba–Korolev
@@ -76,7 +81,7 @@ open scoped ContDiff
 
 /-- The Riemann–Siegel theta function, defined as the closed form
     `θ(t) := δ(t) − π · φ(t) − π` obtained from the Karatsuba–Korolev /
-    Riemann–von Mangoldt identity combined with `S = φ − (1/π)·δ + N_step`
+    Riemann–von Mangoldt identity combined with `S F = φ − (1/π)·δ + F`
     (from `Theorem1.lean`).  Identifies on `(0, ∞)` with the continuous
     branch of `arg(π^(-s/2) · Γ(s/2))` along the segment from `s = 1/2`
     to `s = 1/2 + i t`. -/
@@ -96,12 +101,12 @@ theorem contDiffAt_theta (n : ℕ) {s : ℝ} (hs : 0 < s) :
         N(t) = (1/π) · θ(t) + 1 + S(t).
 
     Under the definitions `theta := δ − π·φ − π` and
-    `S := φ − (1/π)·δ + N_step` (from `Theorem1.lean`), this reduces to
-    a purely algebraic identity in `δ t`, `φ t`, `N_step t`, and `π`:
-    the `N_step t` terms cancel between the two sides.  No properties
-    of the opaque `N_step` are used. -/
-theorem riemann_vonMangoldt (t : ℝ) (_ht : 0 < t) :
-    N_step t = (1 / Real.pi) * theta t + 1 + S t := by
+    `S F := φ − (1/π)·δ + F` (from `Theorem1.lean`), this reduces to
+    a purely algebraic identity in `δ t`, `φ t`, `F t`, and `π`:
+    the `F t` terms cancel between the two sides.  It holds for *every*
+    step function `F` — no `StepFunction` field is used. -/
+theorem riemann_vonMangoldt (F : StepFunction) (t : ℝ) (_ht : 0 < t) :
+    F t = (1 / Real.pi) * theta t + 1 + S F t := by
   have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
   simp only [theta, S]
   field_simp
@@ -154,8 +159,8 @@ private lemma iteratedDeriv_const_mul' (c : ℝ) (g : ℝ → ℝ) (k : ℕ) (s 
 
       iteratedDeriv n theta t = iteratedDeriv n δ t − π · iteratedDeriv n φ t.
 
-  No N_step is involved — this is purely a Mathlib-calculus consequence
-  of the definition of `theta`.
+  No step function is involved — this is purely a Mathlib-calculus
+  consequence of the definition of `theta`.
 -/
 
 /-- For `n ≥ 1` and `t > 0`,
@@ -199,7 +204,7 @@ private lemma iteratedDeriv_theta_split (n : ℕ) (hn : 1 ≤ n) (t : ℝ) (ht :
         θ^(n)(t) = (-1)^n · (n-2)! / 2 · t^(1-n) + O(t^(-n-1))
 
     as `t → +∞`.  Note: since `theta := δ − π·φ − π` is smooth on the
-    entire half-line `(0, ∞)` (no N_step), this conclusion is at the
+    entire half-line `(0, ∞)` (no step function), this conclusion is at the
     unrelativized filter `𝓝∞` — *not* at Theorem 1's `𝓝∞₀`. -/
 theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
     IsO
@@ -239,3 +244,274 @@ theorem corollary2 (n : ℕ) (hn : 2 ≤ n) :
     filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
     exact h_clean t ht
   exact h_evEq.trans_isBigO h_bd
+
+/-!
+  ## §5  `θ` tends to `+∞`
+
+  `theta = δ − π·φ − π` grows without bound as `t → +∞`: the main term
+  `−π·φ(t) − π = (t/2)·(log(t/(2π)) − 1) + 7π/8 − π` tends to `+∞`,
+  while the error term `δ = α_part − (t/2)·j` is eventually bounded
+  below (`α_part ≥ 0` elementarily and `(t/2)·j(t) = O(t⁻¹)` from
+  `iteratedDeriv_j_isO` at order `0`).
+
+  This is the existence input that lets `Theorem3.lean` *define* the
+  Gram function as an inverse of `theta` on `[7, ∞)` (via the
+  intermediate value theorem) instead of axiomatising it.
+-/
+
+/-- The Riemann–Siegel theta function tends to `+∞` at `+∞`.  Proved
+    from the concrete definition `theta = δ − π·φ − π`: the `φ`-part
+    contributes `(t/2)·(log(t/(2π)) − 1) → +∞` and `δ` is eventually
+    bounded below by `−1`. -/
+theorem theta_tendsto_atTop : Filter.Tendsto theta 𝓝∞ 𝓝∞ := by
+  -- (1) The integral part: `|t/2 · j t| ≤ 1` eventually, since `j = O(t⁻²)`.
+  have h_j : IsO j (fun t => t ^ (-(0 : ℝ) - 2)) 𝓝∞ := by
+    simpa [iteratedDeriv_zero] using iteratedDeriv_j_isO 0
+  have h_tj : ∀ᶠ t in (𝓝∞ : Filter ℝ), |t / 2 * j t| ≤ 1 := by
+    obtain ⟨C, hC⟩ := h_j.bound
+    filter_upwards [hC, Filter.eventually_ge_atTop (1 : ℝ),
+        Filter.eventually_ge_atTop (max C 1)] with t hCt h1 hmax
+    have ht0 : (0 : ℝ) < t := lt_of_lt_of_le one_pos h1
+    have h_pow : t ^ (-(0 : ℝ) - 2) = (t ^ 2)⁻¹ := by
+      rw [show -(0 : ℝ) - 2 = ((-2 : ℤ) : ℝ) by norm_num, Real.rpow_intCast]
+      rw [zpow_neg, zpow_two]
+      ring
+    have hj_le : |j t| ≤ C * (t ^ 2)⁻¹ := by
+      have h := hCt
+      rw [Real.norm_eq_abs, Real.norm_eq_abs, h_pow,
+          abs_of_pos (by positivity : (0 : ℝ) < (t ^ 2)⁻¹)] at h
+      exact h
+    have hC_le_t : C ≤ t := le_trans (le_max_left _ _) hmax
+    rw [abs_mul, abs_of_pos (by positivity : (0 : ℝ) < t / 2)]
+    have h_step : t / 2 * |j t| ≤ t / 2 * (C * (t ^ 2)⁻¹) :=
+      mul_le_mul_of_nonneg_left hj_le (by positivity)
+    have h_simp : t / 2 * (C * (t ^ 2)⁻¹) = C / (2 * t) := by
+      field_simp
+    rw [h_simp] at h_step
+    have h_frac : C / (2 * t) ≤ 1 / 2 := by
+      rw [div_le_iff₀ (by positivity : (0 : ℝ) < 2 * t)]
+      linarith
+    linarith
+  -- (2) The algebraic part: `α_part t ≥ 0` for `t > 0`.
+  have h_α : ∀ᶠ t in (𝓝∞ : Filter ℝ), 0 ≤ α_part t := by
+    filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+    unfold α_part
+    have h_inv : 0 ≤ 1 / (4 * t ^ 2) := by positivity
+    have h_log : 0 ≤ Real.log (1 + 1 / (4 * t ^ 2)) :=
+      Real.log_nonneg (by linarith)
+    have h_arctan : 0 ≤ Real.arctan (1 / (2 * t)) := by
+      have h := Real.arctan_mono (by positivity : (0 : ℝ) ≤ 1 / (2 * t))
+      simpa [Real.arctan_zero] using h
+    have h1 : 0 ≤ t / 4 * Real.log (1 + 1 / (4 * t ^ 2)) :=
+      mul_nonneg (by positivity) h_log
+    have h2 : 0 ≤ 1 / 4 * Real.arctan (1 / (2 * t)) :=
+      mul_nonneg (by norm_num) h_arctan
+    linarith
+  -- (3) Hence `δ t ≥ −1` eventually.
+  have h_δ : ∀ᶠ t in (𝓝∞ : Filter ℝ), -1 ≤ δ t := by
+    filter_upwards [h_tj, h_α, Filter.eventually_gt_atTop (0 : ℝ)] with t htj hα ht
+    rw [δ_eq t ht]
+    have := le_abs_self (t / 2 * j t)
+    linarith
+  -- (4) Eventual lower bound for `theta` by an explicit minorant.
+  have h_lower : ∀ᶠ t in (𝓝∞ : Filter ℝ),
+      t / 2 * Real.log (t / (2 * Real.pi)) - t / 2
+        + (7 * Real.pi / 8 - Real.pi - 1) ≤ theta t := by
+    filter_upwards [h_δ, Filter.eventually_gt_atTop (0 : ℝ)] with t hδt ht
+    have h_theta_eq : theta t
+        = δ t + t / 2 * Real.log (t / (2 * Real.pi)) - t / 2
+          + 7 * Real.pi / 8 - Real.pi := by
+      have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+      unfold theta φ
+      field_simp
+      ring
+    rw [h_theta_eq]
+    linarith
+  -- (5) The minorant tends to `+∞`.
+  have h_min : Filter.Tendsto
+      (fun t : ℝ => t / 2 * Real.log (t / (2 * Real.pi)) - t / 2
+        + (7 * Real.pi / 8 - Real.pi - 1)) 𝓝∞ 𝓝∞ := by
+    have h_log : Filter.Tendsto (fun t : ℝ => Real.log (t / (2 * Real.pi)) - 1)
+        𝓝∞ 𝓝∞ := by
+      have h_inner : Filter.Tendsto (fun t : ℝ => t / (2 * Real.pi)) 𝓝∞ 𝓝∞ :=
+        Filter.Tendsto.atTop_div_const (by positivity) Filter.tendsto_id
+      exact Filter.tendsto_atTop_add_const_right _ (-1)
+        (Real.tendsto_log_atTop.comp h_inner)
+    have h_half : Filter.Tendsto (fun t : ℝ => t / 2) 𝓝∞ 𝓝∞ :=
+      Filter.Tendsto.atTop_div_const (by norm_num) Filter.tendsto_id
+    have h_prod : Filter.Tendsto
+        (fun t : ℝ => t / 2 * (Real.log (t / (2 * Real.pi)) - 1)) 𝓝∞ 𝓝∞ :=
+      Filter.Tendsto.atTop_mul_atTop₀ h_half h_log
+    have h_shift := Filter.tendsto_atTop_add_const_right 𝓝∞
+      (7 * Real.pi / 8 - Real.pi - 1) h_prod
+    refine h_shift.congr fun t => ?_
+    ring
+  -- (6) Comparison.
+  exact Filter.tendsto_atTop_mono' 𝓝∞ h_lower h_min
+
+/-!
+  ## §6  Leading-order asymptotics of `θ` and `θ'`
+
+  The two "input facts" of the Gram-asymptotics blueprint
+  (`Proof_Gram_fun_der.tex`), both immediate from `theta = δ − π·φ − π`:
+
+    (θ1)  θ(t)  = t/2 · log(t/(2π)) − t/2 − π/8 + O(1/t),
+    (θ2)  θ'(t) = 1/2 · log(t/(2π)) + O(1/t²),
+
+  as `t → +∞`.  Expanding `−π·φ(t) = (t/2)·log(t/(2π)) − t/2 + 7π/8`
+  shows the (θ1)-residual is *exactly* `δ(t)`, so (θ1) is `δ_isO`;
+  similarly the (θ2)-residual is exactly `δ'(t)`, which is
+  `iteratedDeriv_δ_isO` at order `1`.  These feed the derivation of the
+  Lavrik/Korolev asymptotics (8) and (9) in `Theorem3.lean`.
+-/
+
+/-- Closed form of `theta`: the definition `θ = δ − π·φ − π` expands to
+
+        θ(t) = t/2 · log(t/(2π)) − t/2 − π/8 + δ(t)
+
+    for every real `t` (pure field algebra using `π ≠ 0`). -/
+theorem theta_eq_main_add_δ (t : ℝ) :
+    theta t = t / 2 * Real.log (t / (2 * Real.pi)) - t / 2 - Real.pi / 8 + δ t := by
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  unfold theta φ
+  field_simp
+  ring
+
+/-- **(θ1)**  `θ(t) = t/2·log(t/(2π)) − t/2 − π/8 + O(1/t)` as `t → +∞`.
+    By `theta_eq_main_add_δ` the residual is exactly `δ`, so this is
+    `δ_isO`. -/
+theorem theta_asymp :
+    IsO
+      (fun t => theta t - (t / 2 * Real.log (t / (2 * Real.pi)) - t / 2 - Real.pi / 8))
+      (fun t => t ^ (-1 : ℝ))
+      𝓝∞ := by
+  have h_eq : (fun t => theta t
+      - (t / 2 * Real.log (t / (2 * Real.pi)) - t / 2 - Real.pi / 8)) = δ := by
+    funext t
+    rw [theta_eq_main_add_δ t]
+    ring
+  rw [h_eq]
+  exact δ_isO
+
+/-- First derivative of `theta`:  `θ'(t) = log(t/(2π))/2 + δ'(t)` for
+    `t > 0`.  From `theta = δ − π·φ − π` and
+    `φ'(t) = −(1/(2π))·log(t/(2π))` (`hasDerivAt_φ` in `Theorem1.lean`). -/
+theorem deriv_theta_eq {t : ℝ} (ht : 0 < t) :
+    deriv theta t = Real.log (t / (2 * Real.pi)) / 2 + deriv δ t := by
+  -- `δ` has some derivative at `t`.
+  have hδ_diff : DifferentiableAt ℝ δ t :=
+    (contDiffAt_δ 1 ht).differentiableAt (by norm_num)
+  have hδ : HasDerivAt δ (deriv δ t) t := hδ_diff.hasDerivAt
+  -- `π·φ` has derivative `−(1/2)·log(t/(2π))`.
+  have hφ := (hasDerivAt_φ ht).const_mul Real.pi
+  -- Assemble `theta = δ − π·φ − π`.
+  have h_theta : HasDerivAt theta
+      (deriv δ t - Real.pi * (-(1 / (2 * Real.pi)) * Real.log (t / (2 * Real.pi)))) t := by
+    have h := (hδ.sub hφ).sub_const Real.pi
+    exact h.congr_of_eventuallyEq (by
+      filter_upwards with s
+      unfold theta
+      simp only [Pi.sub_apply])
+  rw [h_theta.deriv]
+  have hπ : Real.pi ≠ 0 := Real.pi_ne_zero
+  field_simp
+  ring
+
+/-- **(θ2)**  `θ'(t) = log(t/(2π))/2 + O(1/t²)` as `t → +∞`.
+    By `deriv_theta_eq` the residual is exactly `δ'`, which is
+    `iteratedDeriv_δ_isO` at order `1`. -/
+theorem theta_deriv_asymp :
+    IsO
+      (fun t => deriv theta t - Real.log (t / (2 * Real.pi)) / 2)
+      (fun t => t ^ (-2 : ℝ))
+      𝓝∞ := by
+  -- The order-1 δ bound, with the exponent normalised to `-2`.
+  have h_δ' : IsO (fun t => deriv δ t) (fun t => t ^ (-2 : ℝ)) 𝓝∞ := by
+    have h := iteratedDeriv_δ_isO 1 le_rfl
+    have h_fun : (fun t : ℝ => iteratedDeriv 1 δ t) = fun t => deriv δ t := by
+      funext t; rw [iteratedDeriv_one]
+    have h_exp : (fun t : ℝ => t ^ (-((1 : ℕ) : ℝ) - 1)) = fun t : ℝ => t ^ (-2 : ℝ) := by
+      funext t; norm_num
+    rwa [h_fun, h_exp] at h
+  refine (Filter.EventuallyEq.trans_isBigO ?_ h_δ')
+  filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+  rw [deriv_theta_eq ht]
+  ring
+
+/-!
+  ## §7  Strict monotonicity of `θ` on `[7, ∞)`
+
+  The classical fact cited informally to justify `contDiffAt_gram` in
+  `Theorem3.lean` — that the Riemann–Siegel `θ` is strictly increasing on
+  `[7, ∞)`, making `Function.invFunOn theta (Ici 7)` the genuine monotone
+  inverse — is a *theorem* for our concrete `theta = δ − π·φ − π`:
+
+      θ'(t) = log(t/(2π))/2 + δ'(t)          (`deriv_theta_eq`, §6)
+            ≥ (1 − 2π/t)/2 − 1/t²            (`abs_deriv_δ_le`, log x ≥ 1 − 1/x)
+            > 0   for t ≥ 7                  (π < 3.15).
+
+  The pointwise bound `|δ'(t)| ≤ 1/t²` (`abs_deriv_δ_le`, `Theorem1.lean`
+  §7a) is essential here: the asymptotic `iteratedDeriv_δ_isO` alone says
+  nothing at any concrete `t`.
+-/
+
+/-- Elementary companion of `Real.log_le_sub_one_of_pos`:
+    `1 − 1/x ≤ log x` for `x > 0` (apply the former to `x⁻¹`). -/
+private lemma one_sub_inv_le_log {x : ℝ} (hx : 0 < x) : 1 - x⁻¹ ≤ Real.log x := by
+  have h := Real.log_le_sub_one_of_pos (inv_pos.mpr hx)
+  rw [Real.log_inv] at h
+  linarith
+
+/-- **`θ' > 0` on `[7, ∞)`:**  from `θ'(t) = log(t/(2π))/2 + δ'(t)`,
+    `|δ'(t)| ≤ 1/t²`, `log x ≥ 1 − 1/x`, and `π < 3.15`, positivity
+    reduces to the quadratic inequality `t² − 2πt − 2 > 0`, valid for
+    `t ≥ 7 > 2π`. -/
+theorem deriv_theta_pos {t : ℝ} (ht : 7 ≤ t) : 0 < deriv theta t := by
+  have ht0 : (0 : ℝ) < t := by linarith
+  have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
+  rw [deriv_theta_eq ht0]
+  -- (1) The δ'-term is at least `−1/t²`.
+  have h_δ : -(1 / t ^ 2) ≤ deriv δ t := neg_le_of_abs_le (abs_deriv_δ_le ht0)
+  -- (2) The log-term is at least `(1 − 2π/t)/2`.
+  have h_log : 1 - 2 * Real.pi / t ≤ Real.log (t / (2 * Real.pi)) := by
+    have h := one_sub_inv_le_log (show (0 : ℝ) < t / (2 * Real.pi) by positivity)
+    have h_inv : (t / (2 * Real.pi))⁻¹ = 2 * Real.pi / t := by
+      field_simp
+    rwa [h_inv] at h
+  -- (3) The quadratic inequality `2πt + 2 < t²` for `t ≥ 7`, from `π < 3.15`.
+  have h_pi : Real.pi < 3.15 := Real.pi_lt_d2
+  have h_quad : 2 * Real.pi * t + 2 < t ^ 2 := by
+    nlinarith [mul_nonneg (le_of_lt ht0) (by linarith : (0 : ℝ) ≤ t - 7),
+               mul_lt_mul_of_pos_right h_pi ht0]
+  -- (4) Assemble:  `(1 − 2π/t)/2 − 1/t² = (t² − 2πt − 2)/(2t²) > 0`.
+  have h_step : 0 < 1 / 2 * (1 - 2 * Real.pi / t) - 1 / t ^ 2 := by
+    have h_expand : 1 / 2 * (1 - 2 * Real.pi / t) - 1 / t ^ 2
+        = (t ^ 2 - (2 * Real.pi * t + 2)) / (2 * t ^ 2) := by
+      field_simp
+      ring
+    rw [h_expand]
+    apply div_pos
+    · linarith
+    · positivity
+  calc (0 : ℝ) < 1 / 2 * (1 - 2 * Real.pi / t) - 1 / t ^ 2 := h_step
+    _ ≤ Real.log (t / (2 * Real.pi)) / 2 + deriv δ t := by linarith
+
+/-- **Strict monotonicity of the Riemann–Siegel `θ` on `[7, ∞)`** —
+    formerly cited as a classical unformalised fact; now a theorem for
+    the concrete `theta = δ − π·φ − π`.  This is what makes the
+    `invFunOn`-defined Gram function in `Theorem3.lean` the genuine
+    monotone inverse of `θ` (see `gram_theta` there). -/
+theorem strictMonoOn_theta : StrictMonoOn theta (Set.Ici (7 : ℝ)) := by
+  refine strictMonoOn_of_deriv_pos (convex_Ici 7) ?_ ?_
+  · intro t ht
+    have ht0 : (0 : ℝ) < t := by
+      have := Set.mem_Ici.mp ht
+      linarith
+    exact ((contDiffAt_theta 0 ht0).continuousAt).continuousWithinAt
+  · intro t ht
+    rw [interior_Ici] at ht
+    exact deriv_theta_pos (le_of_lt (Set.mem_Ioi.mp ht))
+
+/-- `θ` is injective on `[7, ∞)`. -/
+theorem injOn_theta : Set.InjOn theta (Set.Ici (7 : ℝ)) :=
+  strictMonoOn_theta.injOn

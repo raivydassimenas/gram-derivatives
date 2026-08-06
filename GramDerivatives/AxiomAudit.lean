@@ -18,7 +18,13 @@ when re-auditing.
 -/
 
 #print axioms theorem1
+#print axioms Gram.UD.vdc_fundamental_inequality
+#print axioms Gram.UD.isUDModOne_of_forall_diff
+#print axioms Gram.UD.isUDModOne_of_antitone_diff
+#print axioms Gram.UD.isUDModOne_of_iteratedDeriv_decay
 #print axioms corollary2
+#print axioms strictMonoOn_theta
+#print axioms gram_theta
 #print axioms theorem3
 #print axioms Gram.Theorem4.theorem4
 #print axioms Gram.corollary5
