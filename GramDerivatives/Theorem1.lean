@@ -64,40 +64,29 @@
   decomposition comes from.
 
   ─── Remaining gaps ────────────────────────────────────────────────────
-  None.  `Theorem1.lean` builds with zero `sorry`.  `jK_isO` (§6) is
-  fully discharged from `jK_eq_sigma_integral` (proved) and
-  `sigma_mixedDerivExpr_isO`, which reduces to the σ-weighted integral
-  asymptotic `sigma_lorMix_integral_isO`; the latter and its supporting
-  lemmas are now all proved (see "Closed" below).
+  None.  `Theorem1.lean` builds with zero `sorry`.
 
-  ─── Closed under Strategy B ───────────────────────────────────────────
-  • `lorMix_bounded_on_nonneg`      (§6) — `∃ M, ∀ y ≥ 0, |lorMix n y| ≤ M`.
-                                          Continuity (`lorMix_continuous`)
-                                          on a compact prefix + `lorMix_isO`
-                                          on the tail.
-  • `lorMix_unified_decay_on_nonneg`(§6) — `∃ K, ∀ y ≥ 0,
-                                          |lorMix n y| ≤ K · (1 + y^(n+4))⁻¹`.
-                                          Combines `lorMix_bounded_on_nonneg`
-                                          (near 0) with `lorMix_isO` (large `y`).
-  • `sigma_lorMix_integral_isO`     (§6) — σ-weighted integral asymptotic.
-                                          Dominate the integrand via
-                                          `lorMix_unified_decay_on_nonneg`
-                                          and `|σ u| ≤ 1/8`
-                                          (`integrable_lorMix_majorant`
-                                          supplies the dominator's
-                                          integrability), then reduce to
-                                          `sigma_lorMix_majorant_integral_isO`
-                                          by `norm_integral_le` +
-                                          `setIntegral_mono`.
-  • `sigma_lorMix_majorant_integral_isO`  — the analytic core.  Split
-                                   (§6)     `Ici 0` at `s = t/2 − 1/4`;
-                                            the near piece is bounded by a
-                                            finite-interval integral and the
-                                            tail by
-                                            `integral_Ioi_add_quarter_pow_inv`
-                                            (FTC value of
-                                            `∫_{u>s} ((u+1/4)^{n+3})⁻¹`).
-                                            Both pieces are `O(t^{-(n+2)})`.
+  ─── How the integral error term is handled (§6) ───────────────────────
+  §6 follows the proof of Theorem 1 in §2 of the paper literally.  With
+  `σ` the bounded antiderivative of the sawtooth `ρ` (`0 ≤ σ ≤ 1/8`),
+  integration by parts on each unit interval turns the formal derivative
+  integral `jK n` into
+        `jK n t = −∫₀^∞ σ(u) · ∂ᵤ∂ₜⁿ kernel(u,t) du`
+  (`jK_eq_sigma_integral`) — the paper's
+  `j(t) = 2∫₀^∞ σ(u)(u+1/4)/((u+1/4)²+(t/2)²)² du` differentiated `n`
+  times *under the integral sign*.  Writing `a = 4u+1`, the `t`-profile of
+  that integrand is `quadInv a t = ((a²+4t²)²)⁻¹`
+  (`mixedDerivExpr_eq_quadInv`), and differentiating it `n` times gives
+  the paper's finite sum
+        `∂ₜⁿ (a²+4t²)⁻² = ∑_{r ≤ n} dsC n r · t^(2r−n)/(a²+4t²)^(r+2)`
+  (`iteratedDeriv_quadInv`).  Each `u`-integral is then evaluated in closed
+  form by the paper's substitution `v = (4u+1)² + 4t²`, `dv = 8(4u+1) du`:
+        `∫₀^∞ (4u+1)/((4u+1)²+4t²)^(r+2) du = 1/(8(r+1)(1+4t²)^(r+1))`
+  (`integral_quadPow`).  Combined with `σ ≤ 1/8` and `1 + 4t² ≥ 4t²` and
+  summed over `r`, this is `sigma_mixedDerivExpr_isO`, hence `jK_isO` and
+  `iteratedDeriv_j_isO`:  `j⁽ⁿ⁾(t) = O(t^(−n−2))`.
+
+  Other formerly-axiomatic pieces of §2.5/§6 that are now theorems:
   • `contDiffAt_j`                 (§2.5) — was an axiom; now a theorem derived
                                             from `contDiffOn_jK` (a joint
                                             induction in §2.5 that proves the
@@ -108,18 +97,9 @@
                                             `-(t/2)·j(t)` plus the derived
                                             `contDiffAt_j` theorem.
   • `mixedDerivExpr_eq_lorMix`     (§6)   — pointwise rescaling, definitional
-                                            unfolding + algebra.
-  • `lorMix_isO`                   (§6)   — asymptotic cancellation,
-                                            `lorMix n x = O(x^{-(n+4)})`.
-                                            Proved via the polynomial-rational
-                                            representation `iteratedDeriv n lorSq
-                                            = lorSqNumer n / (1+s²)^(n+2)` plus
-                                            `lorMix n = -2 · iteratedDeriv n lorSq`.
-  • `lorSqNumer_natDegree_le`,            — supporting lemmas for `lorMix_isO`.
-    `iteratedDeriv_lorSq_eq`,
-    `iteratedDeriv_lorSq_isO`     (§6)
-  • `lorMix_continuous`            (§6)   — `Continuous (lorMix n)`, from the
-                                            rational representation.
+                                            unfolding + algebra; feeds the
+                                            sign lemmas of §7a and the bridge
+                                            `mixedDerivExpr_eq_quadInv`.
 -/
 
 import Mathlib
@@ -593,8 +573,8 @@ private lemma integrableOn_pow_inv_shift (k : ℕ) :
 
     Packages the recurring `Integrable.mono'` + `ae_restrict` scaffold shared by
     the parametric-integral integrability lemmas (`integrable_jIntegrand`,
-    `integrable_sigma_mixedDerivExpr`, `integrable_sigma_lorMix_integrand`,
-    `integrable_lorMix_majorant`):  given AE-strong-measurability and a
+    `integrable_sigma_mixedDerivExpr`, `integrableOn_mixedDerivExpr`):
+    given AE-strong-measurability and a
     pointwise bound by the integrable dominator `integrableOn_pow_inv_shift k`,
     the function is integrable on `Ici 0`. -/
 private lemma integrableOn_Ici_of_pow_inv_dominated {f : ℝ → ℝ} (k : ℕ) (C : ℝ)
@@ -1891,6 +1871,19 @@ end ErrorTermAlgebraic
   The asymptotic bound `j^(n)(t) = O(t^(-n-2))` therefore reduces to a
   bound on `jK n` (lemma `jK_isO`).  The bound on `-(t/2)·j(t)` then
   follows by the Leibniz product rule (`iteratedDeriv_tj_isO`).
+
+  This section follows §2 of the paper step for step:
+
+    1. the sawtooth antiderivative `σ` (`0 ≤ σ ≤ 1/8`) and the per-unit-interval
+       integration by parts, giving
+       `jK n t = −∫₀^∞ σ(u)·∂ᵤ∂ₜⁿ kernel(u,t) du`  (`jK_eq_sigma_integral`);
+    2. differentiation under the integral sign, expanding
+       `∂ₜⁿ ((a²+4t²)²)⁻¹` (`a = 4u+1`) into the paper's finite sum over
+       `r` (`iteratedDeriv_quadInv`, `mixedDerivExpr_eq_quadInv`);
+    3. the paper's substitution `v = (4u+1)² + 4t²` evaluating each
+       `u`-integral in closed form (`integral_quadPow`);
+    4. `σ ≤ 1/8`, `1 + 4t² ≥ 4t²` and summation over `r`
+       (`sigma_mixedDerivExpr_isO`).
 -/
 
 section ErrorTermIntegral
@@ -2446,20 +2439,20 @@ private lemma jK_eq_sigma_integral (n : ℕ) {t : ℝ} (_ht : 0 < t) :
     exact tsum_congr h_piece
   rw [h_tsum, ← hG_sum]
 
-/-! ### Sub-lemmas for `sigma_mixedDerivExpr_isO`
+/-! ### Rescaled forms of the integration-by-parts integrand
 
-The σ-integral bound decomposes into three pieces:
+Two equivalent closed forms of `mixedDerivExpr n u t = ∂ᵤ ∂ₜⁿ kernel(u,t)`
+are used downstream:
 
-* `mixedDerivExpr_eq_lorMix` — pointwise rescaling of the integrand:
-  `mixedDerivExpr n u t = (1/2)^n · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4)))`.
-  Purely algebraic (definitional unfolding + `field_simp`/`ring`).
-* `lorMix_isO` — asymptotic cancellation:  `lorMix n x = O(x^{-(n+4)})`.
-  The leading `1/x^(n+2)` parts of `-(n+2)·lor⁽ⁿ⁾(x)` and `x·lor⁽ⁿ⁺¹⁾(x)`
-  in `lorMix` cancel, leaving the `1/x^(n+4)` order.
-* `sigma_lorMix_integral_isO` — change-of-variables aggregation:
-  `∫₀^∞ σ(u) · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4))) du = O(t^{-(n+2)})`.
-  Substitute `x = t/(2(u+1/4))`, bound by `|σ| ≤ 1/8` and the previous
-  asymptotic, and finish on a finite residual integral. -/
+* `mixedDerivExpr_eq_lorMix` — the Lorentzian rescaling
+  `mixedDerivExpr n u t = (1/2)^n · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4)))`,
+  which exhibits the `u`-dependence as a single negative power and feeds the
+  sign lemmas of §7a;
+* `mixedDerivExpr_eq_quadInv` — the paper's form
+  `mixedDerivExpr n u t = −128·(4u+1)·∂ₜⁿ (((4u+1)² + 4t²)²)⁻¹`,
+  from which the estimate of `j⁽ⁿ⁾` is obtained by differentiating under the
+  integral sign (see "The paper's differentiation-under-the-integral-sign
+  computation" below). -/
 
 /-- **Rescaling identity for the mixed derivative.**
 
@@ -2487,16 +2480,19 @@ private lemma mixedDerivExpr_eq_lorMix (n : ℕ) {u : ℝ} (hu : 0 ≤ u) (t : �
   field_simp
   ring
 
-/-! ### Helpers for `lorMix_isO`: identification with `iteratedDeriv lor²`.
+/-! ### Identification of `lorMix` with `iteratedDeriv lor²`.
 
-The cancellation in `lorMix n x = O(x^{-(n+4)})` is equivalent to the cleaner
-statement that `lorMix n s = -2 · (d/ds)^n (lor²)(s)`, where `lor² s = (lor s)²`
-decays as `O(s^{-4})`.  Each derivative of `lor²` decays one order faster,
-giving the desired `O(s^{-(n+4)})`. -/
+`lorMix n s = -2 · (d/ds)^n (lor²)(s)`, where `lor² s = (lor s)²`.  This is
+the bridge between the two rescalings above:  the paper's profile
+`quadInv a t = ((a²+4t²)²)⁻¹` is `a⁻⁴ · lorSq(2t/a)`, so
+`mixedDerivExpr_eq_lorMix` and `mixedDerivExpr_eq_quadInv` are two readings
+of the same identity.  It is also what gives the closed forms
+`lorMix 0 = -2·lor²` and `lorMix 1 s = 8s·lor³` used by the sign lemmas
+of §7a. -/
 
 /-- Squared Lorentzian profile `lorSq s = (lor s)² = 1/(1+s²)²`.  Closed
-    form for `lorMix 0` (cf. `lorMix_zero` below), and the iterate-decay
-    target for `lorMix_isO`. -/
+    form for `lorMix 0` (cf. `lorMix_zero` below), and the profile behind
+    the paper's `quadInv` (see `iteratedDeriv_quadInv_eq_lorSq`). -/
 private noncomputable def lorSq (s : ℝ) : ℝ := lor s ^ 2
 
 private lemma contDiff_lorSq : ContDiff ℝ ⊤ lorSq :=
@@ -2595,874 +2591,527 @@ private lemma lorMix_eq_iteratedDeriv_lorSq (n : ℕ) (s : ℝ) :
       h_iter_at.const_mul _
     exact h_deriv_lorMix.unique h_neg2
 
-/-! ### Polynomial-rational representation for `iteratedDeriv n lorSq`.
+/-! ### The paper's differentiation-under-the-integral-sign computation
 
-Each derivative of `lorSq` has the closed form
-`(lorSqNumer n).eval s / (1+s²)^(n+2)` where `lorSqNumer n` is a real
-polynomial of degree at most `n`.  Combined with the polynomial bound
-`|R.eval s| ≲ (1+|s|)^R.natDegree` and `(1+s²)^(n+2) ≥ s^(2n+4)` for
-`s ≥ 1`, this gives the asymptotic `O(s^{-(n+4)})`. -/
+This sub-section follows the proof of Theorem 1 in §2 of the paper verbatim.
+After the integration by parts of `jK_eq_sigma_integral`, the remaining task
+is to differentiate
 
-/-- Numerator polynomial in the rational representation
-    `iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1+s²)^(n+2)`.
+    `j(t) = 2 ∫₀^∞ σ(u) (u + 1/4) / ((u + 1/4)² + (t/2)²)² du`
 
-    Quotient-rule recursion: if `f(s) = R(s) / (1+s²)^(n+2)`, then
-        `f'(s) = [R'(s)·(1+s²) − 2(n+2)·s·R(s)] / (1+s²)^(n+3)`. -/
-private noncomputable def lorSqNumer : ℕ → Polynomial ℝ
-  | 0 => 1
-  | n + 1 => (lorSqNumer n).derivative * (Polynomial.X ^ 2 + 1)
-              - Polynomial.C (2 * ((n : ℝ) + 2)) * Polynomial.X * (lorSqNumer n)
+`n` times *under the integral sign* and to estimate the result.  Writing
+`a = 4u + 1` (so that `(u+1/4)² + (t/2)² = (a² + 4t²)/16`), the integrand's
+`t`-dependence is carried entirely by
 
-/-- Degree bound on the numerator polynomial:  `(lorSqNumer n).natDegree ≤ n`.
+    `quadInv a t = ((a² + 4t²)²)⁻¹`,
 
-    Induction on `n`.  Base: `lorSqNumer 0 = 1` has degree 0.
-    Step: from the recursion,
-      `((lorSqNumer k).derivative * (X² + 1)).natDegree ≤ k + 1`
-      `(C · X · (lorSqNumer k)).natDegree ≤ k + 1`
-    (using `natDegree_mul_le`, `natDegree_derivative_le`); their difference
-    inherits the bound via `natDegree_sub_le`. -/
-private lemma lorSqNumer_natDegree_le (n : ℕ) : (lorSqNumer n).natDegree ≤ n := by
+and `∂ᵤ ∂ₜⁿ kernel(u,t) = −128 · a · ∂ₜⁿ quadInv a t`
+(`mixedDerivExpr_eq_quadInv`).
+
+Differentiating `quadInv` `n` times produces exactly the sum displayed in the
+paper,
+
+    `∂ₜⁿ (a² + 4t²)⁻² = ∑_{r} dsC n r · t^(2r−n) / (a² + 4t²)^(r+2)`
+
+(`iteratedDeriv_quadInv`), whose coefficients `dsC n r` obey the two-term
+recursion coming from the product rule; they vanish outside the paper's range
+`⌈n/2⌉ ≤ r ≤ n`, but only `r ≤ n` (`dsC_eq_zero_of_lt`) is needed here — the
+terms with `2r < n` carry a *negative* power of `t` and are therefore already
+smaller than `t^(−n−2)`.
+
+Each of the resulting `u`-integrals is evaluated in closed form by the paper's
+substitution `v = (4u+1)² + 4t²`, `dv = 8(4u+1) du`:
+
+    `∫₀^∞ (4u+1) / ((4u+1)² + 4t²)^(r+2) du = 1 / (8(r+1)(1 + 4t²)^(r+1))`
+
+(`integral_quadPow`, obtained from the explicit antiderivative `quadAnti`).
+Combining this with the paper's two elementary bounds `0 ≤ σ ≤ 1/8` and
+`1 + 4t² ≥ 4t²` and summing over `r` yields `sigma_mixedDerivExpr_isO`, i.e.
+`j⁽ⁿ⁾(t) ≪ₙ t^(−n−2)`. -/
+
+/-- The `t`-profile of the integration-by-parts kernel, at scale `a = 4u + 1`:
+    `quadInv a t = ((a² + 4t²)²)⁻¹`.  Up to the constant `64·a` this is the
+    integrand `(u+1/4)/((u+1/4)² + (t/2)²)²` of the paper's IBP'd formula. -/
+private noncomputable def quadInv (a : ℝ) (t : ℝ) : ℝ := ((a ^ 2 + 4 * t ^ 2) ^ 2)⁻¹
+
+/-- Coefficients of the paper's expansion of `∂ₜⁿ (a² + 4t²)⁻²` as a sum of
+    terms `t^(2r−n) / (a² + 4t²)^(r+2)`.
+
+    They are `a`-independent and satisfy the product-rule recursion
+    `dsC (n+1) r = dsC n r · (2r − n) − 8(r+1) · dsC n (r−1)`,
+    obtained from
+    `d/dt [t^p / (a²+4t²)^q] = p·t^(p−1)/(a²+4t²)^q − 8q·t^(p+1)/(a²+4t²)^(q+1)`
+    with `p = 2r − n`, `q = r + 2`. -/
+private noncomputable def dsC : ℕ → ℕ → ℝ
+  | 0,     r     => if r = 0 then 1 else 0
+  | n + 1, 0     => dsC n 0 * (0 - (n : ℝ))
+  | n + 1, r + 1 => dsC n (r + 1) * (2 * ((r : ℝ) + 1) - n) - 8 * ((r : ℝ) + 2) * dsC n r
+
+/-- The `r`-th elementary profile of the expansion:
+    `dsPow m a r t = t^(2r−m) / (a² + 4t²)^(r+2)` (integer exponent, so no
+    truncated subtraction: the terms with `2r < m` simply carry a negative
+    power of `t`). -/
+private noncomputable def dsPow (m : ℕ) (a : ℝ) (r : ℕ) (t : ℝ) : ℝ :=
+  t ^ (2 * (r : ℤ) - m) / (a ^ 2 + 4 * t ^ 2) ^ (r + 2)
+
+/-- The expansion of `∂ₜⁿ (a²+4t²)⁻²` involves only `r ≤ n`:  `dsC n r = 0`
+    for `r > n`.  Induction on `n` through the two-term recursion. -/
+private lemma dsC_eq_zero_of_lt : ∀ (n r : ℕ), n < r → dsC n r = 0 := by
+  intro n
   induction n with
   | zero =>
-    -- `lorSqNumer 0 = 1`, and `(1 : Polynomial ℝ).natDegree = 0`.
-    change (1 : Polynomial ℝ).natDegree ≤ 0
-    simp
-  | succ k ih =>
-    -- Unfold the recursion: `lorSqNumer (k+1) = R.derivative * (X² + 1) − C(2(k+2)) · X · R`
-    -- where `R = lorSqNumer k`.
-    change ((lorSqNumer k).derivative * (Polynomial.X ^ 2 + 1)
-            - Polynomial.C (2 * ((k : ℝ) + 2)) * Polynomial.X * (lorSqNumer k)).natDegree
-          ≤ k + 1
-    refine (Polynomial.natDegree_sub_le _ _).trans ?_
-    refine max_le ?_ ?_
-    · -- First term:  `R.derivative * (X² + 1)`.
-      -- Case split: if `R` is constant, `R.derivative = 0` and the product is `0`.
-      rcases Nat.eq_zero_or_pos (lorSqNumer k).natDegree with hzero | hpos
-      · have h_const : lorSqNumer k = Polynomial.C ((lorSqNumer k).coeff 0) :=
-          Polynomial.eq_C_of_natDegree_le_zero hzero.le
-        rw [h_const, Polynomial.derivative_C, zero_mul, Polynomial.natDegree_zero]
-        exact Nat.zero_le _
-      · -- Non-constant case: `R.derivative.natDegree ≤ R.natDegree − 1`, and
-        -- `(X² + 1).natDegree = 2`, so the product has natDegree `≤ R.natDegree + 1 ≤ k + 1`.
-        refine Polynomial.natDegree_mul_le.trans ?_
-        have hX2 : (Polynomial.X ^ 2 + 1 : Polynomial ℝ).natDegree = 2 := by
-          compute_degree!
-        rw [hX2]
-        have hderiv : (lorSqNumer k).derivative.natDegree ≤ (lorSqNumer k).natDegree - 1 :=
-          Polynomial.natDegree_derivative_le _
-        omega
-    · -- Second term:  `C(2(k+2)) · X · R`.
-      -- `(C · X).natDegree ≤ 1`, and `R.natDegree ≤ k` by IH, so total `≤ k + 1`.
-      refine Polynomial.natDegree_mul_le.trans ?_
-      have hCX : (Polynomial.C (2 * ((k : ℝ) + 2)) * Polynomial.X).natDegree ≤ 1 := by
-        refine Polynomial.natDegree_mul_le.trans ?_
-        rw [Polynomial.natDegree_C, Polynomial.natDegree_X]
-      omega
+    intro r hr
+    cases r with
+    | zero => omega
+    | succ k => simp [dsC]
+  | succ m ih =>
+    intro r hr
+    cases r with
+    | zero => omega
+    | succ k =>
+      have h1 : m < k := by omega
+      have h2 : m < k + 1 := by omega
+      simp [dsC, ih k h1, ih (k + 1) h2]
 
-/-- Rational-function representation:
-    `iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1 + s²)^(n + 2)`.
+/-- Re-indexing identity behind the induction step of `iteratedDeriv_quadInv`.
 
-    Induction on `n`.  Base: `lorSq s = 1/(1+s²)² = (lorSqNumer 0).eval s / (1+s²)^2`.
-    Step: `iteratedDeriv (k+1) lorSq s = (d/ds) (iteratedDeriv k lorSq) s`;
-    differentiate the IH via the quotient rule and match against the
-    `lorSqNumer (k+1)` recursion. -/
-private lemma iteratedDeriv_lorSq_eq (n : ℕ) (s : ℝ) :
-    iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2) := by
-  induction n generalizing s with
+    Differentiating the order-`n` expansion term by term produces, for each
+    `r ≤ n`, a contribution `dsC n r · (2r−n)` at index `r` and a contribution
+    `−8(r+2)·dsC n r` at index `r+1`; collecting them is exactly the `dsC`
+    recursion.  Stated for an arbitrary weight family `W` (instantiated with
+    `W r = dsPow (n+1) a r t`); the `r = n+1` boundary term vanishes by
+    `dsC_eq_zero_of_lt`. -/
+private lemma dsC_sum_step (n : ℕ) (W : ℕ → ℝ) :
+    ∑ r ∈ Finset.range (n + 1),
+        (dsC n r * (2 * (r : ℝ) - n) * W r - 8 * ((r : ℝ) + 2) * dsC n r * W (r + 1))
+      = ∑ r ∈ Finset.range (n + 2), dsC (n + 1) r * W r := by
+  have hR : ∑ r ∈ Finset.range (n + 2), dsC (n + 1) r * W r
+      = (∑ r ∈ Finset.range (n + 1), dsC (n + 1) (r + 1) * W (r + 1))
+        + dsC (n + 1) 0 * W 0 := Finset.sum_range_succ' _ _
+  have hzero : dsC n (n + 1) = 0 := dsC_eq_zero_of_lt n (n + 1) (by omega)
+  have hR2 : (∑ r ∈ Finset.range (n + 1), dsC (n + 1) (r + 1) * W (r + 1))
+      = (∑ r ∈ Finset.range (n + 1), dsC n (r + 1) * (2 * ((r : ℝ) + 1) - n) * W (r + 1))
+        - ∑ r ∈ Finset.range (n + 1), 8 * ((r : ℝ) + 2) * dsC n r * W (r + 1) := by
+    rw [← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl fun r _ => ?_
+    change (dsC n (r + 1) * (2 * ((r : ℝ) + 1) - n)
+      - 8 * ((r : ℝ) + 2) * dsC n r) * W (r + 1) = _
+    ring
+  have hshift : (∑ r ∈ Finset.range (n + 1), dsC n (r + 1) * (2 * ((r : ℝ) + 1) - n) * W (r + 1))
+      = ∑ r ∈ Finset.range n, dsC n (r + 1) * (2 * ((r : ℝ) + 1) - n) * W (r + 1) := by
+    rw [Finset.sum_range_succ, hzero]
+    ring
+  have hL1 : ∑ r ∈ Finset.range (n + 1), dsC n r * (2 * (r : ℝ) - n) * W r
+      = (∑ r ∈ Finset.range n, dsC n (r + 1) * (2 * ((r : ℝ) + 1) - n) * W (r + 1))
+        + dsC n 0 * (0 - (n : ℝ)) * W 0 := by
+    rw [Finset.sum_range_succ' (fun r => dsC n r * (2 * (r : ℝ) - n) * W r) n]
+    push_cast
+    norm_num
+  have hd0 : dsC (n + 1) 0 = dsC n 0 * (0 - (n : ℝ)) := rfl
+  rw [Finset.sum_sub_distrib, hL1, hR, hR2, hshift, hd0]
+  ring
+
+/-- Derivative of a single term of the expansion:
+    `d/dt [c · t^(2r−n)/(a²+4t²)^(r+2)]
+       = c(2r−n)·t^(2r−(n+1))/(a²+4t²)^(r+2)
+         − 8(r+2)c·t^(2(r+1)−(n+1))/(a²+4t²)^(r+3)`,
+    i.e. a contribution at index `r` plus one at index `r+1` of the
+    order-`(n+1)` expansion.  This is the product rule that generates the
+    `dsC` recursion. -/
+private lemma hasDerivAt_dsTerm (n r : ℕ) {a : ℝ} (ha : 0 < a) {t : ℝ} (ht : 0 < t) :
+    HasDerivAt (fun s : ℝ => dsC n r * dsPow n a r s)
+      (dsC n r * (2 * (r : ℝ) - n) * dsPow (n + 1) a r t
+        - 8 * ((r : ℝ) + 2) * dsC n r * dsPow (n + 1) a (r + 1) t) t := by
+  have hD : (0 : ℝ) < a ^ 2 + 4 * t ^ 2 := by positivity
+  have hz : HasDerivAt (fun s : ℝ => s ^ (2 * (r : ℤ) - n))
+      (((2 * (r : ℤ) - n : ℤ) : ℝ) * t ^ (2 * (r : ℤ) - n - 1)) t :=
+    hasDerivAt_zpow _ _ (Or.inl ht.ne')
+  have hbase : HasDerivAt (fun s : ℝ => a ^ 2 + 4 * s ^ 2) (8 * t) t := by
+    have := ((hasDerivAt_pow 2 t).const_mul (4 : ℝ)).const_add (a ^ 2)
+    convert this using 1
+    ring
+  have hd : HasDerivAt (fun s : ℝ => (a ^ 2 + 4 * s ^ 2) ^ (r + 2))
+      (((r : ℝ) + 2) * (a ^ 2 + 4 * t ^ 2) ^ (r + 1) * (8 * t)) t := by
+    have := hbase.pow (r + 2)
+    convert this using 1
+    push_cast
+    ring
+  have hinv := hd.inv (by positivity)
+  have hmain := (hz.mul hinv).const_mul (dsC n r)
+  simp only [Pi.mul_apply, Pi.inv_apply] at hmain
+  have hfun : (fun s : ℝ => dsC n r * dsPow n a r s)
+      = fun s : ℝ => dsC n r *
+          (s ^ (2 * (r : ℤ) - n) * ((a ^ 2 + 4 * s ^ 2) ^ (r + 2))⁻¹) := by
+    funext s; simp only [dsPow, div_eq_mul_inv]
+  rw [hfun]
+  convert hmain using 1
+  have h1 : t ^ (2 * (r : ℤ) - ((n : ℤ) + 1)) = t ^ (2 * (r : ℤ) - n) / t := by
+    rw [show (2 * (r : ℤ) - ((n : ℤ) + 1)) = (2 * (r : ℤ) - n) - 1 from by ring,
+        zpow_sub₀ ht.ne', zpow_one]
+  have h2 : t ^ (2 * ((r : ℤ) + 1) - ((n : ℤ) + 1)) = t ^ (2 * (r : ℤ) - n) * t := by
+    rw [show (2 * ((r : ℤ) + 1) - ((n : ℤ) + 1)) = (2 * (r : ℤ) - n) + 1 from by ring,
+        zpow_add₀ ht.ne', zpow_one]
+  have h3 : t ^ (2 * (r : ℤ) - n - 1) = t ^ (2 * (r : ℤ) - n) / t := by
+    rw [zpow_sub₀ ht.ne', zpow_one]
+  simp only [dsPow]
+  push_cast
+  rw [h1, h2, h3]
+  have hE1 : (a ^ 2 + 4 * t ^ 2) ^ (r + 1)
+      = (a ^ 2 + 4 * t ^ 2) ^ r * (a ^ 2 + 4 * t ^ 2) ^ 1 := pow_add _ _ _
+  have hE2 : (a ^ 2 + 4 * t ^ 2) ^ (r + 2)
+      = (a ^ 2 + 4 * t ^ 2) ^ r * (a ^ 2 + 4 * t ^ 2) ^ 2 := pow_add _ _ _
+  have hE3 : (a ^ 2 + 4 * t ^ 2) ^ (r + 1 + 2)
+      = (a ^ 2 + 4 * t ^ 2) ^ r * (a ^ 2 + 4 * t ^ 2) ^ 3 := by
+    rw [show r + 1 + 2 = r + 3 from rfl]; exact pow_add _ _ _
+  rw [hE1, hE2, hE3]
+  have hEpos : (0 : ℝ) < (a ^ 2 + 4 * t ^ 2) ^ r := pow_pos hD r
+  generalize hEg : (a ^ 2 + 4 * t ^ 2) ^ r = E at hEpos ⊢
+  generalize hPg : t ^ (2 * (r : ℤ) - n) = P
+  field_simp
+  ring
+
+/-- **The paper's expansion of the `n`-th `t`-derivative under the integral
+    sign** (`t > 0`, `a > 0`):
+
+        `∂ₜⁿ ((a² + 4t²)²)⁻¹ = ∑_{r ≤ n} dsC n r · t^(2r−n) / (a² + 4t²)^(r+2)`.
+
+    Induction on `n`: the derivative of the order-`n` expansion is computed
+    term by term (`hasDerivAt_dsTerm`) and re-indexed by `dsC_sum_step`. -/
+private lemma iteratedDeriv_quadInv (n : ℕ) {a : ℝ} (ha : 0 < a) :
+    ∀ t : ℝ, 0 < t →
+      iteratedDeriv n (quadInv a) t = ∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n a r t := by
+  induction n with
   | zero =>
-    rw [iteratedDeriv_zero]
-    -- `lorSqNumer 0 = 1` and `(1 : Polynomial ℝ).eval s = 1`.
-    change lorSq s = (1 : Polynomial ℝ).eval s / (1 + s ^ 2) ^ (0 + 2)
-    rw [Polynomial.eval_one]
-    unfold lorSq lor
-    have h_ne : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
-    field_simp
-  | succ k ih =>
-    -- The IH is pointwise; lift to a functional equality so we can rewrite under `deriv`.
-    have h_func : iteratedDeriv k lorSq =
-        fun x => (lorSqNumer k).eval x / (1 + x ^ 2) ^ (k + 2) := by
-      funext x; exact ih x
-    rw [iteratedDeriv_succ, h_func]
-    -- Build the `HasDerivAt` facts for numerator and denominator.
-    have h_num : HasDerivAt (fun x : ℝ => (lorSqNumer k).eval x)
-        ((lorSqNumer k).derivative.eval s) s :=
-      (lorSqNumer k).hasDerivAt s
-    have h_inner : HasDerivAt (fun x : ℝ => 1 + x ^ 2) (2 * s) s := by
-      have h2 : HasDerivAt (fun x : ℝ => x ^ 2) (2 * s) s := by
-        simpa using hasDerivAt_pow 2 s
-      exact h2.const_add 1
-    have h_den : HasDerivAt (fun x : ℝ => (1 + x ^ 2) ^ (k + 2))
-        (((k : ℝ) + 2) * (1 + s ^ 2) ^ (k + 1) * (2 * s)) s := by
-      have h := h_inner.pow (k + 2)
-      have h_sub : (k + 2) - 1 = k + 1 := by omega
-      rw [h_sub] at h
-      push_cast at h
-      exact h
-    have h_pos : (0 : ℝ) < (1 + s ^ 2) ^ (k + 2) := by positivity
-    have h_ne : ((1 + s ^ 2) ^ (k + 2) : ℝ) ≠ 0 := ne_of_gt h_pos
-    have h_div := h_num.fun_div h_den h_ne
-    rw [h_div.deriv]
-    -- Unfold `lorSqNumer (k+1)` and apply `Polynomial.eval` simp lemmas.
-    rw [show lorSqNumer (k + 1) =
-            (lorSqNumer k).derivative * (Polynomial.X ^ 2 + 1)
-              - Polynomial.C (2 * ((k : ℝ) + 2)) * Polynomial.X * (lorSqNumer k)
-          from rfl]
-    simp only [Polynomial.eval_sub, Polynomial.eval_mul, Polynomial.eval_add,
-               Polynomial.eval_pow, Polynomial.eval_X, Polynomial.eval_C,
-               Polynomial.eval_one]
-    -- Algebraic match: both sides reduce to the same rational expression.
-    have h_ne1 : (1 + s ^ 2 : ℝ) ≠ 0 := ne_of_gt (lor_denom_pos s)
-    field_simp
-    ring
+    intro t ht
+    simp [dsPow, dsC, quadInv]
+  | succ n ih =>
+    intro t ht
+    have hev : iteratedDeriv n (quadInv a)
+        =ᶠ[nhds t] fun s => ∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n a r s := by
+      filter_upwards [isOpen_Ioi.mem_nhds (Set.mem_Ioi.mpr ht)] with s hs using ih s hs
+    have hderiv : HasDerivAt (fun s => ∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n a r s)
+        (∑ r ∈ Finset.range (n + 1),
+          (dsC n r * (2 * (r : ℝ) - n) * dsPow (n + 1) a r t
+            - 8 * ((r : ℝ) + 2) * dsC n r * dsPow (n + 1) a (r + 1) t)) t := by
+      have hsum := HasDerivAt.sum (u := Finset.range (n + 1))
+        (A := fun (r : ℕ) (s : ℝ) => dsC n r * dsPow n a r s)
+        (fun r _ => hasDerivAt_dsTerm n r ha ht)
+      have heq : (∑ x ∈ Finset.range (n + 1), fun s : ℝ => dsC n x * dsPow n a x s)
+          = fun s : ℝ => ∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n a r s := by
+        funext s; exact Finset.sum_apply s _ _
+      rw [heq] at hsum
+      simpa [Finset.sum_sub_distrib] using hsum
+    rw [iteratedDeriv_succ, hev.deriv_eq, hderiv.deriv,
+        dsC_sum_step n (fun r => dsPow (n + 1) a r t)]
 
-/-- Asymptotic bound on the iterated derivative of `lor²`:
-    `iteratedDeriv n lorSq s = O(s^{-(n+4)})` as `s → +∞`.
-
-    Combines the rational representation `iteratedDeriv_lorSq_eq` with the
-    polynomial bound (from `lorSqNumer_natDegree_le`) and the denominator
-    bound `(1+s²)^(n+2) ≥ s^(2n+4)` for `s ≥ 1`. -/
-private lemma iteratedDeriv_lorSq_isO (n : ℕ) :
-    IsO (iteratedDeriv n lorSq) (fun s : ℝ => s ^ (-(n : ℝ) - 4)) 𝓝∞ := by
-  -- Step 1: replace the iterated derivative by its rational form.
-  have h_fun_eq : iteratedDeriv n lorSq =
-      fun s => (lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2) := by
-    funext s; exact iteratedDeriv_lorSq_eq n s
-  rw [h_fun_eq]
-  -- Step 2: polynomial bound on the numerator.
-  have h_num : (fun s : ℝ => (lorSqNumer n).eval s) =O[atTop] (fun s : ℝ => s ^ n) := by
-    have h_deg : (lorSqNumer n).degree ≤ ((Polynomial.X : Polynomial ℝ) ^ n).degree := by
-      rw [Polynomial.degree_X_pow]
-      calc (lorSqNumer n).degree
-          ≤ ((lorSqNumer n).natDegree : WithBot ℕ) := Polynomial.degree_le_natDegree
-        _ ≤ (n : WithBot ℕ) := by exact_mod_cast lorSqNumer_natDegree_le n
-    have h := Polynomial.isBigO_atTop_of_degree_le _ _ h_deg
-    simpa using h
-  -- Step 3: denominator-inverse bound `1/(1+s²)^(n+2) ≤ 1/s^(2(n+2))` for `s ≥ 1`.
-  have h_inv : (fun s : ℝ => 1 / (1 + s ^ 2) ^ (n + 2))
-      =O[atTop] (fun s : ℝ => 1 / s ^ (2 * (n + 2))) := by
-    refine IsBigO.of_bound 1 ?_
-    filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with s hs
-    have hs_pos : 0 < s := zero_lt_one.trans_le hs
-    have h_s2_le : s ^ 2 ≤ 1 + s ^ 2 := by linarith [sq_nonneg s]
-    have h_pow_le : s ^ (2 * (n + 2)) ≤ (1 + s ^ 2) ^ (n + 2) := by
-      calc s ^ (2 * (n + 2))
-          = (s ^ 2) ^ (n + 2) := by rw [← pow_mul]
-        _ ≤ (1 + s ^ 2) ^ (n + 2) := pow_le_pow_left₀ (sq_nonneg s) h_s2_le _
-    have h_pos1 : 0 < (1 + s ^ 2) ^ (n + 2) := by positivity
-    have h_pos2 : 0 < s ^ (2 * (n + 2)) := by positivity
-    rw [Real.norm_eq_abs, Real.norm_eq_abs, one_mul,
-        abs_of_pos (one_div_pos.mpr h_pos1), abs_of_pos (one_div_pos.mpr h_pos2)]
-    exact one_div_le_one_div_of_le h_pos2 h_pow_le
-  -- Step 4: combine via `IsBigO.mul`, after rewriting division as multiplication.
-  have h_split : (fun s : ℝ => (lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2)) =
-      (fun s : ℝ => (lorSqNumer n).eval s * (1 / (1 + s ^ 2) ^ (n + 2))) := by
-    funext s; rw [mul_one_div]
-  rw [h_split]
-  refine (h_num.mul h_inv).trans ?_
-  -- Step 5: show `s^n * (1/s^(2(n+2))) =O[atTop] s^(-(n:ℝ) - 4)`.
-  refine IsBigO.of_bound 1 ?_
-  filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with s hs
-  have hs_ne : s ≠ 0 := ne_of_gt hs
-  rw [Real.norm_eq_abs, Real.norm_eq_abs, one_mul]
-  -- Both sides equal `1/s^(n+4)` for `s > 0`.
-  have h_lhs : s ^ n * (1 / s ^ (2 * (n + 2))) = 1 / s ^ (n + 4) := by
-    rw [mul_one_div, show 2 * (n + 2) = n + (n + 4) from by ring, pow_add,
-        div_mul_eq_div_div, div_self (pow_ne_zero _ hs_ne)]
-  have h_rhs : s ^ (-(n : ℝ) - 4) = 1 / s ^ (n + 4) := by
-    rw [show (-(n : ℝ) - 4) = -((n + 4 : ℕ) : ℝ) from by push_cast; ring,
-        rpow_neg_nat_eq_inv hs (n + 4), one_div]
-  rw [h_lhs, h_rhs]
-
-/-- Asymptotic cancellation:  `lorMix n s = O(s^{-(n+4)})` as `s → +∞`.
-
-    Follows from `lorMix_eq_iteratedDeriv_lorSq` (rewriting `lorMix n` as
-    `-2 · (d/ds)^n (lor²)`) and `iteratedDeriv_lorSq_isO` (the asymptotic on
-    the iterated derivative).  The constant factor `-2` is absorbed by
-    `IsBigO.const_mul_left`. -/
-private lemma lorMix_isO (n : ℕ) :
-    IsO (lorMix n) (fun x : ℝ => x ^ (-(n : ℝ) - 4)) 𝓝∞ := by
-  have h_eq : lorMix n = fun s : ℝ => -2 * iteratedDeriv n lorSq s := by
-    funext s; exact lorMix_eq_iteratedDeriv_lorSq n s
-  rw [h_eq]
-  exact (iteratedDeriv_lorSq_isO n).const_mul_left _
-
-/-! ### Sub-lemmas for `sigma_lorMix_integral_isO`.
-
-The σ-weighted integral asymptotic decomposes into:
-- `lorMix_continuous` (proved): direct from the rational representation.
-- `lorMix_bounded_on_nonneg`: continuity (compact prefix) + `lorMix_isO`
-  (tail) ⟹ uniform bound on `[0, ∞)`.
-- `lorMix_unified_decay_on_nonneg`: combines the two regimes into a single
-  pointwise bound `|lorMix n y| ≤ K · (1 + y^(n+4))⁻¹` for `y ≥ 0`.
-- `sigma_lorMix_integral_isO` (main): integrating the unified bound against
-  the σ-weighted kernel produces the displayed `O(t^{-(n+2)})`. -/
-
-/-- **`lorMix n` is continuous on `ℝ`.**
-
-Direct from the rational representation
-`iteratedDeriv n lorSq s = (lorSqNumer n).eval s / (1 + s²)^(n+2)`:
-the numerator is a polynomial (continuous), the denominator is the
-`(n+2)`-th power of `1 + s² ≥ 1 > 0`, and `lorMix n s = −2 · iteratedDeriv n lorSq s`. -/
-private lemma lorMix_continuous (n : ℕ) : Continuous (lorMix n) := by
-  have h_eq : lorMix n =
-      fun s : ℝ => -2 * ((lorSqNumer n).eval s / (1 + s ^ 2) ^ (n + 2)) := by
+/-- Rescaling `quadInv` onto the Lorentzian square:
+    `quadInv a t = a⁻⁴ · lorSq(2t/a)`, hence
+    `∂ₜⁿ quadInv a t = a⁻⁴ · (2/a)ⁿ · (lorSq)⁽ⁿ⁾(2t/a)`. -/
+private lemma iteratedDeriv_quadInv_eq_lorSq (n : ℕ) {a : ℝ} (ha : 0 < a) (t : ℝ) :
+    iteratedDeriv n (quadInv a) t
+      = (a ^ 4)⁻¹ * (2 / a) ^ n * iteratedDeriv n lorSq ((2 / a) * t) := by
+  have ha_ne : a ≠ 0 := ne_of_gt ha
+  have hfun : quadInv a = fun s : ℝ => (a ^ 4)⁻¹ * lorSq ((2 / a) * s) := by
     funext s
-    rw [lorMix_eq_iteratedDeriv_lorSq, iteratedDeriv_lorSq_eq]
-  rw [h_eq]
-  refine ((lorSqNumer n).continuous.div ?_ (fun s => ?_)).const_mul (-2 : ℝ)
-  · exact (continuous_const.add (continuous_id.pow 2)).pow (n + 2)
-  · positivity
+    have hd : (0 : ℝ) < a ^ 2 + 4 * s ^ 2 := by positivity
+    have h1 : 1 + ((2 / a) * s) ^ 2 = (a ^ 2 + 4 * s ^ 2) / a ^ 2 := by
+      field_simp; ring
+    unfold quadInv lorSq lor
+    rw [h1]
+    field_simp
+  rw [hfun, iteratedDeriv_const_mul_field (a ^ 4)⁻¹ (fun s => lorSq ((2 / a) * s)),
+      show (iteratedDeriv n fun s : ℝ => lorSq ((2 / a) * s)) =
+        (fun s : ℝ => (2 / a) ^ n * iteratedDeriv n lorSq ((2 / a) * s)) from
+      iteratedDeriv_comp_const_mul (contDiff_lorSq.of_le le_top) _]
+  ring
 
-/-- **`lorMix n` is uniformly bounded on `[0, ∞)`.**
+/-- **The IBP kernel in the paper's variables.**  With `a = 4u + 1`,
 
-By `lorMix_continuous`, `|lorMix n|` is bounded on every compact interval
-`[0, Y]`.  By `lorMix_isO`, for `y ≥ Y₀` (some threshold) we have
-`|lorMix n y| ≤ C · y^{−(n+4)} ≤ C · Y₀^{−(n+4)}`.  Taking `Y = max(1, Y₀)`
-and combining the two bounds gives a global `M` for `y ∈ [0, ∞)`. -/
-private lemma lorMix_bounded_on_nonneg (n : ℕ) :
-    ∃ M : ℝ, 0 ≤ M ∧ ∀ y : ℝ, 0 ≤ y → |lorMix n y| ≤ M := by
-  -- Step 1: extract a tail bound `C` from `lorMix_isO`.
-  obtain ⟨C, hC⟩ := (lorMix_isO n).bound
-  rw [Filter.eventually_atTop] at hC
-  obtain ⟨Y₀, hY₀⟩ := hC
-  -- Threshold for which we also have `y ≥ 1` (so `y^{-(n:ℝ) - 4} ≤ 1`).
-  set Y₁ : ℝ := max Y₀ 1 with hY₁_def
-  have hY₁_ge_Y₀ : Y₀ ≤ Y₁ := le_max_left _ _
-  have hY₁_ge_1 : (1 : ℝ) ≤ Y₁ := le_max_right _ _
-  -- Step 2: continuity bound on the compact prefix `[0, Y₁]`.
-  have h_compact : IsCompact (Set.Icc (0 : ℝ) Y₁) := isCompact_Icc
-  have h_cont_abs : Continuous (fun y : ℝ => |lorMix n y|) := (lorMix_continuous n).abs
-  obtain ⟨M₁, hM₁⟩ := h_compact.bddAbove_image h_cont_abs.continuousOn
-  -- `hM₁ : M₁ ∈ upperBounds (|lorMix n ·| '' Icc 0 Y₁)`.
-  -- Step 3: combine the two bounds.  Take `max M₁ (max C 0)` for non-negativity.
-  refine ⟨max M₁ (max C 0), (le_max_right C 0).trans (le_max_right _ _), fun y hy => ?_⟩
-  by_cases h_split : y ≤ Y₁
-  · -- `y ∈ [0, Y₁]`: use the compact bound `M₁`.
-    have h_mem : (|lorMix n y| : ℝ) ∈ (fun y => |lorMix n y|) '' Set.Icc 0 Y₁ :=
-      ⟨y, ⟨hy, h_split⟩, rfl⟩
-    have h_le_M₁ : |lorMix n y| ≤ M₁ := hM₁ h_mem
-    exact h_le_M₁.trans (le_max_left _ _)
-  · -- `y > Y₁`: use the asymptotic bound.  Here `y ≥ Y₀` and `y ≥ 1`.
-    rw [not_le] at h_split
-    have h_y_ge_Y₀ : Y₀ ≤ y := hY₁_ge_Y₀.trans h_split.le
-    have h_y_ge_1 : (1 : ℝ) ≤ y := hY₁_ge_1.trans h_split.le
-    have h_y_pos : (0 : ℝ) < y := zero_lt_one.trans_le h_y_ge_1
-    have h_norm_bound : ‖lorMix n y‖ ≤ C * ‖y ^ (-(n : ℝ) - 4)‖ := hY₀ y h_y_ge_Y₀
-    -- `y^{-(n:ℝ) - 4} ≤ 1` since `y ≥ 1` and the exponent is `≤ 0`.
-    have h_rpow_pos : 0 < y ^ (-(n : ℝ) - 4) := Real.rpow_pos_of_pos h_y_pos _
-    have h_rpow_le_one : y ^ (-(n : ℝ) - 4) ≤ 1 :=
-      Real.rpow_le_one_of_one_le_of_nonpos h_y_ge_1
-        (by have : (0 : ℝ) ≤ n := Nat.cast_nonneg n; linarith)
-    have h_norm_rpow_le : ‖y ^ (-(n : ℝ) - 4)‖ ≤ 1 := by
-      rw [Real.norm_eq_abs, abs_of_pos h_rpow_pos]; exact h_rpow_le_one
-    -- `C ≥ 0`: otherwise `C * ‖y^…‖` would be negative, contradicting `0 ≤ ‖lorMix n y‖`.
-    have h_norm_rpow_pos : 0 < ‖y ^ (-(n : ℝ) - 4)‖ := by
-      rw [Real.norm_eq_abs]; exact abs_pos.mpr (ne_of_gt h_rpow_pos)
-    have h_C_nonneg : 0 ≤ C := by
-      by_contra h
-      rw [not_le] at h
-      have : C * ‖y ^ (-(n : ℝ) - 4)‖ < 0 := mul_neg_of_neg_of_pos h h_norm_rpow_pos
-      linarith [norm_nonneg (lorMix n y), h_norm_bound]
-    calc |lorMix n y|
-        = ‖lorMix n y‖ := (Real.norm_eq_abs _).symm
-      _ ≤ C * ‖y ^ (-(n : ℝ) - 4)‖ := h_norm_bound
-      _ ≤ C * 1 := mul_le_mul_of_nonneg_left h_norm_rpow_le h_C_nonneg
-      _ = C := mul_one _
-      _ ≤ max C 0 := le_max_left _ _
-      _ ≤ max M₁ (max C 0) := le_max_right _ _
+        `∂ᵤ ∂ₜⁿ kernel(u,t) = −128 · a · ∂ₜⁿ ((a² + 4t²)²)⁻¹`,
 
-/-- **Unified pointwise decay bound for `lorMix n` on `[0, ∞)`.**
-
-For some `K ≥ 0` and all `y ≥ 0`,
-        `|lorMix n y| ≤ K · (1 + y^(n+4))⁻¹`.
-
-For `y ∈ [0, 1]`: `1 + y^(n+4) ≤ 2`, so `(1 + y^(n+4))⁻¹ ≥ 1/2`, and
-`lorMix_bounded_on_nonneg` provides `|lorMix n y| ≤ M ≤ 2M · (1 + y^(n+4))⁻¹`.
-
-For `y ≥ 1`: `1 + y^(n+4) ≤ 2 · y^(n+4)`, so `(1 + y^(n+4))⁻¹ ≥ (2 y^(n+4))⁻¹`,
-and `lorMix_isO` provides `|lorMix n y| ≤ C · y^{−(n+4)} ≤ 2C · (1 + y^(n+4))⁻¹`.
-
-Take `K = 2 · max(M, C)`. -/
-private lemma lorMix_unified_decay_on_nonneg (n : ℕ) :
-    ∃ K : ℝ, 0 ≤ K ∧ ∀ y : ℝ, 0 ≤ y → |lorMix n y| ≤ K / (1 + y ^ (n + 4)) := by
-  obtain ⟨M, hM_nn, hM⟩ := lorMix_bounded_on_nonneg n
-  obtain ⟨C, hC⟩ := (lorMix_isO n).bound
-  rw [Filter.eventually_atTop] at hC
-  obtain ⟨Y₀, hY₀⟩ := hC
-  -- `Y₁ = max(Y₀, 1)` ensures both the asymptotic bound (`y ≥ Y₀`) and `y ≥ 1`
-  -- apply on the tail.
-  set Y₁ : ℝ := max Y₀ 1 with hY₁_def
-  have hY₁_ge_Y₀ : Y₀ ≤ Y₁ := le_max_left _ _
-  have hY₁_ge_1 : (1 : ℝ) ≤ Y₁ := le_max_right _ _
-  -- `K = max(M · (1 + Y₁^(n+4)),  2 · max(C, 0))` covers both regimes.
-  -- The outer `max C 0` sidesteps a possibly-negative `C` from `IsBigO.bound`.
-  refine ⟨max (M * (1 + Y₁ ^ (n + 4))) (2 * max C 0), ?_, fun y hy => ?_⟩
-  · -- `0 ≤ K`.
-    have : 0 ≤ M * (1 + Y₁ ^ (n + 4)) := mul_nonneg hM_nn (by positivity)
-    exact le_max_of_le_left this
-  · -- The pointwise inequality.
-    have h_denom_pos : 0 < 1 + y ^ (n + 4) := by positivity
-    rw [le_div_iff₀ h_denom_pos]
-    by_cases h_split : y ≤ Y₁
-    · -- Compact regime `y ∈ [0, Y₁]`: dominate using `lorMix_bounded_on_nonneg`.
-      have h_y_bound : |lorMix n y| ≤ M := hM y hy
-      have h_y_pow_le : y ^ (n + 4) ≤ Y₁ ^ (n + 4) :=
-        pow_le_pow_left₀ hy h_split (n + 4)
-      calc |lorMix n y| * (1 + y ^ (n + 4))
-          ≤ M * (1 + Y₁ ^ (n + 4)) :=
-            mul_le_mul h_y_bound (by linarith) h_denom_pos.le hM_nn
-        _ ≤ max (M * (1 + Y₁ ^ (n + 4))) (2 * max C 0) := le_max_left _ _
-    · -- Tail regime `y > Y₁`: dominate using `lorMix_isO`.  Here `y ≥ Y₀, y ≥ 1`.
-      rw [not_le] at h_split
-      have h_y_ge_Y₀ : Y₀ ≤ y := hY₁_ge_Y₀.trans h_split.le
-      have h_y_ge_1 : (1 : ℝ) ≤ y := hY₁_ge_1.trans h_split.le
-      have h_y_pos : (0 : ℝ) < y := zero_lt_one.trans_le h_y_ge_1
-      have h_norm_bound : ‖lorMix n y‖ ≤ C * ‖y ^ (-(n : ℝ) - 4)‖ := hY₀ y h_y_ge_Y₀
-      -- Convert the rpow to a `1/y^(n+4)` form.
-      have h_rpow_eq : y ^ (-(n : ℝ) - 4) = 1 / y ^ (n + 4) := by
-        rw [show (-(n : ℝ) - 4) = -((n + 4 : ℕ) : ℝ) from by push_cast; ring,
-            rpow_neg_nat_eq_inv h_y_pos (n + 4), one_div]
-      have h_rpow_pos : 0 < y ^ (-(n : ℝ) - 4) := Real.rpow_pos_of_pos h_y_pos _
-      have h_norm_rpow : ‖y ^ (-(n : ℝ) - 4)‖ = 1 / y ^ (n + 4) := by
-        rw [Real.norm_eq_abs, abs_of_pos h_rpow_pos, h_rpow_eq]
-      have h_lorMix_le : |lorMix n y| ≤ C / y ^ (n + 4) := by
-        rw [← Real.norm_eq_abs]
-        rw [h_norm_rpow, mul_one_div] at h_norm_bound
-        exact h_norm_bound
-      -- `y^(n+4) ≥ 1` (since `y ≥ 1`), so `1 + y^(n+4) ≤ 2 · y^(n+4)`.
-      have h_y_pow_ge_one : (1 : ℝ) ≤ y ^ (n + 4) := one_le_pow₀ h_y_ge_1
-      have h_y_pow_pos : 0 < y ^ (n + 4) := zero_lt_one.trans_le h_y_pow_ge_one
-      -- `C ≥ 0`: the asymptotic bound at `y` would be contradicted otherwise.
-      have h_C_nonneg : 0 ≤ C := by
-        have h_norm_rpow_pos : 0 < ‖y ^ (-(n : ℝ) - 4)‖ := by
-          rw [h_norm_rpow]; positivity
-        by_contra h
-        rw [not_le] at h
-        have : C * ‖y ^ (-(n : ℝ) - 4)‖ < 0 := mul_neg_of_neg_of_pos h h_norm_rpow_pos
-        linarith [norm_nonneg (lorMix n y), h_norm_bound]
-      calc |lorMix n y| * (1 + y ^ (n + 4))
-          ≤ (C / y ^ (n + 4)) * (2 * y ^ (n + 4)) :=
-            mul_le_mul h_lorMix_le (by linarith) h_denom_pos.le
-              (div_nonneg h_C_nonneg h_y_pow_pos.le)
-        _ = 2 * C := by field_simp
-        _ ≤ 2 * max C 0 :=
-            mul_le_mul_of_nonneg_left (le_max_left _ _) (by norm_num)
-        _ ≤ max (M * (1 + Y₁ ^ (n + 4))) (2 * max C 0) := le_max_right _ _
-
-/-- **Integrability of the σ-weighted lorMix integrand on `Ici 0`.**
-
-For each `t ≥ 0`, the integrand
-    `u ↦ σ u · (u+1/4)^{-(n+3)} · lorMix n ((1/(2(u+1/4))) · t)`
-is dominated on `[0, ∞)` by `(M/8) · ((u+1/4)^{n+3})⁻¹`, where `M` is the
-uniform bound from `lorMix_bounded_on_nonneg n`.  The dominator is integrable
-via `integrableOn_pow_inv_shift (n+1)`.  Measurability of the integrand is
-the product of three continuous factors. -/
-private lemma integrable_sigma_lorMix_integrand (n : ℕ) {t : ℝ} (ht : 0 ≤ t) :
-    IntegrableOn (fun u : ℝ => σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
-                 (Set.Ici (0 : ℝ)) := by
-  obtain ⟨M, hM_nn, hM⟩ := lorMix_bounded_on_nonneg n
-  -- Continuity of each factor on `Ici 0`, hence AEStronglyMeasurable.
-  have h_cont : ContinuousOn
-      (fun u : ℝ => σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                            * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
-      (Set.Ici (0 : ℝ)) := by
-    refine σ_continuous.continuousOn.mul (ContinuousOn.mul ?_ ?_)
-    · -- `(u + 1/4)^{-(n+3)}` continuous on `Ici 0` (since `u + 1/4 > 0`).
-      have : ContinuousOn (fun u : ℝ => u + 1 / 4) (Set.Ici (0 : ℝ)) :=
-        (continuous_id.add continuous_const).continuousOn
-      refine this.zpow₀ _ (fun u hu => ?_)
-      left; linarith [Set.mem_Ici.mp hu]
-    · -- `lorMix n ∘ (...)` continuous on `Ici 0`.
-      refine (lorMix_continuous n).continuousOn.comp ?_ (Set.mapsTo_univ _ _)
-      have h_denom_cont : ContinuousOn (fun u : ℝ => 2 * (u + 1 / 4)) (Set.Ici (0 : ℝ)) :=
-        (continuous_const.mul (continuous_id.add continuous_const)).continuousOn
-      have h_denom_ne : ∀ u ∈ Set.Ici (0 : ℝ), 2 * (u + 1 / 4) ≠ 0 := by
-        intro u hu; have := Set.mem_Ici.mp hu; positivity
-      exact ((continuousOn_const.div h_denom_cont h_denom_ne).mul continuousOn_const)
-  have h_meas : AEStronglyMeasurable (fun u : ℝ =>
-      σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-              * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
-      (volume.restrict (Set.Ici (0 : ℝ))) :=
-    h_cont.aestronglyMeasurable measurableSet_Ici
-  -- Dominator: `(M / 8) · ((u + 1/4)^(n+3))⁻¹`.
-  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) (M / 8) h_meas ?_
-  intro u hu
-  have hu_nn : (0 : ℝ) ≤ u := Set.mem_Ici.mp hu
-  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
-  have hr_ne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr_pos
-  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
-  -- `lorMix` argument is `(1/(2(u+1/4))) * t ≥ 0` since both factors are nonneg.
-  have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
-    mul_nonneg (by positivity) ht
-  have h_lorMix_le : |lorMix n ((1 / (2 * (u + 1 / 4))) * t)| ≤ M := hM _ h_arg_nn
-  have h_σ_nn : 0 ≤ σ u := σ_nonneg u
-  have h_σ_le : σ u ≤ 1 / 8 := σ_le_eighth u
-  -- Show `|integrand| ≤ (M/8) · ((u+1/4)^(n+3))⁻¹`.
-  have h_zpow_eq : (u + 1 / 4) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
-    rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
-        zpow_neg_nat_eq_inv]
-  change ‖σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                  * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖
-          ≤ M / 8 * ((u + 1 / 4) ^ ((n + 1) + 2))⁻¹
-  rw [show (n + 1) + 2 = n + 3 from rfl, h_zpow_eq]
-  rw [Real.norm_eq_abs, abs_mul, abs_mul, abs_of_nonneg h_σ_nn,
-      abs_of_pos (inv_pos.mpr h_pow_pos)]
-  calc σ u * (((u + 1 / 4) ^ (n + 3))⁻¹ * |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|)
-      ≤ (1 / 8) * (((u + 1 / 4) ^ (n + 3))⁻¹ * M) := by gcongr
-    _ = M / 8 * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
-
-/-- **Integrability of the lorMix majorant on `Ici 0`.**
-
-For `t ≥ 0` the dominator
-    `u ↦ K · ((u+1/4)^{n+3})⁻¹ / (1 + ((1/(2(u+1/4))) · t)^{n+4})`
-is bounded by `K · ((u+1/4)^{n+3})⁻¹` (the rational factor is ≤ 1 since the
-denominator is ≥ 1), which is integrable via `integrableOn_pow_inv_shift (n+1)`. -/
-private lemma integrable_lorMix_majorant (n : ℕ) (K : ℝ) (hK : 0 ≤ K)
-    {t : ℝ} (ht : 0 ≤ t) :
-    IntegrableOn
-      (fun u : ℝ => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                          (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
-      (Set.Ici (0 : ℝ)) := by
-  have hr_pos : ∀ u ∈ Set.Ici (0 : ℝ), (0 : ℝ) < u + 1 / 4 := by
-    intro u hu; linarith [Set.mem_Ici.mp hu]
-  have h2r_ne : ∀ u ∈ Set.Ici (0 : ℝ), 2 * (u + 1 / 4) ≠ 0 := by
-    intro u hu; have := hr_pos u hu; positivity
-  have h_denom_pos : ∀ u ∈ Set.Ici (0 : ℝ),
-      (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-    intro u hu
-    have hr := hr_pos u hu
-    have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
-      mul_nonneg (by positivity) ht
-    have := pow_nonneg h_arg_nn (n + 4)
-    linarith
-  -- Continuity → AEStronglyMeasurable.
-  have h_cont : ContinuousOn
-      (fun u : ℝ => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                          (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
-      (Set.Ici (0 : ℝ)) := by
-    have hr : ContinuousOn (fun u : ℝ => u + 1 / 4) (Set.Ici (0 : ℝ)) :=
-      (continuous_id.add continuous_const).continuousOn
-    have h_pow_inv : ContinuousOn (fun u : ℝ => ((u + 1 / 4) ^ (n + 3))⁻¹)
-        (Set.Ici (0 : ℝ)) :=
-      (hr.pow (n + 3)).inv₀ (fun u hu => ne_of_gt (pow_pos (hr_pos u hu) _))
-    have h2r : ContinuousOn (fun u : ℝ => 2 * (u + 1 / 4)) (Set.Ici (0 : ℝ)) :=
-      (continuous_const.mul (continuous_id.add continuous_const)).continuousOn
-    have h_inv1 : ContinuousOn (fun u : ℝ => 1 / (2 * (u + 1 / 4)))
-        (Set.Ici (0 : ℝ)) :=
-      continuousOn_const.div h2r h2r_ne
-    have h_denom : ContinuousOn
-        (fun u : ℝ => 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
-        (Set.Ici (0 : ℝ)) :=
-      continuousOn_const.add ((h_inv1.mul continuousOn_const).pow (n + 4))
-    exact continuousOn_const.mul
-      (h_pow_inv.div h_denom (fun u hu => ne_of_gt (h_denom_pos u hu)))
-  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) K
-    (h_cont.aestronglyMeasurable measurableSet_Ici) ?_
-  intro u hu
-  have hr := hr_pos u hu
-  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr _
-  have h_inv_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := (inv_pos.mpr h_pow_pos).le
-  have h_dpos := h_denom_pos u hu
-  change ‖K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))‖
-          ≤ K * ((u + 1 / 4) ^ ((n + 1) + 2))⁻¹
-  rw [show (n + 1) + 2 = n + 3 from rfl, Real.norm_eq_abs,
-      abs_of_nonneg (by positivity)]
-  have h_div_le : ((u + 1 / 4) ^ (n + 3))⁻¹ /
-                    (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
-                  ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ :=
-    div_le_self h_inv_nn (by
-      have : 0 ≤ ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-        have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
-          mul_nonneg (by positivity) ht
-        exact pow_nonneg h_arg_nn _
-      linarith)
-  calc K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))
-      ≤ K * ((u + 1 / 4) ^ (n + 3))⁻¹ := by
-        exact mul_le_mul_of_nonneg_left h_div_le hK
-
-/-- **Tail integral of the shifted reciprocal power.**
-
-For `s > -1/4`,
-    `∫_{u ≥ s} ((u+1/4)^{n+3})⁻¹ du = (s+1/4)^{-(n+2)} / (n+2)`.
-
-Proved by the fundamental theorem of calculus on `(s, ∞)` with the explicit
-antiderivative `(u+1/4)^{a+1}/(a+1)` (`a = -(n+3)`), which tends to `0` at
-`+∞`; the integrand equals `(u+1/4)^a` since `u+1/4 > 0`. -/
-private lemma integral_Ioi_add_quarter_pow_inv (n : ℕ) {s : ℝ}
-    (hs : -(1 / 4 : ℝ) < s) :
-    ∫ u in Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹
-      = (s + 1 / 4) ^ (-((n : ℝ) + 2)) / ((n : ℝ) + 2) := by
-  set a : ℝ := -((n + 3 : ℕ) : ℝ) with ha_def
-  have hn_nn : (0 : ℝ) ≤ (n : ℝ) := Nat.cast_nonneg n
-  have ha : a < -1 := by rw [ha_def]; push_cast; linarith
-  have ha1_neg : a + 1 < 0 := by rw [ha_def]; push_cast; linarith
-  have ha1_ne : a + 1 ≠ 0 := ne_of_lt ha1_neg
-  -- The integrand equals `(u+1/4)^a` on `Ioi s`.
-  have hcongr : ∀ u ∈ Set.Ioi s, ((u + 1 / 4) ^ (n + 3))⁻¹ = (u + 1 / 4) ^ a := by
-    intro u hu
-    have huq : (0 : ℝ) < u + 1 / 4 := by linarith [Set.mem_Ioi.mp hu]
-    rw [ha_def, Real.rpow_neg huq.le, Real.rpow_natCast]
-  rw [setIntegral_congr_fun measurableSet_Ioi hcongr]
-  -- Antiderivative and its derivative.
-  have hd : ∀ x ∈ Set.Ici s,
-      HasDerivAt (fun t : ℝ => (t + 1 / 4) ^ (a + 1) / (a + 1)) ((x + 1 / 4) ^ a) x := by
-    intro x hx
-    have hxq : (0 : ℝ) < x + 1 / 4 := by linarith [Set.mem_Ici.mp hx]
-    convert (((hasDerivAt_id _).add_const (1 / 4 : ℝ)).rpow_const _).div_const (a + 1)
-      using 1
-    · simp [ha1_ne]
-    · left; exact ne_of_gt hxq
-  -- Antiderivative tends to `0` at `+∞`.
-  have ht : Filter.Tendsto (fun t : ℝ => ((t + 1 / 4) ^ (a + 1)) / (a + 1))
-      Filter.atTop (nhds (0 / (a + 1))) := by
-    rw [← neg_neg (a + 1)]
-    exact (tendsto_rpow_neg_atTop (by linarith)).comp
-      (tendsto_atTop_add_const_right _ (1 / 4 : ℝ) tendsto_id) |>.div_const _
-  have hintegrable : IntegrableOn (fun x : ℝ => (x + 1 / 4) ^ a) (Set.Ioi s) :=
-    integrableOn_add_rpow_Ioi_of_lt ha (by linarith)
-  rw [integral_Ioi_of_hasDerivAt_of_tendsto' hd hintegrable ht]
-  -- `0/(a+1) - (s+1/4)^(a+1)/(a+1) = (s+1/4)^(-(n+2))/(n+2)`.
-  have ha1 : a + 1 = -((n : ℝ) + 2) := by rw [ha_def]; push_cast; ring
-  rw [ha1, zero_div, zero_sub, div_neg, neg_neg]
-
-/-- **Asymptotic of the majorant integral.**
-
-The σ-free, lorMix-free dominator,
-    `K · ((u+1/4)^{n+3})⁻¹ · (1 + ((1/(2(u+1/4))) · t)^{n+4})⁻¹`,
-has integral (over `Ici 0`) of order `O(t^{-(n+2)})`.  This is the
-analytic core of `sigma_lorMix_integral_isO`.
-
-Sketch: substitute `v = u + 1/4` and split at `v = t/2`:
-- On `[1/4, t/2]`: dominator `≤ 2^{n+5} · K · v / t^{n+4}`; integrating
-  in `v` gives `O(t^{-(n+2)})`.
-- On `[t/2, ∞)`: dominator `≤ K · v^{-(n+3)}`; integrating gives
-  `≤ K · 2^{n+2} / ((n+2) · t^{n+2}) = O(t^{-(n+2)})`. -/
-private lemma sigma_lorMix_majorant_integral_isO (n : ℕ) (K : ℝ) (hK : 0 ≤ K) :
-    IsO (fun t : ℝ =>
-            ∫ u in Set.Ici (0 : ℝ),
-              K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                    (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
-        (fun t => t ^ (-(n : ℝ) - 2))
-        𝓝∞ := by
-  refine IsBigO.of_bound
-    (K * 2 ^ (n + 2) + K * 2 ^ (n + 2) / ((n : ℝ) + 2)) ?_
-  filter_upwards [Filter.eventually_ge_atTop (1 : ℝ)] with t ht1
-  have ht_pos : (0 : ℝ) < t := lt_of_lt_of_le one_pos ht1
-  have ht_nn : (0 : ℝ) ≤ t := ht_pos.le
-  have ht_ne : (t : ℝ) ≠ 0 := ne_of_gt ht_pos
-  set s : ℝ := t / 2 - 1 / 4 with hs_def
-  have hs_pos : (0 : ℝ) < s := by rw [hs_def]; linarith
-  have hs_quarter : -(1 / 4 : ℝ) < s := by linarith
-  have hsq : s + 1 / 4 = t / 2 := by rw [hs_def]; ring
-  set M : ℝ → ℝ := fun u => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-        (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) with hM
-  -- Integrability of `M` on the whole ray and its two pieces.
-  have hM_all : IntegrableOn M (Set.Ici (0 : ℝ)) :=
-    integrable_lorMix_majorant n K hK ht_nn
-  have hsub_near : Set.Ico (0 : ℝ) s ⊆ Set.Ici 0 :=
-    fun x hx => Set.mem_Ici.mpr (Set.mem_Ico.mp hx).1
-  have hsub_tail : Set.Ici s ⊆ Set.Ici (0 : ℝ) :=
-    fun x hx => Set.mem_Ici.mpr (le_trans hs_pos.le (Set.mem_Ici.mp hx))
-  have hM_near : IntegrableOn M (Set.Ico 0 s) := hM_all.mono_set hsub_near
-  have hM_tail : IntegrableOn M (Set.Ici s) := hM_all.mono_set hsub_tail
-  have hdisj : Disjoint (Set.Ico (0 : ℝ) s) (Set.Ici s) :=
-    Set.disjoint_left.mpr (fun x hx hx2 =>
-      lt_irrefl x (lt_of_lt_of_le (Set.mem_Ico.mp hx).2 (Set.mem_Ici.mp hx2)))
-  have hunion : ∫ u in Set.Ici (0 : ℝ), M u
-        = (∫ u in Set.Ico 0 s, M u) + ∫ u in Set.Ici s, M u := by
-    rw [← MeasureTheory.setIntegral_union hdisj measurableSet_Ici hM_near hM_tail,
-        Set.Ico_union_Ici_eq_Ici hs_pos.le]
-  -- Pointwise bound on the near piece: `M u ≤ (K·2^{n+4}/t^{n+4})·(u+1/4)`.
-  have hbound_near : ∀ u ∈ Set.Ico (0 : ℝ) s,
-      M u ≤ (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4) := by
-    intro u hu
-    have hu0 : (0 : ℝ) ≤ u := (Set.mem_Ico.mp hu).1
-    have hr : (0 : ℝ) < u + 1 / 4 := by linarith
-    have hrne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr
-    have hwpow : (0 : ℝ) < ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by positivity
-    have hden : (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-      linarith
-    have hnum_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := by positivity
-    have hfrac_le :
-        ((u + 1 / 4) ^ (n + 3))⁻¹ / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
-          ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ / ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-      gcongr
-      linarith
-    have hid :
-        ((u + 1 / 4) ^ (n + 3))⁻¹ / ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)
-          = 2 ^ (n + 4) * (u + 1 / 4) / t ^ (n + 4) := by
-      rw [show (1 / (2 * (u + 1 / 4))) * t = t / (2 * (u + 1 / 4)) from by ring,
-          div_pow, mul_pow, div_div_eq_mul_div]
-      field_simp
-      ring
-    rw [hM]
-    calc K * (((u + 1 / 4) ^ (n + 3))⁻¹
-              / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))
-        ≤ K * (((u + 1 / 4) ^ (n + 3))⁻¹
-              / ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)) :=
-          mul_le_mul_of_nonneg_left hfrac_le hK
-      _ = K * (2 ^ (n + 4) * (u + 1 / 4) / t ^ (n + 4)) := by rw [hid]
-      _ = (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4) := by ring
-  -- Pointwise bound on the tail piece: `M u ≤ K·((u+1/4)^{n+3})⁻¹`.
-  have hbound_tail : ∀ u ∈ Set.Ici s,
-      M u ≤ K * ((u + 1 / 4) ^ (n + 3))⁻¹ := by
-    intro u hu
-    have hus : s ≤ u := Set.mem_Ici.mp hu
-    have hr : (0 : ℝ) < u + 1 / 4 := by linarith [hs_pos]
-    have hwpow_nn : (0 : ℝ) ≤ ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-      positivity
-    have hden_ge1 : (1 : ℝ) ≤ 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-      linarith
-    have hnum_nn : (0 : ℝ) ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := by positivity
-    rw [hM]
-    have hfrac : ((u + 1 / 4) ^ (n + 3))⁻¹
-                  / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))
-                ≤ ((u + 1 / 4) ^ (n + 3))⁻¹ := div_le_self hnum_nn hden_ge1
-    exact mul_le_mul_of_nonneg_left hfrac hK
-  -- Near integral bound.
-  have hAnn : (0 : ℝ) ≤ K * 2 ^ (n + 4) / t ^ (n + 4) := by positivity
-  have hlin_cont : Continuous
-      (fun u : ℝ => (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4)) :=
-    continuous_const.mul (continuous_id.add continuous_const)
-  have hlin_int : IntegrableOn
-      (fun u : ℝ => (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4))
-      (Set.Ico 0 s) :=
-    (hlin_cont.integrableOn_Icc (a := 0) (b := s)).mono_set Set.Ico_subset_Icc_self
-  have hconst_int : IntegrableOn
-      (fun _ : ℝ => (K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4))
-      (Set.Ico 0 s) :=
-    (continuous_const.integrableOn_Icc (a := 0) (b := s)).mono_set
-      Set.Ico_subset_Icc_self
-  have hnear1 : ∫ u in Set.Ico 0 s, M u
-        ≤ ∫ u in Set.Ico 0 s, (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4) :=
-    setIntegral_mono_on hM_near hlin_int measurableSet_Ico hbound_near
-  have hnear2 : ∫ u in Set.Ico 0 s,
-          (K * 2 ^ (n + 4) / t ^ (n + 4)) * (u + 1 / 4)
-        ≤ ∫ u in Set.Ico 0 s,
-          (K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4) := by
-    refine setIntegral_mono_on hlin_int hconst_int measurableSet_Ico ?_
-    intro u hu
-    have : u ≤ s := (Set.mem_Ico.mp hu).2.le
-    exact mul_le_mul_of_nonneg_left (by linarith) hAnn
-  have hvol : (volume.real (Set.Ico (0 : ℝ) s)) = s := by
-    rw [measureReal_def, Real.volume_Ico, sub_zero,
-        ENNReal.toReal_ofReal hs_pos.le]
-  have hnear3 : ∫ u in Set.Ico 0 s,
-          (K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4)
-        = s * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4)) := by
-    rw [setIntegral_const, hvol, smul_eq_mul]
-  have hnear_val :
-      s * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4))
-        ≤ K * 2 ^ (n + 2) * (t ^ (n + 2))⁻¹ := by
-    have hstep : s * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (s + 1 / 4))
-          ≤ (t / 2) * ((K * 2 ^ (n + 4) / t ^ (n + 4)) * (t / 2)) := by
-      rw [hsq]
-      have hcoef_nn : (0 : ℝ) ≤ (K * 2 ^ (n + 4) / t ^ (n + 4)) * (t / 2) := by
-        positivity
-      have hs_le : s ≤ t / 2 := by rw [hs_def]; linarith
-      exact mul_le_mul_of_nonneg_right hs_le hcoef_nn
-    refine hstep.trans (le_of_eq ?_)
+    which is `−2·(u+1/4)·∂ₜⁿ ((u+1/4)² + (t/2)²)⁻²` written out — the
+    integrand of the paper's integration-by-parts formula for `j`. -/
+private lemma mixedDerivExpr_eq_quadInv (n : ℕ) {u : ℝ} (hu : 0 ≤ u) (t : ℝ) :
+    mixedDerivExpr n u t
+      = -128 * (4 * u + 1) * iteratedDeriv n (quadInv (4 * u + 1)) t := by
+  have ha : (0 : ℝ) < 4 * u + 1 := by linarith
+  have ha_ne : (4 * u + 1 : ℝ) ≠ 0 := ne_of_gt ha
+  have hr : (0 : ℝ) < u + 1 / 4 := by linarith
+  have hr_ne : (u + 1 / 4 : ℝ) ≠ 0 := ne_of_gt hr
+  have h2a : (2 : ℝ) / (4 * u + 1) = 1 / (2 * (u + 1 / 4)) := by
     field_simp
     ring
-  have hnear : ∫ u in Set.Ico 0 s, M u ≤ K * 2 ^ (n + 2) * (t ^ (n + 2))⁻¹ :=
-    le_trans hnear1 (le_trans hnear2 (le_trans (le_of_eq hnear3) hnear_val))
-  -- Tail integral bound.
-  have hg_tail_int : IntegrableOn
-      (fun u : ℝ => K * ((u + 1 / 4) ^ (n + 3))⁻¹) (Set.Ici s) := by
-    have hioi : IntegrableOn
-        (fun u : ℝ => ((u + 1 / 4) ^ (n + 3))⁻¹) (Set.Ioi s) := by
-      refine (integrableOn_add_rpow_Ioi_of_lt (a := -((n + 3 : ℕ) : ℝ))
-        (m := 1 / 4) (c := s) (by push_cast; linarith) (by linarith)).congr_fun
-        ?_ measurableSet_Ioi
-      intro x hx
-      have hxq : (0 : ℝ) < x + 1 / 4 := by linarith [Set.mem_Ioi.mp hx]
-      change (x + 1 / 4) ^ (-((n + 3 : ℕ) : ℝ)) = ((x + 1 / 4) ^ (n + 3))⁻¹
-      rw [Real.rpow_neg hxq.le, Real.rpow_natCast]
-    exact (hioi.congr_set_ae Ioi_ae_eq_Ici.symm).const_mul K
-  have htail1 : ∫ u in Set.Ici s, M u
-        ≤ ∫ u in Set.Ici s, K * ((u + 1 / 4) ^ (n + 3))⁻¹ :=
-    setIntegral_mono_on hM_tail hg_tail_int measurableSet_Ici hbound_tail
-  have htail2 : ∫ u in Set.Ici s, K * ((u + 1 / 4) ^ (n + 3))⁻¹
-        = K * ((s + 1 / 4) ^ (-((n : ℝ) + 2)) / ((n : ℝ) + 2)) := by
-    rw [integral_const_mul, integral_Ici_eq_integral_Ioi,
-        integral_Ioi_add_quarter_pow_inv n hs_quarter]
-  have he1 : (s + 1 / 4) ^ (-((n : ℝ) + 2)) = 2 ^ (n + 2) * (t ^ (n + 2))⁻¹ := by
-    have hhalf_pos : (0 : ℝ) < t / 2 := by linarith
-    rw [hsq, show (-((n : ℝ) + 2)) = -(((n + 2 : ℕ) : ℝ)) from by push_cast; ring,
-        Real.rpow_neg hhalf_pos.le, Real.rpow_natCast, div_pow, inv_div]
+  have hhalf : (1 : ℝ) / (2 * (u + 1 / 4)) = (1 / 2) * (u + 1 / 4)⁻¹ := by
+    field_simp
+  rw [mixedDerivExpr_eq_lorMix n hu t, lorMix_eq_iteratedDeriv_lorSq,
+      iteratedDeriv_quadInv_eq_lorSq n ha, h2a, hhalf, mul_pow, inv_pow,
+      show (-((n : ℤ) + 3)) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
+      zpow_neg_nat_eq_inv, pow_add,
+      show (4 * u + 1 : ℝ) = 4 * (u + 1 / 4) from by ring]
+  have hqpos : (0 : ℝ) < (u + 1 / 4) ^ n := pow_pos hr n
+  generalize hL : iteratedDeriv n lorSq ((1 / 2 * (u + 1 / 4)⁻¹) * t) = L
+  generalize hq : (u + 1 / 4 : ℝ) ^ n = q at hqpos ⊢
+  generalize hc : (1 / 2 : ℝ) ^ n = c
+  have hqne : q ≠ 0 := ne_of_gt hqpos
+  field_simp
+  ring
+
+/-- The `u`-kernel of the paper's estimate:
+    `quadKer r t u = (4u+1)/((4u+1)² + 4t²)^(r+2)`. -/
+private noncomputable def quadKer (r : ℕ) (t u : ℝ) : ℝ :=
+  (4 * u + 1) / ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ (r + 2)
+
+private lemma quadKer_nonneg (r : ℕ) (t : ℝ) {u : ℝ} (hu : 0 ≤ u) : 0 ≤ quadKer r t u := by
+  have : (0 : ℝ) < 4 * u + 1 := by linarith
+  unfold quadKer
+  positivity
+
+/-- Antiderivative in `u` used for the paper's substitution
+    `v = (4u+1)² + 4t²`, `dv = 8(4u+1) du`:
+
+        `quadAnti r t u = −1/(8(r+1)) · ((4u+1)² + 4t²)^(−(r+1))`,
+
+    whose `u`-derivative is `(4u+1)/((4u+1)² + 4t²)^(r+2)`. -/
+private noncomputable def quadAnti (r : ℕ) (t : ℝ) (u : ℝ) : ℝ :=
+  -(1 / (8 * ((r : ℝ) + 1))) * (((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ (r + 1))⁻¹
+
+private lemma hasDerivAt_quadAnti (r : ℕ) {t : ℝ} (ht : 0 < t) (u : ℝ) :
+    HasDerivAt (quadAnti r t) (quadKer r t u) u := by
+  unfold quadKer
+  have hD : (0 : ℝ) < (4 * u + 1) ^ 2 + 4 * t ^ 2 := by positivity
+  have hlin : HasDerivAt (fun v : ℝ => 4 * v + 1) 4 u := by
+    simpa using ((hasDerivAt_id u).const_mul (4 : ℝ)).add_const (1 : ℝ)
+  have hb : HasDerivAt (fun v : ℝ => (4 * v + 1) ^ 2 + 4 * t ^ 2) (8 * (4 * u + 1)) u := by
+    have := (hlin.pow 2).add_const (4 * t ^ 2)
+    convert this using 1
+    push_cast
     ring
-  have htail : ∫ u in Set.Ici s, M u
-        ≤ K * 2 ^ (n + 2) / ((n : ℝ) + 2) * (t ^ (n + 2))⁻¹ := by
-    refine le_trans htail1 (le_of_eq ?_)
-    rw [htail2, he1]; ring
-  -- Combine the two pieces.
-  have hsum_le : ∫ u in Set.Ici (0 : ℝ), M u
-        ≤ (K * 2 ^ (n + 2) + K * 2 ^ (n + 2) / ((n : ℝ) + 2)) * (t ^ (n + 2))⁻¹ := by
-    rw [hunion]
-    have := add_le_add hnear htail
-    refine this.trans (le_of_eq ?_)
+  have hp : HasDerivAt (fun v : ℝ => ((4 * v + 1) ^ 2 + 4 * t ^ 2) ^ (r + 1))
+      (((r : ℝ) + 1) * ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ r * (8 * (4 * u + 1))) u := by
+    have := hb.pow (r + 1)
+    convert this using 1
+    push_cast
     ring
-  have hM_nn_int : (0 : ℝ) ≤ ∫ u in Set.Ici (0 : ℝ), M u := by
-    refine setIntegral_nonneg measurableSet_Ici (fun u hu => ?_)
-    have hu0 : (0 : ℝ) ≤ u := hu
-    have hr : (0 : ℝ) < u + 1 / 4 := by linarith
-    have : (0 : ℝ) ≤ ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by positivity
-    simp only [hM]
+  have hinv := hp.inv (by positivity)
+  have hmain := hinv.const_mul (-(1 / (8 * ((r : ℝ) + 1))))
+  convert hmain using 1
+  have hE1 : ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ (r + 1)
+      = ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ r * ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ 1 := pow_add _ _ _
+  have hE2 : ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ (r + 2)
+      = ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ r * ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ 2 := pow_add _ _ _
+  rw [hE1, hE2]
+  have hEpos : (0 : ℝ) < ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ r := pow_pos hD r
+  generalize hEg : ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ r = E at hEpos ⊢
+  have hrpos : (0 : ℝ) < (r : ℝ) + 1 := by positivity
+  field_simp
+
+private lemma tendsto_quadAnti (r : ℕ) {t : ℝ} (ht : 0 < t) :
+    Filter.Tendsto (quadAnti r t) Filter.atTop (nhds 0) := by
+  have hbig : Filter.Tendsto (fun u : ℝ => ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ (r + 1))
+      Filter.atTop Filter.atTop := by
+    refine Filter.tendsto_atTop_mono' _ ?_ (Filter.tendsto_atTop_add_const_right _ 1
+      (Filter.tendsto_id.const_mul_atTop (by norm_num : (0 : ℝ) < 4)))
+    filter_upwards [Filter.eventually_ge_atTop (0 : ℝ)] with u hu
+    have h1 : (1 : ℝ) ≤ 4 * u + 1 := by linarith
+    have h2 : (4 * u + 1) ≤ (4 * u + 1) ^ 2 + 4 * t ^ 2 := by nlinarith
+    calc 4 * u + 1 ≤ (4 * u + 1) ^ 2 + 4 * t ^ 2 := h2
+      _ ≤ ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ (r + 1) := le_self_pow₀ (by linarith) (by omega)
+  have hinv := hbig.inv_tendsto_atTop
+  have h0 := hinv.const_mul (-(1 / (8 * ((r : ℝ) + 1))))
+  simp only [Pi.inv_apply, mul_zero] at h0
+  exact h0
+
+/-- Integrability of the paper's `u`-kernel on `(0, ∞)`:  it is the derivative
+    of the bounded monotone antiderivative `quadAnti`. -/
+private lemma integrableOn_quadPow (r : ℕ) {t : ℝ} (ht : 0 < t) :
+    IntegrableOn (quadKer r t) (Set.Ioi (0 : ℝ)) :=
+  integrableOn_Ioi_deriv_of_nonneg' (fun u _ => hasDerivAt_quadAnti r ht u)
+    (fun _ hu => quadKer_nonneg r t (le_of_lt (Set.mem_Ioi.mp hu)))
+    (tendsto_quadAnti r ht)
+
+/-- **The paper's substitution `v = (4u+1)² + 4t²`, `dv = 8(4u+1) du`:**
+
+        `∫₀^∞ (4u+1) / ((4u+1)² + 4t²)^(r+2) du
+           = (1/8) ∫_{1+4t²}^∞ v^(−r−2) dv = 1/(8(r+1)(1 + 4t²)^(r+1))`.
+
+    Formalised through the explicit antiderivative `quadAnti` (improper FTC),
+    which is the same computation without a change of variables. -/
+private lemma integral_quadPow (r : ℕ) {t : ℝ} (ht : 0 < t) :
+    ∫ u in Set.Ioi (0 : ℝ), quadKer r t u
+      = 1 / (8 * ((r : ℝ) + 1) * (1 + 4 * t ^ 2) ^ (r + 1)) := by
+  rw [integral_Ioi_of_hasDerivAt_of_nonneg' (fun u _ => hasDerivAt_quadAnti r ht u)
+    (fun u hu => quadKer_nonneg r t (le_of_lt (Set.mem_Ioi.mp hu)))
+    (tendsto_quadAnti r ht)]
+  have hpos : (0 : ℝ) < (1 + 4 * t ^ 2) ^ (r + 1) := by positivity
+  have hr : (0 : ℝ) < 8 * ((r : ℝ) + 1) := by positivity
+  simp only [quadAnti]
+  norm_num
+  field_simp
+
+/-- The majorant produced by the paper's estimate of `σ · ∂ᵤ∂ₜⁿ kernel`:
+    `∑_{r ≤ n} 16·|dsC n r|·t^(2r−n)·(4u+1)/((4u+1)² + 4t²)^(r+2)`.
+    (The `16 = 128/8` collects the constant `128` of `mixedDerivExpr_eq_quadInv`
+    and the paper's bound `σ ≤ 1/8`.) -/
+private noncomputable def jMajorant (n : ℕ) (t : ℝ) (u : ℝ) : ℝ :=
+  ∑ r ∈ Finset.range (n + 1), 16 * |dsC n r| * t ^ (2 * (r : ℤ) - n) * quadKer r t u
+
+private lemma integrableOn_jMajorant (n : ℕ) {t : ℝ} (ht : 0 < t) :
+    IntegrableOn (jMajorant n t) (Set.Ici (0 : ℝ)) := by
+  have hIoi : IntegrableOn (jMajorant n t) (Set.Ioi (0 : ℝ)) := by
+    refine integrable_finset_sum _ (fun r _ => ?_)
+    exact ((integrableOn_quadPow r ht).const_mul
+      (16 * |dsC n r| * t ^ (2 * (r : ℤ) - n)))
+  exact hIoi.congr_set_ae Ioi_ae_eq_Ici.symm
+
+/-- Pointwise form of the paper's estimate: after the integration by parts,
+    `|σ(u) · ∂ᵤ∂ₜⁿ kernel(u,t)| ≤ jMajorant n t u` for `u ≥ 0`, `t > 0`.
+    Uses `mixedDerivExpr_eq_quadInv`, the expansion `iteratedDeriv_quadInv`,
+    and the paper's bound `0 ≤ σ ≤ 1/8`. -/
+private lemma norm_sigma_mixedDerivExpr_le (n : ℕ) {t : ℝ} (ht : 0 < t)
+    {u : ℝ} (hu : 0 ≤ u) :
+    ‖σ u * mixedDerivExpr n u t‖ ≤ jMajorant n t u := by
+  have ha : (0 : ℝ) < 4 * u + 1 := by linarith
+  have hσ_nn : 0 ≤ σ u := σ_nonneg u
+  have hσ_le : σ u ≤ 1 / 8 := σ_le_eighth u
+  have hdsPow_pos : ∀ r : ℕ, 0 < dsPow n (4 * u + 1) r t := by
+    intro r
+    have h1 : (0 : ℝ) < t ^ (2 * (r : ℤ) - n) := zpow_pos ht _
+    have h2 : (0 : ℝ) < ((4 * u + 1) ^ 2 + 4 * t ^ 2) ^ (r + 2) := by positivity
+    unfold dsPow
     positivity
-  have hrpow : t ^ (-(n : ℝ) - 2) = (t ^ (n + 2))⁻¹ := by
-    rw [show (-(n : ℝ) - 2) = -((n + 2 : ℕ) : ℝ) from by push_cast; ring,
-        rpow_neg_nat_eq_inv ht_pos (n + 2)]
-  rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_of_nonneg hM_nn_int, hrpow,
-      abs_of_nonneg (by positivity)]
-  exact hsum_le
+  have hterm : ∀ r : ℕ, (4 * u + 1) * dsPow n (4 * u + 1) r t
+      = t ^ (2 * (r : ℤ) - n) * quadKer r t u := by
+    intro r
+    unfold dsPow quadKer
+    ring
+  -- Absolute value of the IBP integrand, expanded by the paper's formula.
+  have habs : |mixedDerivExpr n u t|
+      ≤ ∑ r ∈ Finset.range (n + 1),
+          128 * |dsC n r| * (t ^ (2 * (r : ℤ) - n) * quadKer r t u) := by
+    rw [mixedDerivExpr_eq_quadInv n hu t, iteratedDeriv_quadInv n ha t ht]
+    have hsplit : |(-128 : ℝ) * (4 * u + 1)
+          * ∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n (4 * u + 1) r t|
+        = 128 * (4 * u + 1)
+          * |∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n (4 * u + 1) r t| := by
+      rw [abs_mul, abs_mul, abs_of_pos ha]
+      norm_num
+    rw [hsplit]
+    have h1 : |∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n (4 * u + 1) r t|
+        ≤ ∑ r ∈ Finset.range (n + 1), |dsC n r| * dsPow n (4 * u + 1) r t := by
+      refine (Finset.abs_sum_le_sum_abs _ _).trans (le_of_eq ?_)
+      refine Finset.sum_congr rfl fun r _ => ?_
+      rw [abs_mul, abs_of_pos (hdsPow_pos r)]
+    calc 128 * (4 * u + 1)
+            * |∑ r ∈ Finset.range (n + 1), dsC n r * dsPow n (4 * u + 1) r t|
+        ≤ 128 * (4 * u + 1)
+            * ∑ r ∈ Finset.range (n + 1), |dsC n r| * dsPow n (4 * u + 1) r t := by
+          have : (0 : ℝ) ≤ 128 * (4 * u + 1) := by positivity
+          exact mul_le_mul_of_nonneg_left h1 this
+      _ = ∑ r ∈ Finset.range (n + 1),
+            128 * |dsC n r| * (t ^ (2 * (r : ℤ) - n) * quadKer r t u) := by
+          rw [Finset.mul_sum]
+          refine Finset.sum_congr rfl fun r _ => ?_
+          rw [← hterm r]
+          ring
+  calc ‖σ u * mixedDerivExpr n u t‖
+      = σ u * |mixedDerivExpr n u t| := by
+        rw [Real.norm_eq_abs, abs_mul, abs_of_nonneg hσ_nn]
+    _ ≤ (1 / 8) * ∑ r ∈ Finset.range (n + 1),
+            128 * |dsC n r| * (t ^ (2 * (r : ℤ) - n) * quadKer r t u) :=
+        mul_le_mul hσ_le habs (abs_nonneg _) (by norm_num)
+    _ = jMajorant n t u := by
+        unfold jMajorant
+        rw [Finset.mul_sum]
+        refine Finset.sum_congr rfl fun r _ => ?_
+        ring
 
-/-- **σ-weighted integral asymptotic (lorMix form).**
+/-- The paper's final estimate of the majorant integral:  evaluating each
+    `u`-integral by `integral_quadPow` and using `1 + 4t² ≥ 4t² ≥ t²` gives
 
-The σ-weighted integral of the lorMix-rescaled mixed derivative,
-    `∫₀^∞ σ(u) · (u+1/4)^{-(n+3)} · lorMix n (t/(2(u+1/4))) du`,
-is `O(t^{-(n+2)})` as `t → +∞`.
+        `∫₀^∞ jMajorant n t ≤ (∑_{r ≤ n} 2|dsC n r|) · t^(−n−2)`.
 
-Bound `|σ u| ≤ 1/8` and `|lorMix n y| ≤ K · (1 + y^{n+4})⁻¹` (the unified
-decay).  Triangle inequality on the integral plus dominated comparison
-reduces to `sigma_lorMix_majorant_integral_isO`. -/
-private lemma sigma_lorMix_integral_isO (n : ℕ) :
-    IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
-                σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
-        (fun t => t ^ (-(n : ℝ) - 2))
-        𝓝∞ := by
-  obtain ⟨K, hK_nn, h_decay⟩ := lorMix_unified_decay_on_nonneg n
-  -- Step 1: the σ-integral is `O` of the majorant integral (constant `1/8`).
-  have h_step :
-      IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
-                σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
-          (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ),
-                K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                      (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
-          𝓝∞ := by
-    refine IsBigO.of_bound (1 / 8) ?_
-    filter_upwards [Filter.eventually_ge_atTop (0 : ℝ)] with t ht
-    have hf_int : IntegrableOn
-        (fun u : ℝ => σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                       * lorMix n ((1 / (2 * (u + 1 / 4))) * t)))
-        (Set.Ici (0 : ℝ)) := integrable_sigma_lorMix_integrand n ht
-    have hg_int : IntegrableOn
-        (fun u : ℝ => K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                      (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))))
-        (Set.Ici (0 : ℝ)) := integrable_lorMix_majorant n K hK_nn ht
-    -- Pointwise bound on `Ici 0`.
-    have h_pt : ∀ u ∈ Set.Ici (0 : ℝ),
-        ‖σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖
-          ≤ (1 / 8) * (K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                  (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) := by
-      intro u hu
-      have hu_nn : (0 : ℝ) ≤ u := hu
-      have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
-      have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
-      have h_zpow_eq : (u + 1 / 4) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
-        rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
-            zpow_neg_nat_eq_inv]
-      have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
-        mul_nonneg (by positivity) ht
-      have h_lor_le : |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|
-            ≤ K / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)) :=
-        h_decay _ h_arg_nn
-      have h_denom_pos : (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-        have := pow_nonneg h_arg_nn (n + 4); linarith
-      have h_σ_nn : 0 ≤ σ u := σ_nonneg u
-      have h_σ_le : σ u ≤ 1 / 8 := σ_le_eighth u
-      have h_K_div_nn : 0 ≤ K / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)) :=
-        div_nonneg hK_nn h_denom_pos.le
-      rw [Real.norm_eq_abs, h_zpow_eq, abs_mul, abs_mul,
-          abs_of_nonneg h_σ_nn, abs_of_pos (inv_pos.mpr h_pow_pos)]
-      calc σ u * (((u + 1 / 4) ^ (n + 3))⁻¹
-              * |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|)
-          ≤ (1 / 8) * (((u + 1 / 4) ^ (n + 3))⁻¹
-              * (K / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) := by
-            gcongr
-        _ = (1 / 8) * (K * (((u + 1 / 4) ^ (n + 3))⁻¹
-              / (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) := by ring
-    -- Nonnegativity of the majorant integral (so its norm is itself).
-    have h_g_nn : 0 ≤ ∫ u in Set.Ici (0 : ℝ),
-        K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) := by
-      refine setIntegral_nonneg measurableSet_Ici (fun u hu => ?_)
-      have hu_nn : (0 : ℝ) ≤ u := hu
-      have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
-      have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t :=
-        mul_nonneg (by positivity) ht
-      have h_denom_pos : (0 : ℝ) < 1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4) := by
-        have := pow_nonneg h_arg_nn (n + 4); linarith
-      positivity
-    have hg_abs : ‖∫ u in Set.Ici (0 : ℝ),
-        K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))‖
-        = ∫ u in Set.Ici (0 : ℝ),
-        K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-              (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) := by
-      rw [Real.norm_eq_abs, abs_of_nonneg h_g_nn]
-    rw [hg_abs]
-    calc ‖∫ u in Set.Ici (0 : ℝ),
-            σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                   * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖
-        ≤ ∫ u in Set.Ici (0 : ℝ),
-            ‖σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                    * lorMix n ((1 / (2 * (u + 1 / 4))) * t))‖ :=
-          norm_integral_le_integral_norm _
-      _ ≤ ∫ u in Set.Ici (0 : ℝ),
-            (1 / 8) * (K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                  (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4)))) :=
-          setIntegral_mono_on hf_int.norm (hg_int.const_mul (1 / 8))
-            measurableSet_Ici h_pt
-      _ = (1 / 8) * ∫ u in Set.Ici (0 : ℝ),
-            K * (((u + 1 / 4) ^ (n + 3))⁻¹ /
-                  (1 + ((1 / (2 * (u + 1 / 4))) * t) ^ (n + 4))) :=
-          integral_const_mul _ _
-  exact h_step.trans (sigma_lorMix_majorant_integral_isO n K hK_nn)
+    Term by term this is the paper's
+    `t^(2r−n)/(64(r+1)(1+4t²)^(r+1)) ≤ t^(−n−2)/(64(r+1)4^(r+1))`. -/
+private lemma integral_jMajorant_le (n : ℕ) {t : ℝ} (ht : 0 < t) :
+    (∫ u in Set.Ici (0 : ℝ), jMajorant n t u)
+      ≤ (∑ r ∈ Finset.range (n + 1), 2 * |dsC n r|) * t ^ (-(n : ℤ) - 2) := by
+  have hval : (∫ u in Set.Ici (0 : ℝ), jMajorant n t u)
+      = ∑ r ∈ Finset.range (n + 1),
+          16 * |dsC n r| * t ^ (2 * (r : ℤ) - n)
+            * (1 / (8 * ((r : ℝ) + 1) * (1 + 4 * t ^ 2) ^ (r + 1))) := by
+    rw [integral_Ici_eq_integral_Ioi]
+    unfold jMajorant
+    rw [integral_finset_sum _ (fun r _ =>
+      ((integrableOn_quadPow r ht).const_mul (16 * |dsC n r| * t ^ (2 * (r : ℤ) - n))))]
+    refine Finset.sum_congr rfl fun r _ => ?_
+    rw [integral_const_mul]
+    congr 1
+    exact integral_quadPow r ht
+  rw [hval, Finset.sum_mul]
+  refine Finset.sum_le_sum fun r _ => ?_
+  -- The paper keeps the sharper factor `4^(r+1)` from `1 + 4t² ≥ 4t²`; only
+  -- `1 + 4t² ≥ t²` (hence `(1 + 4t²)^(r+1) ≥ t^(2r+2)`) and `r + 1 ≥ 1` are
+  -- needed for the `O(t^(-n-2))` conclusion.
+  have hpow_ge : t ^ (2 * r + 2) ≤ (1 + 4 * t ^ 2) ^ (r + 1) := by
+    calc t ^ (2 * r + 2) = (t ^ 2) ^ (r + 1) := by rw [← pow_mul]; ring_nf
+      _ ≤ (1 + 4 * t ^ 2) ^ (r + 1) := by
+          refine pow_le_pow_left₀ (by positivity) (by nlinarith [sq_nonneg t]) _
+  have hd_ge : 8 * t ^ (2 * r + 2) ≤ 8 * ((r : ℝ) + 1) * (1 + 4 * t ^ 2) ^ (r + 1) := by
+    have h1 : (1 : ℝ) ≤ (r : ℝ) + 1 := by
+      have := Nat.cast_nonneg (α := ℝ) r; linarith
+    nlinarith [pow_pos ht (2 * r + 2), pow_pos (show (0:ℝ) < 1 + 4 * t ^ 2 by positivity) (r + 1)]
+  have hfrac : 1 / (8 * ((r : ℝ) + 1) * (1 + 4 * t ^ 2) ^ (r + 1))
+      ≤ 1 / (8 * t ^ (2 * r + 2)) :=
+    one_div_le_one_div_of_le (by positivity) hd_ge
+  have hcoef_nn : (0 : ℝ) ≤ 16 * |dsC n r| * t ^ (2 * (r : ℤ) - n) := by
+    have : (0 : ℝ) < t ^ (2 * (r : ℤ) - n) := zpow_pos ht _
+    positivity
+  have hzpow_id : t ^ (2 * (r : ℤ) - n) * (1 / (8 * t ^ (2 * r + 2)))
+      = 1 / 8 * t ^ (-(n : ℤ) - 2) := by
+    have hm : (t : ℝ) ^ (2 * r + 2) = t ^ (2 * (r : ℤ) + 2) := by
+      rw [show (2 * (r : ℤ) + 2) = ((2 * r + 2 : ℕ) : ℤ) from by push_cast; ring, zpow_natCast]
+    rw [hm, one_div, mul_inv, ← zpow_neg,
+        show (t : ℝ) ^ (2 * (r : ℤ) - n) * (8⁻¹ * t ^ (-(2 * (r : ℤ) + 2)))
+          = 8⁻¹ * (t ^ (2 * (r : ℤ) - n) * t ^ (-(2 * (r : ℤ) + 2))) from by ring,
+        ← zpow_add₀ ht.ne',
+        show (2 * (r : ℤ) - n + -(2 * (r : ℤ) + 2)) = -(n : ℤ) - 2 from by ring, one_div]
+  calc 16 * |dsC n r| * t ^ (2 * (r : ℤ) - n)
+          * (1 / (8 * ((r : ℝ) + 1) * (1 + 4 * t ^ 2) ^ (r + 1)))
+      ≤ 16 * |dsC n r| * t ^ (2 * (r : ℤ) - n) * (1 / (8 * t ^ (2 * r + 2))) := by
+        exact mul_le_mul_of_nonneg_left hfrac hcoef_nn
+    _ = 2 * |dsC n r| * t ^ (-(n : ℤ) - 2) := by
+        rw [mul_assoc, hzpow_id]; ring
 
 /-- Asymptotic bound on the σ-weighted integral of `mixedDerivExpr n u t`:
     `|∫₀^∞ σ(u) · mixedDerivExpr n u t du| = O(t^(-n-2))` as `t → +∞`.
 
-    Combines the three sub-lemmas above: the pointwise rescaling
-    `mixedDerivExpr_eq_lorMix` rewrites the integrand into the lorMix form;
-    the constant `(1/2)^n` factors out of the integral; and the resulting
-    σ-weighted lorMix integral is bounded by `sigma_lorMix_integral_isO`. -/
+    This is the paper's estimate of `j⁽ⁿ⁾`: bound the integrand pointwise by
+    the majorant produced by differentiating under the integral sign
+    (`norm_sigma_mixedDerivExpr_le`), then integrate the majorant in closed
+    form via the substitution `v = (4u+1)² + 4t²` (`integral_jMajorant_le`). -/
 private lemma sigma_mixedDerivExpr_isO (n : ℕ) :
     IsO (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t)
         (fun t => t ^ (-(n : ℝ) - 2))
         𝓝∞ := by
-  -- Pointwise rewrite of the integrand via the rescaling identity.
-  have h_pt : ∀ t : ℝ, ∀ u ∈ Set.Ici (0 : ℝ),
-      σ u * mixedDerivExpr n u t
-        = (1 / 2 : ℝ) ^ n *
-            (σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                    * lorMix n ((1 / (2 * (u + 1 / 4))) * t))) := by
-    intro t u hu
-    have hu_nn : (0 : ℝ) ≤ u := hu
-    rw [mixedDerivExpr_eq_lorMix n hu_nn t]; ring
-  -- Lift the pointwise rewrite to an equality of functions of `t`.
-  have h_int :
-      (fun t : ℝ => ∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t)
-        = fun t : ℝ => (1 / 2 : ℝ) ^ n *
-            (∫ u in Set.Ici (0 : ℝ),
-               σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                      * lorMix n ((1 / (2 * (u + 1 / 4))) * t))) := by
-    funext t
-    have h_eq :
-        ∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t
-          = ∫ u in Set.Ici (0 : ℝ),
-              (1 / 2 : ℝ) ^ n *
-                (σ u * ((u + 1 / 4) ^ (-((n : ℤ) + 3))
-                        * lorMix n ((1 / (2 * (u + 1 / 4))) * t))) :=
-      MeasureTheory.setIntegral_congr_fun measurableSet_Ici (fun u hu => h_pt t u hu)
-    rw [h_eq, MeasureTheory.integral_const_mul]
-  rw [h_int]
-  exact (sigma_lorMix_integral_isO n).const_mul_left _
+  refine IsBigO.of_bound (∑ r ∈ Finset.range (n + 1), 2 * |dsC n r|) ?_
+  filter_upwards [Filter.eventually_gt_atTop (0 : ℝ)] with t ht
+  have hrpow : t ^ (-(n : ℝ) - 2) = t ^ (-(n : ℤ) - 2) := by
+    rw [show (-(n : ℝ) - 2) = (((-(n : ℤ) - 2 : ℤ)) : ℝ) from by push_cast; ring,
+        Real.rpow_intCast]
+  have hzpos : (0 : ℝ) < t ^ (-(n : ℤ) - 2) := zpow_pos ht _
+  have hf_int : IntegrableOn (fun u : ℝ => σ u * mixedDerivExpr n u t) (Set.Ici (0 : ℝ)) :=
+    integrable_sigma_mixedDerivExpr n t
+  have hg_int : IntegrableOn (jMajorant n t) (Set.Ici (0 : ℝ)) := integrableOn_jMajorant n ht
+  calc ‖∫ u in Set.Ici (0 : ℝ), σ u * mixedDerivExpr n u t‖
+      ≤ ∫ u in Set.Ici (0 : ℝ), ‖σ u * mixedDerivExpr n u t‖ :=
+        norm_integral_le_integral_norm _
+    _ ≤ ∫ u in Set.Ici (0 : ℝ), jMajorant n t u :=
+        setIntegral_mono_on hf_int.norm hg_int measurableSet_Ici
+          (fun u hu => norm_sigma_mixedDerivExpr_le n ht (Set.mem_Ici.mp hu))
+    _ ≤ (∑ r ∈ Finset.range (n + 1), 2 * |dsC n r|) * t ^ (-(n : ℤ) - 2) :=
+        integral_jMajorant_le n ht
+    _ = (∑ r ∈ Finset.range (n + 1), 2 * |dsC n r|) * ‖t ^ (-(n : ℝ) - 2)‖ := by
+        rw [hrpow, Real.norm_eq_abs, abs_of_pos hzpos]
 
 /-- Asymptotic bound on the formal `n`-th derivative integral `jK n`:
     `|jK n t| = O(t^(-n-2))` as `t → +∞`.
@@ -3789,34 +3438,17 @@ private lemma mixedDerivExpr_one_nonneg {u : ℝ} (hu : 0 ≤ u) {t : ℝ} (ht :
   have h_arg : 0 ≤ (1 / (2 * (u + 1 / 4))) * t := by positivity
   positivity
 
-/-- `u ↦ mixedDerivExpr n u t` is integrable on `[0, ∞)` for `t ≥ 0`:
-    continuous (`continuousOn_mixedDerivExpr`) and dominated by
-    `M·((u+1/4)^{n+3})⁻¹` via the uniform `lorMix` bound. -/
-private lemma integrableOn_mixedDerivExpr (n : ℕ) {t : ℝ} (ht : 0 ≤ t) :
+/-- `u ↦ mixedDerivExpr n u t` is integrable on `[0, ∞)`:  continuous
+    (`continuousOn_mixedDerivExpr`) and dominated by `C·((u+1/4)^{n+3})⁻¹`
+    (`exists_bound_mixedDerivExpr`). -/
+private lemma integrableOn_mixedDerivExpr (n : ℕ) {t : ℝ} (_ht : 0 ≤ t) :
     IntegrableOn (fun u : ℝ => mixedDerivExpr n u t) (Set.Ici (0 : ℝ)) := by
-  obtain ⟨M, hM_nn, hM⟩ := lorMix_bounded_on_nonneg n
-  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) M
+  obtain ⟨C, _, hC⟩ := exists_bound_mixedDerivExpr n |t|
+  refine integrableOn_Ici_of_pow_inv_dominated (n + 1) C
     ((continuousOn_mixedDerivExpr n t).aestronglyMeasurable measurableSet_Ici) ?_
   intro u hu
-  have hu_nn : (0 : ℝ) ≤ u := Set.mem_Ici.mp hu
-  have hr_pos : (0 : ℝ) < u + 1 / 4 := by linarith
-  have h_pow_pos : (0 : ℝ) < (u + 1 / 4) ^ (n + 3) := pow_pos hr_pos _
-  have h_arg_nn : 0 ≤ (1 / (2 * (u + 1 / 4))) * t := by positivity
-  have h_zpow_eq : (u + 1 / 4 : ℝ) ^ (-((n : ℤ) + 3)) = ((u + 1 / 4) ^ (n + 3))⁻¹ := by
-    rw [show -((n : ℤ) + 3) = -((n + 3 : ℕ) : ℤ) from by push_cast; ring,
-        zpow_neg_nat_eq_inv]
-  rw [show (n + 1) + 2 = n + 3 from rfl, Real.norm_eq_abs,
-      mixedDerivExpr_eq_lorMix n hu_nn t, h_zpow_eq, abs_mul, abs_mul,
-      abs_of_pos (inv_pos.mpr h_pow_pos)]
-  have h_half : |(1 / 2 : ℝ) ^ n| ≤ 1 := by
-    rw [abs_of_pos (by positivity)]
-    exact pow_le_one₀ (by norm_num) (by norm_num)
-  calc |(1 / 2 : ℝ) ^ n| * ((u + 1 / 4) ^ (n + 3))⁻¹
-        * |lorMix n ((1 / (2 * (u + 1 / 4))) * t)|
-      ≤ 1 * ((u + 1 / 4) ^ (n + 3))⁻¹ * M := by
-        gcongr
-        exact hM _ h_arg_nn
-    _ = M * ((u + 1 / 4) ^ (n + 3))⁻¹ := by ring
+  rw [show (n + 1) + 2 = n + 3 from rfl, Real.norm_eq_abs]
+  exact hC u (Set.mem_Ici.mp hu) t (le_refl _)
 
 /-- **Improper FTC evaluation at kernel-order `0`:**
     `∫_{u≥0} ∂ᵤ kernel(u,t) du = −kernel 0 t`, the antiderivative being
