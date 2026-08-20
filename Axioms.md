@@ -38,7 +38,7 @@ discussion of custom assumptions below.
 
 | Theorem | Location | Custom axioms it depends on |
 |---|---|---|
-| `theorem1` | `Theorem1.lean:4078` | **none** (only the three standard Lean axioms) |
+| `theorem1` | `Theorem1.lean:3710` | **none** (only the three standard Lean axioms) |
 | `Gram.UD.vdc_fundamental_inequality` | `VanDerCorput.lean` §4 | **none** (only the three standard Lean axioms) |
 | `Gram.UD.isUDModOne_of_forall_diff` | `VanDerCorput.lean` §5 | **none** (only the three standard Lean axioms) |
 | `corollary2` | `Corollary2.lean:209` | **none** (only the three standard Lean axioms) |
@@ -61,6 +61,11 @@ discussion of custom assumptions below.
   `F : StepFunction`, at the relativized filter `𝓝∞₀[F.jumpSet]` (nontrivial
   by `StepFunction.neBot_regularAtTop`, which uses discreteness of the jump
   set). `Theorem1.lean` contains zero `axiom` declarations.
+  Its one genuinely analytic ingredient — the bound `j^(n)(t) = O(t^(-n-2))`
+  on the derivatives of the integral part of `δ` — is *proved*, by the
+  differentiation-under-the-integral-sign argument of the paper's §2
+  (see "The integral error term (§6)" below); no step of that chain is
+  assumed.
 - **`corollary2` is axiom-free of custom assumptions.** The axiom-light path was
   taken: `theta` is *defined* as `δ − π·φ − π` (not axiomatized), so
   `riemann_vonMangoldt` and `contDiffAt_theta` are **theorems**, and the proof
@@ -135,6 +140,88 @@ that interpretation. Discreteness of the jump set enters only through
 
 `S` is a `def` (`S F = φ − (1/π)·δ + F`) and `S_eq_φ_sub_δ_add_N` holds by
 `rfl`, so the Karatsuba–Korolev decomposition is *not* an axiom here.
+
+#### The integral error term (§6): differentiation under the integral sign
+
+The only genuinely analytic input of `Theorem1.lean` is the bound
+`j^(n)(t) = O(t^(-n-2))` on the derivatives of
+
+```
+j(t) = ∫₀^∞ ρ(u) / ((u + 1/4)² + (t/2)²) du,    ρ(u) = 1/2 − {u},
+```
+
+and it is derived in full, following the proof of Theorem 1 in §2 of the
+paper step for step. **No stage of the chain is axiomatized.**
+
+1. **Differentiation under the integral sign** (§2.5). `contDiffAt_j` —
+   formerly an axiom — is a **theorem**. A joint induction (`contDiffOn_jK`,
+   `iteratedDeriv_j_eqOn_jK`) shows `iteratedDeriv n j = jK n` on `(0, ∞)`,
+   where `jK n t = ∫₀^∞ ρ(u)·∂ₜⁿ kernel(u,t) du`; each differentiation step
+   (`hasDerivAt_jK`) is justified by Mathlib's
+   `hasDerivAt_integral_of_dominated_loc_of_deriv_le` against the dominator
+   `C_k·(u+1/4)^(−(k+2))` (`exists_bound_iteratedDeriv_kernel`) — the paper's
+   "integrable majorant uniform in `t` on `[T, ∞)`" (Rudin pp. 180–182).
+
+2. **Integration by parts.** With `σ(u) = {u}(1−{u})/2` — the continuous
+   antiderivative of `ρ` that vanishes at every integer and satisfies
+   `0 ≤ σ ≤ 1/8` — per-unit-interval IBP (the boundary terms vanish at the
+   integers, `σ_natCast_eq_zero`) plus countable additivity over
+   `Ici 0 = ⋃ₖ [k, k+1)` give `jK_eq_sigma_integral`:
+
+   ```
+   jK n t = −∫₀^∞ σ(u) · ∂ᵤ ∂ₜⁿ kernel(u,t) du,
+   ```
+
+   i.e. the paper's `j(t) = 2∫₀^∞ σ(u)(u+1/4)/((u+1/4)²+(t/2)²)² du`
+   differentiated `n` times.
+
+3. **The paper's expansion of the `n`-th derivative.** Writing `a = 4u+1`,
+   `mixedDerivExpr_eq_quadInv` rewrites the integrand as
+   `−128·a·∂ₜⁿ quadInv a t` with `quadInv a t = ((a²+4t²)²)⁻¹`, and
+   `iteratedDeriv_quadInv` expands
+
+   ```
+   ∂ₜⁿ (a² + 4t²)⁻² = ∑_{r ≤ n} dsC n r · t^(2r−n) / (a² + 4t²)^(r+2)
+   ```
+
+   by induction through the product rule (`hasDerivAt_dsTerm` for a single
+   term, `dsC_sum_step` for the re-indexing that *is* the two-term recursion
+   `dsC (n+1) r = dsC n r·(2r−n) − 8(r+1)·dsC n (r−1)`). Exponents are
+   `ℤ`-valued `zpow`, so no truncated subtraction appears and only
+   `dsC n r = 0` for `r > n` (`dsC_eq_zero_of_lt`) is needed; the paper's
+   lower cutoff `r ≥ ⌈n/2⌉` is not required, since the terms it excludes
+   carry a negative power of `t` and are already smaller than `t^(−n−2)`.
+
+4. **The paper's substitution.** `integral_quadPow` evaluates each
+   `u`-integral in closed form,
+
+   ```
+   ∫₀^∞ (4u+1) / ((4u+1)² + 4t²)^(r+2) du = 1 / (8(r+1)(1 + 4t²)^(r+1)),
+   ```
+
+   through the explicit antiderivative `quadAnti` and Mathlib's improper FTC
+   (`integral_Ioi_of_hasDerivAt_of_nonneg'`, whose companion
+   `integrableOn_Ioi_deriv_of_nonneg'` also supplies integrability). This is
+   the paper's `v = (4u+1)² + 4t²`, `dv = 8(4u+1) du`, carried out without a
+   change-of-variables lemma.
+
+5. **Assembly.** `norm_sigma_mixedDerivExpr_le` bounds the integrand by
+   `jMajorant` using `0 ≤ σ ≤ 1/8`; `integral_jMajorant_le` integrates it with
+   step 4 and bounds each term by `2|dsC n r|·t^(−n−2)` using
+   `1 + 4t² ≥ t²` (the paper keeps the sharper `1 + 4t² ≥ 4t²`, which is not
+   needed for the conclusion). Summing over `r` gives
+   `sigma_mixedDerivExpr_isO`, hence `jK_isO` and `iteratedDeriv_j_isO`. The
+   Leibniz rule applied to `−(t/2)·j(t)` (`iteratedDeriv_tj_isO`) combines
+   with the algebraic part (`iteratedDeriv_α_part_isO`) to give
+   `iteratedDeriv_δ_isO`: `δ^(n)(t) = O(t^(−n−1))` for `n ≥ 1`.
+
+§7a re-runs the same σ-IBP machinery with *explicit* constants — improper-FTC
+evaluations of `∫_{u≥0} ∂ᵤ∂ₜⁿ kernel` at orders `0` and `1`, together with the
+sign lemmas `mixedDerivExpr_zero_nonpos` / `mixedDerivExpr_one_nonneg` — to
+obtain the pointwise bounds `|j(t)| ≤ 1/(2t²)` and `|δ'(t)| ≤ 1/t²` valid for
+*every* `t > 0`. These are what `strictMonoOn_theta` (`Corollary2.lean` §7)
+consumes, where an eventual `IsBigO` bound would say nothing about any
+concrete `t`.
 
 ### `Theorem3.lean` — the Gram function and its base asymptotics
 
