@@ -167,7 +167,7 @@ This corrects the constant in [10, Lemma 1.1] for `n = 2` (Korolev).
 
 - **Gram function `t_u`** — for `t ≥ 7`, the Riemann–Siegel theta function `θ` is monotonically increasing, so it has a well-defined inverse on `[θ(7), ∞)`. The Gram function is defined implicitly by equation (7) of the paper:
   ```
-  θ(t_u) = (u − 1) · π,   for u ≥ θ(7)/π + π.
+  θ(t_u) = (u − 1) · π,   for u ≥ θ(7)/π + 1.
   ```
   For positive integers `k`, `t_k` are the classical Gram points (Edwards [1, pp. 125–226]).
 
@@ -198,7 +198,7 @@ t_u^(k) = (-1)^(k+1) · 2π · (k − 2)! / (u^(k-1) · log² u)
 When importing `GramDerivatives.Corollary2`:
 
 - **`theta`** is the Riemann–Siegel theta function (as fixed in `Corollary2.lean`), monotonically increasing for `t ≥ 7`.
-- **`gram : ℝ → ℝ`** — the Gram function, a genuine `def`: an inverse of `theta` on `[7, ∞)` chosen via `Function.invFunOn theta (Set.Ici 7)` (equivalently, a solution of `θ(t_u) = (u − 1)π` lying in `[7, ∞)`). Smoothness on `(θ(7)/π + π, ∞)` is the *theorem* `contDiffAt_gram`, by the inverse function theorem applied to `theta` (nonvanishing derivative from `deriv_theta_pos`).
+- **`gram : ℝ → ℝ`** — the Gram function, a genuine `def`: an inverse of `theta` on `[7, ∞)` chosen via `Function.invFunOn theta (Set.Ici 7)` (equivalently, a solution of `θ(t_u) = (u − 1)π` lying in `[7, ∞)`). Smoothness on `(θ(7)/π + 1, ∞)` is the *theorem* `contDiffAt_gram`, by the inverse function theorem applied to `theta` (nonvanishing derivative from `deriv_theta_pos`).
 
 ### Axiom budget for `Theorem3.lean`
 
@@ -209,7 +209,7 @@ When importing `GramDerivatives.Corollary2`:
 - `theorem gram_ge_seven (u : ℝ) (hu : gramThreshold ≤ u) : 7 ≤ gram u` — the chosen inverse lands in `[7, ∞)`.
 - `theorem gram_asymp` and `theorem gram_deriv_asymp` — equations (8) and (9), the Lavrik / Korolev base-case asymptotics for `t_u` and `t_u'`. Formerly axioms; now derived in §1.7a (following the blueprint `Proof_Gram_fun_der.tex` at the repo root) from `gram_spec` plus the leading-order behaviour of `θ` and `θ'` (`theta_eq_main_add_δ`, `theta_deriv_asymp` in `Corollary2.lean` §6): `gram u → +∞` unconditionally, the star equation `gram·(log gram − log(2π) − 1) = 2πu + O(1)`, a logarithmic-scale sandwich `log(gram u) = log u − log log u + O(1)`, and a shared inversion lemma `one_div_denom_expansion` applied to the denominators of (8) and (9) (for (9) via the chain-rule identity `θ'(gram u)·gram'(u) = π`).
 
-- `theorem contDiffAt_gram (n : ℕ) {u : ℝ} (hu : θ(7)/π + π < u) : ContDiffAt ℝ n gram u` — smoothness on the open half-line. Formerly the project's last analytic axiom; now proved by Mathlib's C^m inverse function theorem (`ContDiffAt.to_localInverse`) applied to `theta` at `gram u`: the strict monotonicity of `theta` on `[7, ∞)` is formal (`strictMonoOn_theta` in `Corollary2.lean` §7, via the explicit pointwise bound `abs_deriv_δ_le : |δ'(t)| ≤ 1/t²` from `Theorem1.lean` §7a), `deriv_theta_pos` gives the nonvanishing derivative, and `injOn_theta` identifies the IFT local inverse with `gram` near `u` (`gram_theta` is the resulting left-inverse identity).
+- `theorem contDiffAt_gram (n : ℕ) {u : ℝ} (hu : θ(7)/π + 1 < u) : ContDiffAt ℝ n gram u` — smoothness on the open half-line. Formerly the project's last analytic axiom; now proved by Mathlib's C^m inverse function theorem (`ContDiffAt.to_localInverse`) applied to `theta` at `gram u`: the strict monotonicity of `theta` on `[7, ∞)` is formal (`strictMonoOn_theta` in `Corollary2.lean` §7, via the explicit pointwise bound `abs_deriv_δ_le : |δ'(t)| ≤ 1/t²` from `Theorem1.lean` §7a), `deriv_theta_pos` gives the nonvanishing derivative, and `injOn_theta` identifies the IFT local inverse with `gram` near `u` (`gram_theta` is the resulting left-inverse identity).
 
 `Theorem3.lean` contains **zero axioms**; `theorem3` depends only on Lean's standard foundation.
 
@@ -260,7 +260,7 @@ is `C^∞` on `(0, ∞)`. Its n-th iterated derivative equals `(−1)^(n−1) ·
 
 **Riemann–Siegel theta function `θ`** — `θ : ℝ → ℝ` is the continuous branch of `arg(π^(-s/2) Γ(s/2))` along the segment from `s = 1/2` to `s = 1/2 + it`. It is `C^∞` on `(0, ∞)` (no exceptional points) and monotonically increasing for `t ≥ 7`. In `Corollary2.lean`, `theta` is *defined* as `theta t := δ t − π · φ t − π` (the axiom-light path; see "Working on `Corollary2.lean`"), so smoothness (`contDiffAt_theta`) follows from `contDiffAt_δ` and `contDiffAt_φ`, and `theta_tendsto_atTop` (θ → +∞ at +∞, §5) is proved from the concrete formula. Only the *identification* with the analytic Riemann–Siegel θ is informal.
 
-**Gram function `t_u`** — the inverse of `θ` on the half-line where `θ` is monotonic. For `u ≥ θ(7)/π + π`, `t_u` is the unique real satisfying `θ(t_u) = (u − 1)π` (equation (7) of the paper). It is `C^∞` on `(θ(7)/π + π, ∞)` by the inverse function theorem (since `θ'` does not vanish there). The base-case asymptotics
+**Gram function `t_u`** — the inverse of `θ` on the half-line where `θ` is monotonic. For `u ≥ θ(7)/π + 1`, `t_u` is the unique real satisfying `θ(t_u) = (u − 1)π` (equation (7) of the paper). It is `C^∞` on `(θ(7)/π + 1, ∞)` by the inverse function theorem (since `θ'` does not vanish there). The base-case asymptotics
 ```
 t_u  = (2π u / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 8, Lavrik [14])
 t_u' = (2π   / log u) · (1 + (1 + o(1)) · log log u / log u),   (eq. 9, Korolev [10])
