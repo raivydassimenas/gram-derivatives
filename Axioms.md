@@ -11,11 +11,11 @@ Regenerate at any time with the scratch module
 lake build GramDerivatives.AxiomAudit   # prints the axiom list for each theorem
 ```
 
-Last audited: 2026-07-19, against `lean4:v4.30.0-rc2` + matching Mathlib.
+Last audited: 2026-08-20, against `lean4:v4.30.0-rc2` + matching Mathlib.
 
 ## Method
 
-Every proof module builds with **zero `sorry`** and — as of 2026-07-19 —
+Every proof module builds with **zero `sorry`** and — as of 2026-08-20 —
 **zero `axiom` declarations**: the last remaining assumption (the discrete
 Fejér / Kuipers–Niederreiter criterion) is now a theorem, proved in
 `Fejer.lean`. `#print axioms` walks the full transitive dependency graph, so
@@ -38,7 +38,7 @@ discussion of custom assumptions below.
 
 | Theorem | Location | Custom axioms it depends on |
 |---|---|---|
-| `theorem1` | `Theorem1.lean:3754` | **none** (only the three standard Lean axioms) |
+| `theorem1` | `Theorem1.lean:4078` | **none** (only the three standard Lean axioms) |
 | `Gram.UD.vdc_fundamental_inequality` | `VanDerCorput.lean` §4 | **none** (only the three standard Lean axioms) |
 | `Gram.UD.isUDModOne_of_forall_diff` | `VanDerCorput.lean` §5 | **none** (only the three standard Lean axioms) |
 | `corollary2` | `Corollary2.lean:209` | **none** (only the three standard Lean axioms) |
@@ -107,10 +107,11 @@ discussion of custom assumptions below.
   dominated convergence over `[0, 1]` of the shifted Cesàro averages, unit
   intervals spliced into `∫₀ᴺ`, and a floor-cutoff squeeze for real time.
   Its measurability hypothesis is discharged by `measurable_gram`
-  (`Theorem3.lean`: `gram` is monotone above `θ(7)/π + 1` by injectivity of
-  `θ` and constant below it, where `invFunOn` returns its default), and its
-  shifted-UD hypothesis by `theorem4_shift` (`Theorem4.lean` §8: the four
-  Fejér hypotheses transported along `u ↦ u + t`). So Corollary 5 depends on
+  (`Theorem3.lean`: `gram` is monotone above `gramThreshold = θ(7)/π + 1` by
+  injectivity of `θ` and constant below it, where `invFunOn` returns its
+  default), and its shifted-UD hypothesis by `theorem4_shift`
+  (`Theorem4.lean` §8: the four Fejér hypotheses transported along
+  `u ↦ u + t`). So Corollary 5 depends on
   **exactly the same (empty) axiom set as Theorem 4**: nothing beyond Lean's
   standard foundation.
 
@@ -145,7 +146,9 @@ paper) and the range fact `gram_ge_seven` are **theorems**: for
 between `theta 7` and `theta_tendsto_atTop` — the latter a new theorem in
 `Corollary2.lean` §5, proved from the concrete `theta = δ − π·φ − π` (the
 `φ`-part tends to `+∞`; `δ` is eventually bounded below via `α_part ≥ 0`
-and `j = O(t⁻²)` from `iteratedDeriv_j_isO` at order 0).
+and `j = O(t⁻²)` from `iteratedDeriv_j_isO` at order 0). The threshold is
+`gramThreshold := θ(7)/π + 1`, i.e. exactly the condition `θ(7) ≤ (u − 1)π`,
+so it is the largest half-line on which `gram` inverts `θ`.
 
 **No custom axioms.** The strict monotonicity of `theta` on `[7, ∞)` is
 **formal** (`strictMonoOn_theta`, `Corollary2.lean` §7, axiom-free): `θ'(t) =
