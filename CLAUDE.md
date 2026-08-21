@@ -9,7 +9,7 @@ lake build          # compile the project
 lake doc            # generate documentation
 ```
 
-Lean version is pinned in `lean-toolchain` (`leanprover/lean4:v4.30.0-rc2`). The sole dependency is Mathlib at the matching revision, declared in `lakefile.toml`.
+Lean version is pinned in `lean-toolchain` (`leanprover/lean4:v4.29.1`). The sole dependency is Mathlib at the matching revision, declared in `lakefile.toml`.
 
 ## Project Overview
 

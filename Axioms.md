@@ -11,7 +11,7 @@ Regenerate at any time with the scratch module
 lake build GramDerivatives.AxiomAudit   # prints the axiom list for each theorem
 ```
 
-Last audited: 2026-08-20, against `lean4:v4.30.0-rc2` + matching Mathlib.
+Last audited: 2026-08-20, against `lean4:v4.29.1` + matching Mathlib.
 
 ## Method
 
