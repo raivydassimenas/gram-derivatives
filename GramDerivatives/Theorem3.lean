@@ -22,7 +22,7 @@
                           `Function.invFunOn`.
     • `gram_spec`       = θ(t_u) = (u − 1)·π                  (eq. (7));
                           a *theorem* (IVT + `theta_tendsto_atTop`).
-    • `contDiffAt_gram` = smoothness on (θ(7)/π + π, ∞)
+    • `contDiffAt_gram` = smoothness on (θ(7)/π + 1, ∞)
                           (a *theorem*: inverse function theorem applied
                           to θ, using `deriv_theta_pos` / `injOn_theta`
                           from `Corollary2.lean` §7).
@@ -94,8 +94,9 @@ abbrev Iso (f g : ℝ → ℝ) (l : Filter ℝ) : Prop := Asymptotics.IsLittleO 
 -/
 
 /-- The threshold above which `θ` is monotonically increasing on `[7, ∞)`
-    gets transported by `θ` to `u ≥ θ(7)/π + π`. -/
-noncomputable def gramThreshold : ℝ := theta 7 / Real.pi + Real.pi
+    gets transported by `θ` to `u ≥ θ(7)/π + 1`: this is exactly the
+    condition `θ(7) ≤ (u − 1)π`. -/
+noncomputable def gramThreshold : ℝ := theta 7 / Real.pi + 1
 
 /-- The Gram function `t_u : ℝ → ℝ`: *defined* as an inverse of the
     Riemann–Siegel theta function on `[7, ∞)` — `gram u` is a point
@@ -129,22 +130,23 @@ private lemma exists_gram_preimage' (u : ℝ)
     intermediate_value_Icc hT7 hcont ⟨h_lb, hTval⟩
   exact ⟨t, htIcc.1, htEq⟩
 
-private lemma exists_gram_preimage (u : ℝ) (hu : gramThreshold ≤ u) :
-    ∃ t ∈ Set.Ici (7 : ℝ), theta t = (u - 1) * Real.pi := by
-  refine exists_gram_preimage' u ?_
+/-- Lower-endpoint bound: `u ≥ gramThreshold = θ(7)/π + 1` says exactly
+    `θ(7) ≤ (u − 1)π`. -/
+private lemma base_lb {u : ℝ} (hu : theta 7 / Real.pi + 1 ≤ u) :
+    theta 7 ≤ (u - 1) * Real.pi := by
   have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
-  unfold gramThreshold at hu
-  have h_mul : (theta 7 / Real.pi + Real.pi) * Real.pi ≤ u * Real.pi :=
-    mul_le_mul_of_nonneg_right hu hπ.le
-  have h_expand : (theta 7 / Real.pi + Real.pi) * Real.pi
-      = theta 7 + Real.pi ^ 2 := by
-    field_simp
-  nlinarith [Real.pi_gt_three]
+  have h1 : theta 7 / Real.pi ≤ u - 1 := by linarith
+  calc theta 7 = theta 7 / Real.pi * Real.pi := by field_simp
+    _ ≤ (u - 1) * Real.pi := mul_le_mul_of_nonneg_right h1 hπ.le
+
+private lemma exists_gram_preimage (u : ℝ) (hu : gramThreshold ≤ u) :
+    ∃ t ∈ Set.Ici (7 : ℝ), theta t = (u - 1) * Real.pi :=
+  exists_gram_preimage' u (base_lb hu)
 
 /-- The defining relation of the Gram function (equation (7) of the
     paper):
 
-        θ(t_u) = (u − 1) · π     for  u ≥ θ(7)/π + π.
+        θ(t_u) = (u − 1) · π     for  u ≥ θ(7)/π + 1.
 
     Formerly an axiom; now a theorem, by `Function.invFunOn_eq` applied
     to `exists_gram_preimage`. -/
@@ -183,26 +185,19 @@ decomposition gives measurability.  This is needed by `Corollary5.lean`:
 the time averages defining continuous uniform distribution are Bochner
 integrals of `exp(2πik·gramⁿ)`, which must be a measurable integrand. -/
 
-/-- Lower-endpoint bound on the wider half-line `u ≥ θ(7)/π + 1`. -/
-private lemma base_lb {u : ℝ} (hu : theta 7 / Real.pi + 1 ≤ u) :
-    theta 7 ≤ (u - 1) * Real.pi := by
-  have hπ : (0 : ℝ) < Real.pi := Real.pi_pos
-  have h1 : theta 7 / Real.pi ≤ u - 1 := by linarith
-  calc theta 7 = theta 7 / Real.pi * Real.pi := by field_simp
-    _ ≤ (u - 1) * Real.pi := mul_le_mul_of_nonneg_right h1 hπ.le
-
-/-- `gram_spec` on the wider half-line `u ≥ θ(7)/π + 1`. -/
+/-- `gram_spec` with the threshold spelled out; `θ(7)/π + 1` *is*
+`gramThreshold`. -/
 private lemma gram_spec' (u : ℝ) (hu : theta 7 / Real.pi + 1 ≤ u) :
     theta (gram u) = (u - 1) * Real.pi :=
-  Function.invFunOn_eq (exists_gram_preimage' u (base_lb hu))
+  gram_spec u hu
 
-/-- `gram_ge_seven` on the wider half-line `u ≥ θ(7)/π + 1`. -/
+/-- `gram_ge_seven` with the threshold spelled out. -/
 private lemma gram_ge_seven' (u : ℝ) (hu : theta 7 / Real.pi + 1 ≤ u) :
     7 ≤ gram u :=
-  Function.invFunOn_mem (exists_gram_preimage' u (base_lb hu))
+  gram_ge_seven u hu
 
 /-- `gram` is monotone where its defining relation holds: on
-`[θ(7)/π + 1, ∞)`. -/
+`[θ(7)/π + 1, ∞) = [gramThreshold, ∞)`. -/
 private lemma gram_monotoneOn :
     MonotoneOn gram (Set.Ici (theta 7 / Real.pi + 1)) := by
   intro u₁ h₁ u₂ h₂ h₁₂
@@ -262,7 +257,7 @@ theorem measurable_gram : Measurable gram := by
   rw [hrepr]
   exact Measurable.piecewise measurableSet_Ici hmono.measurable measurable_const
 
-/-- **`gram` is `C^n` on the open half-line `(θ(7)/π + π, ∞)`** —
+/-- **`gram` is `C^n` on the open half-line `(θ(7)/π + 1, ∞)`** —
     formerly the project's last axiom; now a theorem, by the inverse
     function theorem.
 
@@ -284,14 +279,10 @@ theorem contDiffAt_gram (n : ℕ) {u : ℝ} (hu : gramThreshold < u) :
   have h_spec : theta t₀ = (u - 1) * Real.pi := gram_spec u hu.le
   -- (1) `θ(7) < (u−1)π`, hence `t₀ > 7` strictly.
   have h_theta7_lt : theta 7 < (u - 1) * Real.pi := by
-    have hu' : theta 7 / Real.pi + Real.pi < u := hu
-    have h1 : (1 : ℝ) < Real.pi := by nlinarith [Real.pi_gt_three]
-    have h_expand : (theta 7 / Real.pi + Real.pi - 1) * Real.pi
-        = theta 7 + Real.pi * (Real.pi - 1) := by
-      field_simp
-      ring
-    nlinarith [mul_lt_mul_of_pos_right
-      (show theta 7 / Real.pi + Real.pi - 1 < u - 1 by linarith) hπ]
+    have hu' : theta 7 / Real.pi + 1 < u := hu
+    have h1 : theta 7 / Real.pi < u - 1 := by linarith
+    calc theta 7 = theta 7 / Real.pi * Real.pi := by field_simp
+      _ < (u - 1) * Real.pi := mul_lt_mul_of_pos_right h1 hπ
   have h7_lt : 7 < t₀ := by
     rcases lt_or_eq_of_le h7 with h | h
     · exact h
